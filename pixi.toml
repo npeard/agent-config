@@ -1,0 +1,25 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.12"
+
+[feature.dev.dependencies]
+ruff = "*"
+codespell = "*"
+pre-commit = "*"
+
+[environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tasks]
+ascii = "python scripts/check_ascii.py"
+
+[feature.dev.tasks]
+format = "ruff format . && ruff check --fix ."
+lint = "ruff check ."
+spell = "codespell ."
+precommit = "pre-commit run --all-files"
+all = { depends-on = ["format", "lint", "ascii"] }
