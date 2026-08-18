@@ -89,6 +89,13 @@ against the value a line provides:
 
 ## Verification & perf philosophy
 
+- **Smoke-verify long-running scripts on a timeout.** To check that a
+  change works in a training/simulation script that runs for minutes or
+  hours, run it under a short timeout and confirm it started cleanly and
+  the loss (or equivalent metric) is descending -- do not wait for the
+  script to exit. Being killed by the timeout is the expected outcome,
+  not a failure. Read the head of the output for setup and the first
+  epochs; don't pipe through `tail` waiting for a completion banner.
 - Don't trust profiler percentages on tiny, high-frequency operations --
   cProfile's per-call bookkeeping inflates their apparent cost. Confirm
   any claimed micro-optimization with a real wall-clock A/B (several

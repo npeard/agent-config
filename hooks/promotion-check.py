@@ -4,8 +4,13 @@ import json
 import os
 import sys
 
-MASTER_REPO = os.path.expanduser("~/Documents/Projects/claude-config")
-PATTERNS = ("*/CLAUDE.md", "*/memory/*.md", "*/skills/*/SKILL.md")
+MASTER_REPO = os.path.normcase(
+    os.path.normpath(os.path.expanduser("~/Documents/Projects/claude-config"))
+)
+# Lowercase: paths are normcase'd before matching, which lowercases on
+# Windows. fnmatch is case-insensitive there anyway, but matching lower
+# against lower is correct on POSIX too.
+PATTERNS = ("*/claude.md", "*/memory/*.md", "*/skills/*/skill.md")
 MESSAGE = (
     "You just wrote a CLAUDE.md, memory, or skill file. Check: is this "
     "preference or skill general engineering or workflow taste that holds "
@@ -23,10 +28,15 @@ def main():
     if not file_path:
         return
 
-    if file_path.startswith(MASTER_REPO + os.sep):
+    # Normalize before comparing: expanduser can return mixed separators on
+    # Windows ("C:\Users\me/Documents/..."), and hook payloads use forward
+    # slashes, so a raw startswith/fnmatch silently never matches.
+    normalized = os.path.normcase(os.path.normpath(file_path))
+    if normalized.startswith(MASTER_REPO + os.sep):
         return
 
-    if not any(fnmatch.fnmatch(file_path, p) for p in PATTERNS):
+    posix_path = normalized.replace(os.sep, "/")
+    if not any(fnmatch.fnmatch(posix_path, p) for p in PATTERNS):
         return
 
     print(
