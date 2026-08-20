@@ -60,3 +60,78 @@ deleted rather than restated. Under the bar when decided (3 occurrences, one
 session), so it was never actionable -- recorded so it is not re-litigated
 if it crosses later.
 """
+
+[[decision]]
+class = "write-before-read"
+date = "2026-08-20"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 4
+note = """
+Not disobedience. The trigger is running `pixi run format`, which rewrites
+files that were already read, so the harness's staleness check fires on the
+next edit. The check is what stops a stale write from clobbering a formatter
+change, and it reports at the moment it matters for the cost of one round
+trip. Removing or muting it would trade a real guarantee for that round trip.
+"""
+
+[[decision]]
+class = "inline-script-error"
+date = "2026-08-20"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 5
+note = """
+The class lumps two things together, and neither is actionable. Most
+occurrences are a throwaway heredoc probe whose assertion failed -- the probe
+doing its job, reported instantly. The rest are relative paths used after a
+`cd` in an earlier call, and that the working directory persists is already
+stated in the Bash tool's own description. A rule restating it would be paid
+by every future session for a lapse the tool already reports.
+"""
+
+[[decision]]
+class = "tool-schema-misuse"
+date = "2026-08-20"
+cause = "harness-constraint"
+outcome = "tier-0"
+count_at_decision = 3
+note = """
+Calling a deferred tool before ToolSearch has loaded its schema. The
+InputValidationError already names the missing and unexpected parameters and
+explains that the schema was absent from the prompt -- a better explanation
+than prose here could give, delivered exactly where the mistake happens.
+"""
+
+[[decision]]
+class = "cmd-not-found"
+date = "2026-08-20"
+cause = "missing-tooling"
+outcome = "tier-0"
+count_at_decision = 4
+note = """
+Genuine cause-1 friction, but not this repo's. Every occurrence is a PDF
+extraction binary (`pdftotext`, `mutool`) that claude-config has no use for;
+the tool belongs in whichever project reads PDFs, added to that project's own
+environment. Recording it here so it is not re-proposed against this repo,
+where installing poppler would be dependency weight nothing uses.
+"""
+
+[[decision]]
+class = "hook-modified-files"
+date = "2026-08-20"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+count_at_decision = 5
+note = """
+Committing before running the formatter, so pre-commit stashes unstaged work,
+a hook rewrites a staged file, and the commit exits 1. The rule already exists
+-- coding standard 7, never hand-fix what a tool owns, run the project's own
+format command -- and tier 1 was considered and rejected: the only precise
+predictor of "a hook will rewrite a staged file" is running the formatter, so
+the hook would have to run `pixi run format` inside every `git commit`,
+mutating files from a pre-tool hook on every commit. That is a large,
+always-on cost against a failure that self-describes and costs one `git add`.
+Evidence the rule works when followed: the branch that produced this entry ran
+`pixi run format` before all eight commits and hit this zero times.
+"""

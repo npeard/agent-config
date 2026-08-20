@@ -37,6 +37,13 @@ load it. Ceremony scales with the task -- `superpowers:brainstorming`
 classifies it as spike, bounded, or architectural, and only
 architectural work runs the full sequence.
 
+**Two deliverable kinds share this spine.** Code, whose correctness a
+test asserts, and prose -- LaTeX, Markdown, a paper or thesis chapter --
+whose correctness a reader judges. `workflow-orchestration` carries the
+code spine; `writing-orchestration` carries the prose substitutions for
+the same eight steps. Classification picks the spine, not the toolbox:
+invoke a skill by the pattern you are fixing, not by the file extension.
+
 0. **Preflight.** `pixi run preflight` (or the project equivalent):
    pre-commit installed and current, tests green, on the default branch,
    clean tree.

@@ -119,6 +119,46 @@ def test_skill_description_within_budget(path: Path):
     )
 
 
+class TestHumanizerPatternCount:
+    """Three files state how many patterns the catalog has, and only the
+    catalog knows. Same drift class as TestStandardsPointerIntegrity below:
+    adding or removing a pattern silently falsifies every statement of the
+    count, and splitting the catalog out of SKILL.md is what made the number
+    a cross-file claim in the first place.
+    """
+
+    def catalog(self) -> Path:
+        return REPO_ROOT / "skills" / "humanizer" / "patterns.md"
+
+    def actual(self) -> int:
+        headings = re.findall(
+            r"^### (\d+)\. ", self.catalog().read_text(), re.MULTILINE
+        )
+        return len(headings)
+
+    def test_patterns_are_numbered_consecutively_from_one(self):
+        numbers = re.findall(r"^### (\d+)\. ", self.catalog().read_text(), re.MULTILINE)
+        assert numbers == [str(i) for i in range(1, len(numbers) + 1)]
+
+    @pytest.mark.parametrize(
+        "relative",
+        [
+            "skills/humanizer/SKILL.md",
+            "skills/humanizer/patterns.md",
+            "README.md",
+        ],
+    )
+    def test_every_file_that_states_the_count_states_the_right_one(self, relative: str):
+        n = self.actual()
+        text = (REPO_ROOT / relative).read_text()
+        stated = re.findall(r"(\d+)[ -]patterns?\b", text)
+        assert stated, f"{relative} no longer states the pattern count"
+        wrong = [s for s in stated if s != str(n)]
+        assert not wrong, (
+            f"{relative} says {wrong} patterns but patterns.md defines {n}"
+        )
+
+
 class TestDescriptionExtraction:
     """The gate is only as good as its parser; these are the two ways it
     silently passed a description it should have measured."""
