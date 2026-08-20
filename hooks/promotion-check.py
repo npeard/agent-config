@@ -1,15 +1,30 @@
 #!/usr/bin/env python3
+# claude-hook: PostToolUse Write|Edit
 import fnmatch
 import json
 import os
 import sys
 
-MASTER_REPO = os.path.normcase(
-    os.path.normpath(os.path.expanduser("~/Documents/Projects/claude-config"))
-)
-# Lowercase: paths are normcase'd before matching, which lowercases on
-# Windows. fnmatch is case-insensitive there anyway, but matching lower
-# against lower is correct on POSIX too.
+
+def canonical(path: str) -> str:
+    """Resolved, forward-slashed, lowercased form used for all matching.
+
+    Symlinks are resolved because install.sh links ~/.claude/CLAUDE.md and
+    ~/.claude/skills/<name> into the master repo. Editing the config through
+    its installed path yields a path outside MASTER_REPO, so without
+    realpath the self-guard misses and the hook tells you to promote a file
+    you are already editing in the master repo.
+
+    The lowercasing is explicit rather than delegated to os.path.normcase,
+    which only lowercases on Windows. Relying on it meant the lowercase
+    PATTERNS below could never match the real CLAUDE.md and SKILL.md
+    filenames on macOS or Linux, so the hook silently never fired for
+    exactly the two file kinds it exists to catch.
+    """
+    return os.path.realpath(os.path.normpath(path)).replace(os.sep, "/").lower()
+
+
+MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/claude-config"))
 PATTERNS = ("*/claude.md", "*/memory/*.md", "*/skills/*/skill.md")
 MESSAGE = (
     "You just wrote a CLAUDE.md, memory, or skill file. Check: is this "
@@ -21,22 +36,32 @@ MESSAGE = (
 
 
 def main():
-    data = json.load(sys.stdin)
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        # Malformed or empty stdin: a hook that tracebacks is noisier than
+        # one that declines. task-list.py guards the identical call.
+        return
     tool_input = data.get("tool_input", {})
     tool_response = data.get("tool_response", {})
     file_path = tool_input.get("file_path") or tool_response.get("filePath")
     if not file_path:
         return
 
-    # Normalize before comparing: expanduser can return mixed separators on
-    # Windows ("C:\Users\me/Documents/..."), and hook payloads use forward
-    # slashes, so a raw startswith/fnmatch silently never matches.
-    normalized = os.path.normcase(os.path.normpath(file_path))
-    if normalized.startswith(MASTER_REPO + os.sep):
+    # Canonicalize before comparing: expanduser can return mixed separators
+    # on Windows ("C:\Users\me/Documents/..."), and hook payloads use
+    # forward slashes, so a raw startswith/fnmatch silently never matches.
+    path = canonical(file_path)
+
+    # The trailing slash matters: a bare prefix test would also swallow a
+    # sibling directory like "claude-config-other".
+    if path.startswith(MASTER_REPO + "/"):
         return
 
-    posix_path = normalized.replace(os.sep, "/")
-    if not any(fnmatch.fnmatch(posix_path, p) for p in PATTERNS):
+    # fnmatchcase, not fnmatch: both sides are already lowercased above, so
+    # the platform-dependent normcase inside fnmatch would be a second,
+    # invisible normalization.
+    if not any(fnmatch.fnmatchcase(path, p) for p in PATTERNS):
         return
 
     print(

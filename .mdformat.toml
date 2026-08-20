@@ -1,0 +1,18 @@
+# Prose width matching the hand-wrapped Markdown already in this repo.
+# Kept in config rather than CLI args so `pixi run format` and the
+# pre-commit hook cannot disagree about the value.
+wrap = 72
+
+# Number ordered lists consecutively. mdformat's default rewrites every
+# marker to "1.", which renders correctly but makes the numbered workflow
+# steps unreadable in source -- and those steps are cross-referenced by
+# number ("loop back to Verify (step 5)"), so the numbering has to be real.
+number = true
+
+# Deliberately no `exclude` key here: mdformat hard-errors on it below
+# Python 3.13 ("'exclude' patterns are only available on Python 3.13+"),
+# and neither pre-commit's hook env nor a future pixi re-solve is pinned
+# above that. Exclusions are done by the caller instead -- a git pathspec
+# in the pixi task and pre-commit's own `exclude:` regex. The task passes
+# --others, so untracked-but-not-ignored Markdown is formatted too; only
+# gitignored files are skipped.

@@ -3,12 +3,16 @@ channels = ["conda-forge"]
 platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
 
 [dependencies]
-python = ">=3.12"
+python = ">=3.13"
 
 [feature.dev.dependencies]
 ruff = "*"
 codespell = "*"
 pre-commit = "*"
+mdformat = "*"
+mdformat-gfm = "*"
+mdformat-frontmatter = "*"
+pytest = "*"
 
 [environments]
 default = { solve-group = "default" }
@@ -16,10 +20,17 @@ dev = { features = ["dev"], solve-group = "default" }
 
 [tasks]
 ascii = "python scripts/check_ascii.py"
+preflight = "python scripts/preflight.py"
+friction = "python scripts/friction.py"
+toolgaps = "python scripts/toolgaps.py"
+suppressions = "python scripts/suppressions.py"
+thresholds = "python scripts/thresholds.py"
+register-hooks = "python scripts/register_hooks.py"
 
 [feature.dev.tasks]
-format = "ruff format . && ruff check --fix ."
+format = "ruff format . && ruff check --fix . && mdformat $(git ls-files --cached --others --exclude-standard '*.md' ':!:skills/quantikz/*')"
 lint = "ruff check ."
 spell = "codespell ."
 precommit = "pre-commit run --all-files"
-all = { depends-on = ["format", "lint", "ascii"] }
+test = "pytest -q"
+all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "test"] }

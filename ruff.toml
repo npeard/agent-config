@@ -1,0 +1,19 @@
+# Ruff 0.16 formats Python code blocks embedded in Markdown. This repo's
+# primary content is skills documents whose examples deliberately show bad
+# patterns, so letting the formatter rewrite them destroys the point of the
+# example -- and in the worst case silently "fixes" the very anti-pattern
+# being illustrated. Markdown is owned by mdformat here.
+extend-exclude = ["*.md"]
+
+# Apply the exclusion even when a path is passed explicitly. Without this,
+# exclusions cover only discovered files, so `ruff format some.md` and any
+# hook that passes explicit paths would still reformat Markdown.
+force-exclude = true
+
+# Pinned so ruff does not infer an old Python and misclassify stdlib
+# modules: without this it treated `tomllib` (3.11+) as third-party and
+# demanded it be moved to a separate import block. Matches pixi.toml's
+# floor, which is deliberately recent -- every project gets a local pixi
+# env with a current interpreter rather than inheriting whatever `python3`
+# the machine happens to ship.
+target-version = "py313"

@@ -12,22 +12,45 @@ repos:
     -   id: check-merge-conflict
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.15
+    rev: v0.16.4
     hooks:
     -   id: ruff
         args: [--fix, --exit-non-zero-on-fix]
     -   id: ruff-format
 
 -   repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
     -   id: codespell
+
+-   repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+    -   id: mdformat
+        # Both plugins are required, not cosmetic, and this hook runs in its
+        # own isolated env -- so they must be repeated here even though
+        # pixi.toml already has them, or the hook corrupts what the task
+        # leaves alone. gfm: without it GFM tables parse as paragraphs and
+        # the configured wrap destroys them. frontmatter: without it a
+        # skill's `---` YAML block parses as a thematic break and is
+        # rewritten, silently breaking the skill's registry entry.
+        additional_dependencies: [mdformat-gfm, mdformat-frontmatter]
+        # Excluded here rather than via .mdformat.toml's `exclude`, which
+        # needs Python 3.13+ and would hard-fail this hook under 3.12.
+        # LaTeX reference material: mdformat escapes bare backslashes in
+        # prose, turning `\gate` into `\\gate`.
+        exclude: ^skills/quantikz/
 
 -   repo: local
     hooks:
     # Use the Pixi dev-env binary directly so the hook works even when git
     # invokes pre-commit outside an activated Pixi shell. Requires
     # `pixi install -e dev`.
+    -   id: suppressions
+        name: Every linter suppression must say why
+        entry: .pixi/envs/dev/bin/python scripts/suppressions.py
+        language: system
+        types: [python]
     -   id: ascii-only
         name: ASCII-only source (no Unicode; use plain text or LaTeX)
         entry: .pixi/envs/dev/bin/python scripts/check_ascii.py

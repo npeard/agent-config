@@ -1,0 +1,62 @@
+# Decisions about recurring friction found by `pixi run friction`.
+#
+# This file is what makes the loop converge instead of nag: a class with a
+# decision here is not re-proposed. It reappears only if its count has
+# doubled since the decision, on the grounds that a rejected finding which
+# got much worse is new evidence rather than the same finding.
+#
+# `count_at_decision` is required for that rule to work -- a decision
+# without it suppresses the class forever, which is how a loop like this
+# goes quietly blind.
+#
+# `cause` names *why* the friction recurred, from the taxonomy in the reflect
+# skill; `outcome` names what was done about it, following the tier ladder in
+# the same place. Both are required. Recording only the outcome loses the
+# diagnosis, and it is the causes that reveal patterns -- five frictions all
+# tracing to `underspecified-task` is a finding that outcomes alone hide.
+#
+# `tier-0` means no artifact was created, which is the expected outcome most
+# of the time.
+
+[[decision]]
+class = "codespell-finding"
+date = "2026-08-19"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 4
+note = """
+Not friction. A pre-commit hook catching a typo before it lands is the
+system succeeding, and the cost is one round trip. Suppressing the typo
+check to avoid the round trip would trade a real guarantee for a small
+convenience.
+"""
+
+[[decision]]
+class = "sleep-blocked"
+date = "2026-08-19"
+cause = "harness-constraint"
+outcome = "tier-0"
+count_at_decision = 4
+note = """
+The Bash tool already documents that foreground sleep is blocked and that
+Monitor is the intended mechanism. The rule exists and was ignored, so the
+fix is enforcement or recall, not another rule -- restating it in
+always-loaded context would make every future session pay for a lapse that
+a tool message already reports at the moment it matters.
+"""
+
+[[decision]]
+class = "ruff-import-sort"
+date = "2026-08-20"
+cause = "rule-not-enforced"
+outcome = "tier-1"
+count_at_decision = 3
+note = """
+Traced to invoking ruff directly instead of `pixi run format`, which
+CLAUDE.md required. The rule was a proxy for information: the failure was
+not knowing that a task existed covering the work. Fixed with a SessionStart
+hook that injects the project's actual task list, and the prose rule was
+deleted rather than restated. Under the bar when decided (3 occurrences, one
+session), so it was never actionable -- recorded so it is not re-litigated
+if it crosses later.
+"""
