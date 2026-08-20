@@ -100,6 +100,15 @@ colleague in another field need different amounts of the same argument.
 Left unstated, the audience defaults to the writer, who already knows
 everything and therefore needs nothing explained.
 
+The dial that moves most is **where a derivation goes**, and the
+document class sets it, not taste. A paper states the result and defers
+the long derivation to an appendix, because a referee wants the claim
+and the means to check it. A thesis works the derivation inline, because
+a committee and the next student are reading to learn the method, and a
+chapter that cites its own appendix at every step teaches nothing. Same
+author, same voice, opposite placement -- so read it off the document
+class, and do not carry one document's habit into the other.
+
 ## Red flags
 
 | Thought                                             | Reality                                                                                                                                         |
