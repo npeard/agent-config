@@ -20,6 +20,7 @@ passed by pre-commit, scans exactly those.
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -79,7 +80,15 @@ def scan(path: Path) -> tuple[int, list[str]]:
     return justified, complaints
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="files to scan; pre-commit passes the staged set, "
+        "and an empty list falls back to every tracked file",
+    )
+    argv = parser.parse_args(argv).paths
     targets = argv or tracked_python_files()
     justified, complaints = 0, []
     for name in targets:
@@ -107,4 +116,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
