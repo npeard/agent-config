@@ -14,6 +14,11 @@ Each hook declares its own event in a marker comment near the top:
 Keeping the declaration in the hook means it cannot drift from the file it
 describes, and a new hook cannot be added without saying when it runs.
 
+A hook may carry several markers and so register under several events. One
+notification hook answering Stop, Notification and PreToolUse is one set of
+sound preferences in one file; splitting it into three files to satisfy the
+parser would give three copies of that table to keep in agreement.
+
 Run by install.sh through the project's own interpreter, after the dev
 environment has been materialized. That ordering is not incidental: a
 registered hook names `.pixi/envs/dev/bin/python` in its command, so writing
@@ -43,14 +48,18 @@ INTERPRETER = REPO / ".pixi" / "envs" / "dev" / "bin" / "python"
 
 
 def declared_hooks(hooks_dir=REPO / "hooks"):
-    """[(filename, event, matcher_or_None)] for every declaring hook."""
+    """[(filename, event, matcher_or_None)] for every marker in every hook.
+
+    Every marker in the window is collected, not just the first, so one file
+    can serve several events. Order follows the file, which is the order the
+    events are registered in.
+    """
     found = []
     for path in sorted(hooks_dir.glob("*.py")):
         for line in path.read_text(errors="replace").splitlines()[:10]:
             match = MARKER.match(line.strip())
             if match:
                 found.append((path.name, match.group("event"), match.group("matcher")))
-                break
     return found
 
 

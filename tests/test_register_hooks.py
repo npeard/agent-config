@@ -59,6 +59,17 @@ class TestParsing:
             ("h.py", "SessionStart", None)
         ]
 
+    def test_a_hook_may_declare_several_events(self, tmp_path: Path):
+        """notify.py answers Stop, Notification and PreToolUse from one file,
+        because the alternative is three copies of one sound table."""
+        (tmp_path / "h.py").write_text(
+            f"#!/usr/bin/env python3\n{MARKER} Stop\n{MARKER} PreToolUse Write\n"
+        )
+        assert register_hooks.declared_hooks(tmp_path) == [
+            ("h.py", "Stop", None),
+            ("h.py", "PreToolUse", "Write"),
+        ]
+
     def test_marker_must_be_near_the_top(self, tmp_path: Path):
         """Scanning the whole file would match the string in a docstring or a
         test fixture."""

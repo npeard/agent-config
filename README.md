@@ -71,9 +71,10 @@ pixi run all                        # format, lint, ascii, spell,
   its own event in a marker comment near the top
   (`# claude-hook: PostToolUse Write|Edit`) and `./install.sh` registers
   them, so adding a hook needs no manual edit and cannot silently ship
-  inert. A test fails if a hook omits its marker; `preflight` reports
-  when this machine's registrations are out of date, since that is
-  machine state rather than repo state and no test can gate it.
+  inert. A hook may carry several markers and answer several events. A
+  test fails if a hook omits its marker; `preflight` reports when this
+  machine's registrations are out of date, since that is machine state
+  rather than repo state and no test can gate it.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
@@ -100,6 +101,24 @@ pixi run all                        # format, lint, ascii, spell,
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/notify.py` -- plays a sound and posts a desktop banner when the
+  turn comes back to you: the turn ended (`Stop`), a tool wants
+  permission or the prompt has gone idle (`Notification`), or Claude is
+  asking a question (`AskUserQuestion`). Sounds are a table at the top
+  of the file, so they are version-controlled and a new machine sounds
+  like this one; `CLAUDE_NOTIFY_OFF=1 claude` mutes a single session and
+  `CLAUDE_NOTIFY_SOUND_DONE=Tink` overrides one reason.
+  Terminal-agnostic because the sound comes from the OS rather than a
+  BEL written to a tty, so a bare terminal, the VSCode integrated
+  terminal and tmux all behave alike. It replaces the
+  `singularityinc.claude-notifier` VSCode extension, which did the same
+  job but kept its sounds in a machine-local file `install.sh` knows
+  nothing about -- so a new machine came up silent until someone
+  remembered an extension. On macOS the banner is posted by
+  `terminal-notifier` when it is installed and by `osascript` otherwise;
+  the `osascript` path is attributed to Script Editor and is dropped
+  silently if that app has no notification permission, so
+  `brew install terminal-notifier` is the fix for a missing banner.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `toolgaps.py`, `suppressions.py`, `thresholds.py`)
   meant to be copied into new projects rather than rewritten from
