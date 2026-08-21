@@ -10,6 +10,12 @@ evict, or to relocate the content to a tier that loads on demand. Raising a
 ceiling is a real option but deserves the same deliberation as any other
 change to what every session must read -- and changing a number in a test
 should feel heavier than adding a sentence, which is the whole point.
+
+The ceilings and the frontmatter parser now live in scripts/audit_assets.py
+and are imported here. This file remains the gate -- it is what fails the
+build -- while the script is the report the config-audit skill reads. They
+are not duplicated in two places, because a test asserting that two copies
+of a number agree is a test that a refactor happened.
 """
 
 from __future__ import annotations
@@ -18,69 +24,21 @@ import re
 from pathlib import Path
 
 import pytest
+from audit_assets import (
+    CLAUDE_MD_MAX_WORDS,
+    SKILL_BODY_MAX_WORDS,
+    SKILL_DESCRIPTION_MAX_WORDS,
+    description,
+    skill_files,
+    words,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-# Measured at the time of writing plus deliberately tight headroom.
-CLAUDE_MD_MAX_WORDS = 1250
-
-# A skill body is paid only by sessions that invoke the skill, so this is
-# looser than CLAUDE.md -- but a skill nobody can finish reading is not
-# cheaper than prose, it is just less likely to be followed.
-SKILL_BODY_MAX_WORDS = 2000
-
-# Descriptions are the one part of a skill that IS always loaded: they are
-# listed in every session so the model can decide what to invoke. A verbose
-# description is therefore a permanent tax, and the tightest budget here.
-SKILL_DESCRIPTION_MAX_WORDS = 60
 
 REMEDY = (
     "Evict content or move it to a lower tier (reference file, script, hook) "
     "rather than raising this ceiling; see the reflect skill."
 )
-
-
-def words(text: str) -> int:
-    return len(text.split())
-
-
-def frontmatter(text: str) -> str | None:
-    """The YAML block between the leading `---` fences, if any."""
-    if not text.startswith("---\n"):
-        return None
-    end = text.find("\n---", 4)
-    return text[4:end] if end != -1 else None
-
-
-def description(text: str) -> str | None:
-    """The description value, including folded continuation lines.
-
-    A regex capturing to end-of-line reads `description: >` as the single
-    word ">" and lets an arbitrarily long description through the budget.
-    Searching the whole file rather than the frontmatter would also measure
-    a body line that merely starts with "description:".
-    """
-    block = frontmatter(text)
-    if block is None:
-        return None
-    lines = block.splitlines()
-    for i, line in enumerate(lines):
-        if not line.startswith("description:"):
-            continue
-        value = line.split(":", 1)[1].strip()
-        # A folded or literal scalar puts the text on the indented lines
-        # that follow; a plain scalar may also wrap onto them.
-        parts = [] if value in (">", "|", ">-", "|-") else [value]
-        for cont in lines[i + 1 :]:
-            if not cont[:1].isspace() or not cont.strip():
-                break
-            parts.append(cont.strip())
-        return " ".join(parts)
-    return None
-
-
-def skill_files() -> list[Path]:
-    return sorted((REPO_ROOT / "skills").glob("*/SKILL.md"))
 
 
 def test_skills_exist():
