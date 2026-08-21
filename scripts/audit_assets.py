@@ -24,6 +24,7 @@ import argparse
 import json
 import re
 import sys
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -174,9 +175,143 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     return out
 
 
+# Three shapes, because the house has three idioms and recognizing only some
+# of them punishes a compliant asset. A first pass knew tables and fences
+# only, and reported humanizer -- whose whole catalog is labelled before/after
+# examples -- as evidence-free.
+#
+# A GFM table needs its delimiter row, or a line of prose containing pipes
+# counts as evidence.
+EVIDENCE_TABLE = re.compile(r"^\|.*\|[ \t]*$\n^\|[\s\-:|]+\|[ \t]*$", re.MULTILINE)
+EVIDENCE_FENCE = re.compile(r"^```", re.MULTILINE)
+EVIDENCE_EXAMPLE = re.compile(
+    r"\*\*(?:Before|After|Flag|Prefer|Bad|Good|Example|Words to watch|Problem)\b",
+    re.IGNORECASE,
+)
+EVIDENCE = (EVIDENCE_TABLE, EVIDENCE_FENCE, EVIDENCE_EXAMPLE)
+
+
+def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
+    """P2: built from real expertise, so it carries evidence.
+
+    A proxy, and known to be one: presence of a table or a worked example is
+    mechanical, whether the evidence behind it is real is not, and that
+    judgement is left to skills/config-audit.
+
+    Scoped to the skill directory rather than SKILL.md alone. A prototype
+    scoped to SKILL.md reported humanizer as evidence-free when its
+    35-pattern catalog is in patterns.md precisely because principle 3 says
+    to push a catalog to a reference file -- a check that punishes compliance
+    with one principle in the name of another is worse than none.
+    """
+    out = []
+    for path in skill_files(root):
+        texts = [p.read_text() for p in sorted(path.parent.glob("*.md"))]
+        if not any(r.search(text) for text in texts for r in EVIDENCE):
+            out.append(
+                Finding(
+                    2,
+                    rel(path.parent, root),
+                    "no table, code example or labelled worked example "
+                    "anywhere in the skill directory; guidance with no "
+                    "evidence structure reads as authoritative and cannot "
+                    "be checked",
+                )
+            )
+    return out
+
+
+def check_script_help(root: Path = REPO_ROOT) -> list[Finding]:
+    """P4: a script an agent must read to use has failed principle 3 while
+    pretending to serve it."""
+    out = []
+    for path in script_files(root):
+        if "ArgumentParser" not in path.read_text():
+            out.append(
+                Finding(
+                    4,
+                    rel(path, root),
+                    "no argparse parser, so `--help` does not work and the "
+                    "interface can only be learned by reading the source",
+                )
+            )
+    return out
+
+
+SCRIPT_REF = re.compile(r"scripts/([A-Za-z_][A-Za-z0-9_]*\.py)")
+TASK_REF = re.compile(r"pixi run ([a-z][a-z0-9-]*)")
+READ_THE_SOURCE = re.compile(
+    r"\bread(?:ing|s)?\b[^.\n]{0,40}\bscripts/[A-Za-z_][A-Za-z0-9_]*\.py", re.IGNORECASE
+)
+
+
+def prose_files(root: Path = REPO_ROOT) -> list[Path]:
+    """Everything that can name a script and so can name one that is gone."""
+    candidates = [
+        root / "CLAUDE.md",
+        root / "README.md",
+        *sorted((root / "skills").glob("*/*.md")),
+    ]
+    return [p for p in candidates if p.exists()]
+
+
+def pixi_tasks(root: Path = REPO_ROOT) -> set[str]:
+    """Names from `[tasks]` and from every `[feature.<name>.tasks]`.
+
+    Reading only the top-level table reported six real tasks as dangling:
+    this project keeps its dev-env tasks under a feature, which is idiomatic
+    pixi and invisible to a top-level lookup.
+    """
+    path = root / "pixi.toml"
+    if not path.exists():
+        return set()
+    data = tomllib.loads(path.read_text())
+    names = set(data.get("tasks", {}))
+    for feature in data.get("feature", {}).values():
+        names |= set(feature.get("tasks", {}))
+    return names
+
+
+def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
+    """P4: a named script or task must resolve, and prose must name the
+    command rather than the source."""
+    have = {p.name for p in script_files(root)}
+    tasks = pixi_tasks(root)
+    out = []
+    for path in prose_files(root):
+        text = path.read_text()
+        asset = rel(path, root)
+        for name in sorted(set(SCRIPT_REF.findall(text)) - have):
+            out.append(Finding(4, asset, f"names scripts/{name}, which does not exist"))
+        for name in sorted(set(TASK_REF.findall(text)) - tasks):
+            out.append(
+                Finding(
+                    4,
+                    asset,
+                    f"names `pixi run {name}`, which is not a task in pixi.toml",
+                )
+            )
+        for hit in READ_THE_SOURCE.findall(text):
+            out.append(
+                Finding(
+                    4,
+                    asset,
+                    "instructs reading a script rather than running it: "
+                    f'"{hit.strip()}"',
+                )
+            )
+    return out
+
+
 # Extended by later tasks. Order here is the order findings are collected in;
 # `audit` sorts, so it does not affect output.
-CHECKS = (check_trigger_shaped, check_budgets)
+CHECKS = (
+    check_trigger_shaped,
+    check_budgets,
+    check_evidence,
+    check_script_help,
+    check_script_references,
+)
 
 
 def audit(root: Path = REPO_ROOT) -> list[Finding]:

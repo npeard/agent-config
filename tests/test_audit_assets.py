@@ -121,3 +121,129 @@ class TestBaseline:
 
     def test_p3_baseline_is_clean(self):
         assert audit_assets.check_budgets(REPO_ROOT) == []
+
+
+class TestEvidence:
+    def test_skill_with_no_table_or_example_anywhere_is_reported(self, fake_root):
+        write_skill(fake_root, "bare", "Use when bare", "# Body\n\nJust prose.\n")
+        found = audit_assets.check_evidence(fake_root)
+        assert [f.asset for f in found] == ["skills/bare"]
+        assert found[0].principle == 2
+
+    def test_table_in_skill_md_satisfies_it(self, fake_root):
+        write_skill(fake_root, "tabled", "Use when tabled")
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_fenced_code_block_satisfies_it(self, fake_root):
+        write_skill(fake_root, "fenced", "Use when fenced", "# B\n\n```\nx = 1\n```\n")
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_evidence_in_a_reference_file_satisfies_it(self, fake_root):
+        """The humanizer case. Its catalog lives in patterns.md exactly as
+        principle 3 prescribes, so a SKILL.md-only check would punish
+        compliance with one principle in the name of another."""
+        write_skill(fake_root, "split", "Use when split", "# B\n\nSee patterns.md.\n")
+        (fake_root / "skills" / "split" / "patterns.md").write_text(
+            "| a | b |\n| --- | --- |\n| 1 | 2 |\n"
+        )
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_labelled_worked_example_satisfies_it(self, fake_root):
+        """The real humanizer shape. Its catalog is before/after pairs with no
+        table and no code fence, and a check that knew only those two reported
+        the most evidence-dense skill in the repo as evidence-free."""
+        write_skill(
+            fake_root,
+            "worked",
+            "Use when worked",
+            "# B\n\n**Words to watch:** x\n\n**Before:** a\n\n**After:** b\n",
+        )
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_asset_is_the_directory_so_the_ledger_key_is_stable(self, fake_root):
+        write_skill(fake_root, "bare", "Use when bare", "# Body\n\nJust prose.\n")
+        assert audit_assets.check_evidence(fake_root)[0].key == "skills/bare::P2"
+
+
+class TestScriptHelp:
+    def test_script_without_argparse_is_reported(self, fake_root):
+        (fake_root / "scripts" / "mute.py").write_text("import sys\nprint(sys.argv)\n")
+        found = audit_assets.check_script_help(fake_root)
+        assert [f.asset for f in found] == ["scripts/mute.py"]
+        assert found[0].principle == 4
+
+    def test_script_with_argparse_is_silent(self, fake_root):
+        (fake_root / "scripts" / "ok.py").write_text(
+            "import argparse\np = argparse.ArgumentParser()\n"
+        )
+        assert audit_assets.check_script_help(fake_root) == []
+
+    def test_a_usage_docstring_alone_does_not_satisfy_it(self, fake_root):
+        """The exact shape of the two baseline violations: documented for a
+        human reading the file, undiscoverable for an agent that should not
+        have to."""
+        (fake_root / "scripts" / "doc.py").write_text('"""Usage:\n    doc.py X\n"""\n')
+        assert audit_assets.check_script_help(fake_root)
+
+
+class TestScriptReferences:
+    def test_dangling_script_path_is_reported(self, fake_root):
+        write_skill(fake_root, "ref", "Use when ref", "# B\n\nRun scripts/ghost.py.\n")
+        found = audit_assets.check_script_references(fake_root)
+        assert any("ghost.py" in f.detail for f in found)
+
+    def test_existing_script_path_is_silent(self, fake_root):
+        (fake_root / "scripts" / "real.py").write_text("import argparse\n")
+        write_skill(fake_root, "ref", "Use when ref", "# B\n\nRun scripts/real.py.\n")
+        assert audit_assets.check_script_references(fake_root) == []
+
+    def test_dangling_pixi_task_is_reported(self, fake_root):
+        write_skill(fake_root, "ref", "Use when ref", "# B\n\nRun `pixi run nope`.\n")
+        found = audit_assets.check_script_references(fake_root)
+        assert any("pixi run nope" in f.detail for f in found)
+
+    def test_existing_pixi_task_is_silent(self, fake_root):
+        write_skill(fake_root, "ref", "Use when ref", "# B\n\nRun `pixi run fmt`.\n")
+        assert audit_assets.check_script_references(fake_root) == []
+
+    def test_a_feature_scoped_pixi_task_counts_as_existing(self, fake_root):
+        """Six real tasks looked dangling because they live under
+        [feature.dev.tasks] rather than [tasks]."""
+        (fake_root / "pixi.toml").write_text(
+            '[tasks]\nfmt = "true"\n\n[feature.dev.tasks]\ncheck = "true"\n'
+        )
+        write_skill(fake_root, "ref", "Use when ref", "# B\n\nRun `pixi run check`.\n")
+        assert audit_assets.check_script_references(fake_root) == []
+
+    def test_instruction_to_read_a_script_is_reported(self, fake_root):
+        (fake_root / "scripts" / "real.py").write_text("import argparse\n")
+        write_skill(
+            fake_root,
+            "ref",
+            "Use when ref",
+            "# B\n\nRead scripts/real.py to see the flags.\n",
+        )
+        found = audit_assets.check_script_references(fake_root)
+        assert any("instructs reading" in f.detail for f in found)
+
+    def test_claude_md_is_covered_too(self, fake_root):
+        (fake_root / "CLAUDE.md").write_text("Run scripts/ghost.py\n")
+        assert any(
+            "ghost.py" in f.detail
+            for f in audit_assets.check_script_references(fake_root)
+        )
+
+
+class TestBaselineTaskTwo:
+    def test_p2_baseline_is_clean(self):
+        assert audit_assets.check_evidence(REPO_ROOT) == []
+
+    def test_p4_help_baseline_is_the_two_known_scripts(self):
+        found = audit_assets.check_script_help(REPO_ROOT)
+        assert sorted(f.asset for f in found) == [
+            "scripts/check_ascii.py",
+            "scripts/suppressions.py",
+        ]
+
+    def test_p4_reference_baseline_is_clean(self):
+        assert audit_assets.check_script_references(REPO_ROOT) == []
