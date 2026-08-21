@@ -394,3 +394,32 @@ class TestInterpreter:
         monkeypatch.chdir(git_repo)
         monkeypatch.setattr("sys.prefix", "/usr/local")
         assert preflight.main(["--strict"]) == 1
+
+
+class TestAuditOwed:
+    """The marker is gitignored branch state, so nothing else can report it."""
+
+    def report_for(self, root):
+        report = preflight.Report()
+        preflight.check_audit_owed(report, root)
+        return report.rows
+
+    def test_marker_with_assets_is_reported(self, tmp_path):
+        (tmp_path / ".audit-owed").write_text("scripts/x.py\nCLAUDE.md\n")
+        rows = self.report_for(tmp_path)
+        assert len(rows) == 1
+        status, label, detail = rows[0]
+        assert status == preflight.WARN and label == "audit"
+        assert "2 config asset(s)" in detail and "pixi run audit" in detail
+
+    def test_absent_marker_is_silent(self, tmp_path):
+        assert self.report_for(tmp_path) == []
+
+    def test_empty_marker_is_silent(self, tmp_path):
+        """A hook that wrote nothing should not produce a standing warning."""
+        (tmp_path / ".audit-owed").write_text("\n\n")
+        assert self.report_for(tmp_path) == []
+
+    def test_a_directory_named_like_the_marker_is_silent(self, tmp_path):
+        (tmp_path / ".audit-owed").mkdir()
+        assert self.report_for(tmp_path) == []

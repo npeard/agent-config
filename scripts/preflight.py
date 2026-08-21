@@ -400,6 +400,39 @@ def check_friction(report: Report, root: Path) -> None:
         report.add(OK, "friction", "nothing over the bar")
 
 
+def check_audit_owed(report: Report, root: Path) -> None:
+    """Report a config audit this branch owes but has not run.
+
+    Branch state, not repo state and not machine state: the marker is
+    gitignored, so no test can gate it and it does not travel. Reported here
+    because session start is when it matters -- the hook that wrote the marker
+    injected its reminder into a session that has since ended, and this is
+    what carries the obligation across that boundary.
+
+    Silent when the marker is absent, and silent in projects that have no
+    audit script, since preflight is copied into repos with no such concept.
+    """
+    if not (Path(__file__).resolve().parent / "audit_assets.py").is_file():
+        return
+    marker = root / ".audit-owed"
+    if not marker.is_file():
+        return
+    try:
+        assets = [
+            line.strip() for line in marker.read_text().splitlines() if line.strip()
+        ]
+    except OSError:
+        return
+    if not assets:
+        return
+    report.add(
+        WARN,
+        "audit",
+        f"{len(assets)} config asset(s) changed on this branch; "
+        "run `pixi run audit` and the config-audit skill before integrating",
+    )
+
+
 def check_hooks(report: Report, root: Path) -> None:
     """Report hooks declared in the repo but not registered on this machine.
 
@@ -509,6 +542,7 @@ def main(argv: list[str]) -> int:
     check_hooks(report, root)
     if not args.no_friction:
         check_friction(report, root)
+    check_audit_owed(report, root)
 
     problems = report.render()
     return 1 if (args.strict and problems) else 0

@@ -56,11 +56,15 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "4fd9f3a5ec79905585663d5cfd725fcb38eeaa0e8e96cd4df16c82c7480e3673"
+asset_sha = "d46b51bfad3ec7a670193f5ed9ffad1c2cd2a06b414e93f88fa7bba3da4bfc0b"
 note = """
 Reads manifests to decide booleans and emits check names and pass/fail
 statuses, not manifest content. The foreign-manifest source matches on the
 filenames it looks for rather than on anything it forwards.
+
+Re-granted 2026-08-21 after check_audit_owed was added: the hash expired
+exactly as designed and the finding returned. The new code reads a gitignored
+marker in this repo and emits a count, so the judgement above is unchanged.
 """
 
 [[decision]]

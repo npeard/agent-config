@@ -1,0 +1,217 @@
+"""Contract tests for hooks/audit-owed.py.
+
+Exercised as a subprocess through its real contract -- a payload on stdin, an
+optional payload on stdout -- like the other hook tests here.
+
+Unlike promotion-check.py this hook reads git state and writes a marker file,
+so the repo path and the marker are monkeypatched to a temporary tree. The
+hook derives MASTER_REPO from expanduser at import time, so the tests run it
+with a patched HOME rather than editing the source.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+HOOK = REPO_ROOT / "hooks" / "audit-owed.py"
+MARKER = ".audit-owed"
+
+
+@pytest.fixture
+def fake_master(tmp_path: Path, git_repo_factory) -> Path:
+    """A repo at the path the hook computes from a patched HOME."""
+    repo = tmp_path / "Documents" / "Projects" / "claude-config"
+    repo.parent.mkdir(parents=True)
+    git_repo_factory(repo)
+    return repo
+
+
+@pytest.fixture
+def git_repo_factory():
+    def make(path: Path) -> Path:
+        path.mkdir(parents=True, exist_ok=True)
+        run = lambda *a: subprocess.run(
+            ["git", *a], cwd=path, check=True, capture_output=True
+        )
+        run("init", "-q", "-b", "main", ".")
+        run("config", "user.email", "test@example.invalid")
+        run("config", "user.name", "test")
+        (path / "README.md").write_text("seed\n")
+        run("add", "README.md")
+        run("commit", "-qm", "seed")
+        return path
+
+    return make
+
+
+def commit(repo: Path, relative: str, body: str = "x\n") -> None:
+    target = repo / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body)
+    subprocess.run(["git", "add", relative], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-qm", f"touch {relative}"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
+def run_hook(payload, home: Path, repo: Path | None = None) -> str:
+    env = {**os.environ, "HOME": str(home)}
+    env["CLAUDE_CONFIG_REPO"] = str(
+        repo if repo else home / "Documents/Projects/claude-config"
+    )
+    result = subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=payload if isinstance(payload, str) else json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+    return result.stdout.strip()
+
+
+def payload(repo: Path, command: str = "git commit -m x") -> dict:
+    return {"tool_input": {"command": command}, "cwd": str(repo)}
+
+
+def fired(out: str) -> bool:
+    if not out:
+        return False
+    data = json.loads(out)
+    block = data["hookSpecificOutput"]
+    assert block["hookEventName"] == "PostToolUse"
+    assert block["additionalContext"]
+    return True
+
+
+class TestFiring:
+    @pytest.mark.parametrize(
+        "relative",
+        ["skills/x/SKILL.md", "scripts/x.py", "hooks/x.py", "CLAUDE.md"],
+    )
+    def test_commit_touching_a_config_asset_records_and_injects(
+        self, fake_master, tmp_path, relative
+    ):
+        commit(fake_master, relative)
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        assert relative in (fake_master / MARKER).read_text()
+
+    @pytest.mark.parametrize("relative", ["docs/note.md", "pixi.lock", "README.md"])
+    def test_commit_touching_nothing_auditable_is_silent(
+        self, fake_master, tmp_path, relative
+    ):
+        commit(fake_master, relative)
+        assert run_hook(payload(fake_master), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    def test_non_commit_bash_is_silent(self, fake_master, tmp_path):
+        commit(fake_master, "scripts/x.py")
+        out = run_hook(payload(fake_master, command="git status"), tmp_path)
+        assert out == ""
+        assert not (fake_master / MARKER).exists()
+
+    def test_commit_outside_the_master_repo_is_silent(
+        self, fake_master, tmp_path, git_repo_factory
+    ):
+        """The hook is scoped to this repo; promotion-check.py covers the
+        'you wrote a skill elsewhere' case."""
+        other = git_repo_factory(tmp_path / "Documents" / "Projects" / "other")
+        commit(other, "scripts/x.py")
+        assert run_hook(payload(other), tmp_path) == ""
+
+    def test_a_sibling_directory_is_not_the_master_repo(
+        self, fake_master, tmp_path, git_repo_factory
+    ):
+        """A bare prefix test would swallow claude-config-other."""
+        sibling = git_repo_factory(
+            tmp_path / "Documents" / "Projects" / "claude-config-other"
+        )
+        commit(sibling, "scripts/x.py")
+        assert run_hook(payload(sibling), tmp_path) == ""
+
+    def test_a_subdirectory_of_the_master_repo_still_fires(self, fake_master, tmp_path):
+        commit(fake_master, "scripts/x.py")
+        (fake_master / "scripts").mkdir(exist_ok=True)
+        out = run_hook(
+            {
+                "tool_input": {"command": "git commit -m x"},
+                "cwd": str(fake_master / "scripts"),
+            },
+            tmp_path,
+        )
+        assert fired(out)
+
+    @pytest.mark.parametrize("bad", ["", "not json", "[]", "null"])
+    def test_malformed_stdin_is_silent(self, fake_master, tmp_path, bad):
+        assert run_hook(bad, tmp_path) == ""
+
+    def test_missing_cwd_is_silent(self, fake_master, tmp_path):
+        assert run_hook({"tool_input": {"command": "git commit"}}, tmp_path) == ""
+
+    def test_missing_tool_input_is_silent(self, fake_master, tmp_path):
+        assert run_hook({"cwd": str(fake_master)}, tmp_path) == ""
+
+
+class TestIdempotence:
+    def test_second_commit_adding_no_new_asset_injects_nothing(
+        self, fake_master, tmp_path
+    ):
+        commit(fake_master, "scripts/x.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        commit(fake_master, "scripts/x.py", body="changed\n")
+        assert run_hook(payload(fake_master), tmp_path) == ""
+
+    def test_second_commit_adding_a_new_asset_injects_again(
+        self, fake_master, tmp_path
+    ):
+        commit(fake_master, "scripts/x.py")
+        run_hook(payload(fake_master), tmp_path)
+        commit(fake_master, "hooks/y.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+
+    def test_the_marker_accumulates_a_sorted_unique_set(self, fake_master, tmp_path):
+        for relative in ("scripts/x.py", "hooks/y.py", "CLAUDE.md"):
+            commit(fake_master, relative)
+            run_hook(payload(fake_master), tmp_path)
+        lines = (fake_master / MARKER).read_text().split()
+        assert (
+            lines == sorted(set(lines)) == ["CLAUDE.md", "hooks/y.py", "scripts/x.py"]
+        )
+
+
+class TestWiring:
+    def test_the_hook_declares_its_event(self):
+        assert "# claude-hook: PostToolUse Bash" in HOOK.read_text()
+
+    def test_the_marker_is_gitignored(self):
+        """A committed marker would follow the branch to another machine and
+        claim an audit is owed there."""
+        assert MARKER in (REPO_ROOT / ".gitignore").read_text().split()
+
+    def test_the_expanduser_default_is_still_used_without_the_override(
+        self, fake_master, tmp_path
+    ):
+        """The override exists for portability and for these tests; the
+        documented install path must keep working without it."""
+        commit(fake_master, "scripts/x.py")
+        env = {**os.environ, "HOME": str(tmp_path)}
+        env.pop("CLAUDE_CONFIG_REPO", None)
+        result = subprocess.run(
+            [sys.executable, str(HOOK)],
+            input=json.dumps(payload(fake_master)),
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+        )
+        assert fired(result.stdout.strip())
