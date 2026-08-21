@@ -45,13 +45,33 @@ def is_config_asset(path: str) -> bool:
     return path.startswith(CONFIG_PREFIXES) or path in CONFIG_FILES
 
 
+def failed(response) -> bool:
+    """True only when the response positively says the command failed.
+
+    Deliberately one-directional: an unrecognised payload shape means "not
+    known to have failed", so a schema change degrades to the previous
+    behaviour rather than silencing the hook entirely.
+    """
+    if not isinstance(response, dict):
+        return False
+    if response.get("is_error") or response.get("interrupted"):
+        return True
+    for key in ("exit_code", "exitCode", "returncode", "returnCode"):
+        code = response.get(key)
+        if isinstance(code, int) and code != 0:
+            return True
+    return False
+
+
 def committed_paths(repo: str) -> list[str]:
     """Paths in HEAD's commit.
 
     PostToolUse means the commit already happened, so the staged set is gone
     and HEAD is what was recorded. Failures return empty rather than raising:
-    a hook that tracebacks is noisier than one that declines, and `git commit`
-    appearing in a command is not proof a commit succeeded.
+    a hook that tracebacks is noisier than one that declines. `git commit`
+    appearing in a command is not proof a commit succeeded either; `failed`
+    above is what guards that, since HEAD would otherwise be the *previous*
+    commit.
     """
     try:
         out = subprocess.run(
@@ -63,6 +83,11 @@ def committed_paths(repo: str) -> list[str]:
                 "--no-commit-id",
                 "--name-only",
                 "-r",
+                # --root: a parentless commit otherwise reports no paths at
+                # all. -m: nor does a merge commit, and a merge is how config
+                # assets usually arrive on the default branch.
+                "--root",
+                "-m",
                 "HEAD",
             ],
             capture_output=True,
@@ -88,6 +113,12 @@ def main() -> None:
 
     command = (data.get("tool_input") or {}).get("command") or ""
     if "git commit" not in command:
+        return
+
+    if failed(data.get("tool_response")):
+        # This repo runs ruff with --exit-non-zero-on-fix, so a rejected then
+        # retried commit is routine. Without this the hook reads the *previous*
+        # commit and claims one just happened.
         return
 
     cwd = data.get("cwd")

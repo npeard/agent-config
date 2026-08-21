@@ -93,6 +93,12 @@ the file changes. Write the note that states *that asset's* actual trust
 boundary or rationale. A formula copied across five entries records
 nothing, and is worse than an empty ledger because it looks decided.
 
+Then clear the marker: `pixi run audit --clear-owed`. This is not
+tidying. `preflight` reports on the marker's presence, not on whether an
+audit ran, so a marker nobody clears becomes a standing warning -- and a
+warning that is always there is one everyone learns to scroll past,
+which is the same failure as a gate loosened to keep passing.
+
 A pass that changes nothing is a successful pass. Say so and stop.
 
 ## Red flags
@@ -108,3 +114,4 @@ A pass that changes nothing is a successful pass. Say so and stop.
 | "This asset is under its ceiling, so it is fine"    | A ceiling bounds growth. It does not make content worth reading.                                                                  |
 | "These two skills feel similar, I'll merge them"    | State the boundary first. If you can state it, they are distinct.                                                                 |
 | "I'll skip the ledger and mention it in the report" | The report is gone next session. The ledger is what stops re-litigation.                                                          |
+| "The audit is done, I'll leave the marker"          | `preflight` warns on presence, not completion. `pixi run audit --clear-owed`.                                                     |

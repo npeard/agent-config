@@ -127,9 +127,9 @@ pixi run all                        # format, lint, ascii, spell,
   would report the same findings eight times and get skimmed by the
   fourth. A marker file rather than a message because context is lost to
   compaction and session end, and `preflight` reads the marker, so a
-  fresh session picks up an audit an earlier one owed.
-  `CLAUDE_CONFIG_REPO` overrides the install path for a clone kept
-  elsewhere.
+  fresh session picks up an audit an earlier one owed, and
+  `pixi run audit --clear-owed` is what ends it. `CLAUDE_CONFIG_REPO`
+  overrides the install path for a clone kept elsewhere.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn comes back to you: the turn ended (`Stop`), a tool wants
   permission or the prompt has gone idle (`Notification`), or Claude is

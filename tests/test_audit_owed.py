@@ -215,3 +215,79 @@ class TestWiring:
             env=env,
         )
         assert fired(result.stdout.strip())
+
+
+class TestCommitActuallyHappened:
+    """`git commit` in a command is not proof a commit succeeded, and this
+    repo runs ruff with --exit-non-zero-on-fix, so a rejected-then-retried
+    commit is routine rather than hypothetical."""
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            {"is_error": True},
+            {"interrupted": True},
+            {"exit_code": 1},
+            {"returncode": 128},
+        ],
+    )
+    def test_a_failed_commit_records_nothing(self, fake_master, tmp_path, response):
+        commit(fake_master, "scripts/x.py")
+        data = {**payload(fake_master), "tool_response": response}
+        assert run_hook(data, tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    @pytest.mark.parametrize(
+        "response", [{"exit_code": 0}, {"stdout": "1 file changed"}, None, "text"]
+    )
+    def test_anything_not_known_to_have_failed_still_fires(
+        self, fake_master, tmp_path, response
+    ):
+        """One-directional on purpose: an unrecognised payload degrades to the
+        old behaviour rather than silencing the hook."""
+        commit(fake_master, "scripts/x.py")
+        data = {**payload(fake_master), "tool_response": response}
+        assert fired(run_hook(data, tmp_path))
+
+
+class TestCommitShapes:
+    def test_a_merge_commit_is_seen(self, fake_master, tmp_path):
+        """How config assets usually reach the default branch. Without -m,
+        diff-tree reports no paths for a merge at all."""
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "feat"],
+            cwd=fake_master,
+            check=True,
+            capture_output=True,
+        )
+        commit(fake_master, "scripts/from_branch.py")
+        subprocess.run(
+            ["git", "checkout", "-q", "main"],
+            cwd=fake_master,
+            check=True,
+            capture_output=True,
+        )
+        commit(fake_master, "docs/other.md")
+        subprocess.run(
+            ["git", "merge", "-q", "--no-ff", "feat", "-m", "merge"],
+            cwd=fake_master,
+            check=True,
+            capture_output=True,
+        )
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        assert "scripts/from_branch.py" in (fake_master / MARKER).read_text()
+
+    def test_a_root_commit_is_seen(self, tmp_path):
+        """A parentless commit reports no paths without --root."""
+        repo = tmp_path / "Documents" / "Projects" / "claude-config"
+        repo.mkdir(parents=True)
+        run = lambda *a: subprocess.run(
+            ["git", *a], cwd=repo, check=True, capture_output=True
+        )
+        run("init", "-q", "-b", "main", ".")
+        run("config", "user.email", "t@e.invalid")
+        run("config", "user.name", "t")
+        (repo / "CLAUDE.md").write_text("x\n")
+        run("add", "CLAUDE.md")
+        run("commit", "-qm", "root")
+        assert fired(run_hook(payload(repo), tmp_path))
