@@ -34,4 +34,4 @@ lint = "ruff check ."
 spell = "codespell ."
 precommit = "pre-commit run --all-files"
 test = "pytest -q"
-all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "test"] }
+all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "audit", "test"] }

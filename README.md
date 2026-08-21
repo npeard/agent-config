@@ -51,10 +51,11 @@ pixi run friction                   # recurring friction from transcripts
 pixi run toolgaps                   # missing tooling + reusable assets
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
+pixi run audit                      # agent-asset principle breaches
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
-                                    #   suppressions, test
+                                    #   suppressions, audit, test
 ```
 
 ## Layout
@@ -79,6 +80,14 @@ pixi run all                        # format, lint, ascii, spell,
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
   what makes the improvement loop converge rather than nag.
+- `audit-ledger.toml` -- accepted exceptions to the five agent-asset
+  principles, keyed on asset *and* principle. Where `friction-ledger`
+  reopens a class when its count doubles, an entry here carries the
+  audited file's `asset_sha` and expires when that file changes: a
+  friction is an event stream, but an audit finding is a statement about
+  a file, so a decision about a file is only valid for the file it was
+  made about. `pixi run audit --sha <asset>` gives the value, so writing
+  an entry never means opening the script.
 - `skills/reflect/` -- diagnoses *why* a friction recurs before deciding
   what to change, and prefers a hook over a script over a skill over
   prose, because a hook does not gate on context.
@@ -111,6 +120,16 @@ pixi run all                        # format, lint, ascii, spell,
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/audit-owed.py` -- on a commit touching `skills/`, `scripts/`,
+  `hooks/` or `CLAUDE.md`, records the asset in a gitignored
+  `.audit-owed` and asks for *one* audit at branch end rather than one
+  per commit -- an audit that fired on all eight commits of a branch
+  would report the same findings eight times and get skimmed by the
+  fourth. A marker file rather than a message because context is lost to
+  compaction and session end, and `preflight` reads the marker, so a
+  fresh session picks up an audit an earlier one owed.
+  `CLAUDE_CONFIG_REPO` overrides the install path for a clone kept
+  elsewhere.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn comes back to you: the turn ended (`Stop`), a tool wants
   permission or the prompt has gone idle (`Notification`), or Claude is
@@ -132,11 +151,16 @@ pixi run all                        # format, lint, ascii, spell,
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `toolgaps.py`, `suppressions.py`, `thresholds.py`)
   meant to be copied into new projects rather than rewritten from
-  scratch, plus `register_hooks.py`, which is specific to this repo's
-  install. `check_ascii.py` lets a single file opt out with a
-  reason-bearing `check-ascii: allow` marker in its first ten lines; a
-  marker with no reason fails rather than skipping, so the exemption is
-  documented rather than silent.
+  scratch, plus `register_hooks.py` and `audit_assets.py`, which are
+  specific to this repo -- the first to its install, the second because
+  it knows this layout rather than describing a capability every project
+  has. `audit_assets.py` also owns the always-loaded context ceilings,
+  which `tests/test_context_budget.py` imports rather than restating, so
+  the gate and the report share one definition of each number.
+  `check_ascii.py` lets a single file opt out with a reason-bearing
+  `check-ascii: allow` marker in its first ten lines; a marker with no
+  reason fails rather than skipping, so the exemption is documented
+  rather than silent.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

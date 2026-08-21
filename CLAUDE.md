@@ -99,6 +99,10 @@ parts that do not depend on it, state the assumption, continue.
   so the default outcome is no new artifact -- usually because a rule
   already exists and was ignored, or a tool is working as designed. The
   ladder and the reasoning live in that skill.
+- **Audit the config as a system, not only the diff.** When a branch
+  touches `skills/`, `scripts/`, `hooks/` or this file, `pixi run audit`
+  reports mechanical breaches of the five agent-asset principles and the
+  `config-audit` skill judges the rest.
 - **Promote general taste to this repo.** If a preference, skill, script
   or hook would hold across projects rather than being tied to one
   project's domain or tooling, it belongs in
