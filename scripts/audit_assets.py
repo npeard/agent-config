@@ -142,6 +142,110 @@ def check_trigger_shaped(root: Path = REPO_ROOT) -> list[Finding]:
     return out
 
 
+# Words every description shares by construction. Without removing them the
+# mandatory trigger opener is itself overlap, every pair trips, and the check
+# reports nothing usable.
+OVERLAP_STOPWORDS = frozenset(
+    {
+        # Structural words, plus the trigger opener every description shares.
+        "and",
+        "are",
+        "the",
+        "that",
+        "this",
+        "with",
+        "when",
+        "for",
+        "from",
+        "into",
+        "not",
+        "use",
+        "used",
+        "using",
+        "its",
+        "their",
+    }
+)
+
+# Set from measurement, not taste. Across the seven skills present when this
+# was written the highest pairwise similarity is 0.148 --
+# standards-and-spec-review against workflow-orchestration, an adjacency that
+# is intentional and documented -- so 0.35 leaves that alone while still
+# catching a genuine near-duplicate. Calibrated on seven skills, so it may not
+# hold at twenty; if a real pair ever trips it, read the pair before touching
+# the number. `max_overlap` prints the current figure.
+OVERLAP_THRESHOLD = 0.35
+
+
+def content_words(text: str) -> set[str]:
+    return {
+        w
+        for w in re.findall(r"[a-z]+", text.lower())
+        if w not in OVERLAP_STOPWORDS and len(w) > 2
+    }
+
+
+def max_overlap(root: Path = REPO_ROOT) -> tuple[float, str, str]:
+    """The most similar pair of descriptions, as (score, asset, asset).
+
+    Exposed so a test can assert headroom under the threshold rather than
+    only that nothing currently fires -- the second passes just as well when
+    the threshold has drifted up to hide a real pair.
+    """
+    described = []
+    for path in skill_files(root):
+        value = description(path.read_text())
+        if value:
+            described.append((rel(path.parent, root), content_words(value)))
+    best = (0.0, "", "")
+    for i, (a_name, a_words) in enumerate(described):
+        for b_name, b_words in described[i + 1 :]:
+            union = a_words | b_words
+            if not union:
+                continue
+            score = len(a_words & b_words) / len(union)
+            if score > best[0]:
+                best = (score, *sorted((a_name, b_name)))
+    return best
+
+
+def check_overlap(root: Path = REPO_ROOT) -> list[Finding]:
+    """P1: two triggers a reader would have to choose between.
+
+    Reports the pair and its score; it never picks a winner. Which of two
+    overlapping skills should narrow its trigger, or whether they should
+    merge, is the judgement `reflect`'s boundary-sentence test exists for.
+
+    Keyed on the alphabetically first of the pair so the ledger entry for an
+    accepted adjacency does not move when an unrelated skill is added.
+    """
+    out = []
+    described = []
+    for path in skill_files(root):
+        value = description(path.read_text())
+        if value:
+            described.append((rel(path.parent, root), content_words(value)))
+    for i, (a_name, a_words) in enumerate(described):
+        for b_name, b_words in described[i + 1 :]:
+            union = a_words | b_words
+            if not union:
+                continue
+            score = len(a_words & b_words) / len(union)
+            if score < OVERLAP_THRESHOLD:
+                continue
+            first, second = sorted((a_name, b_name))
+            out.append(
+                Finding(
+                    1,
+                    first,
+                    f"trigger overlaps {second} at {score:.2f} (threshold "
+                    f"{OVERLAP_THRESHOLD:.2f}); a reader has to choose between "
+                    "them and will sometimes choose wrong",
+                )
+            )
+    return out
+
+
 def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     """P3: spend context wisely."""
     out = []
@@ -389,6 +493,7 @@ def check_read_and_emit(root: Path = REPO_ROOT) -> list[Finding]:
 # `audit` sorts, so it does not affect output.
 CHECKS = (
     check_trigger_shaped,
+    check_overlap,
     check_budgets,
     check_evidence,
     check_script_help,

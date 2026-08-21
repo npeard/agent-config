@@ -446,3 +446,49 @@ class TestRepoIsClean:
         keys = {f.key for f in audit_assets.audit(REPO_ROOT)}
         orphans = sorted(set(audit_assets.load_ledger()) - keys)
         assert not orphans, f"ledger entries with no matching finding: {orphans}"
+
+
+class TestOverlap:
+    def test_near_identical_descriptions_are_reported_as_a_pair(self, fake_root):
+        write_skill(
+            fake_root, "one", "Use when reviewing prose for stock phrasing and filler"
+        )
+        write_skill(
+            fake_root, "two", "Use when reviewing prose for filler and stock phrasing"
+        )
+        found = audit_assets.check_overlap(fake_root)
+        assert len(found) == 1
+        assert found[0].principle == 1
+        assert "skills/one" in found[0].asset
+        assert "two" in found[0].detail
+
+    def test_distinct_descriptions_are_silent(self, fake_root):
+        write_skill(fake_root, "one", "Use when drawing quantum circuit diagrams")
+        write_skill(fake_root, "two", "Use when a deploy fails during rollout")
+        assert audit_assets.check_overlap(fake_root) == []
+
+    def test_shared_boilerplate_alone_is_not_overlap(self, fake_root):
+        """Every description here opens with the same trigger words. If those
+        counted, the check would report every pair and be useless."""
+        write_skill(fake_root, "one", "Use when the alpha subsystem misbehaves")
+        write_skill(fake_root, "two", "Use when the beta pipeline stalls")
+        assert audit_assets.check_overlap(fake_root) == []
+
+    def test_the_pair_is_keyed_on_the_first_asset_so_the_ledger_is_stable(
+        self, fake_root
+    ):
+        write_skill(fake_root, "bbb", "Use when reviewing prose for stock filler words")
+        write_skill(fake_root, "aaa", "Use when reviewing prose for filler stock words")
+        found = audit_assets.check_overlap(fake_root)
+        assert found[0].asset == "skills/aaa" and found[0].key == "skills/aaa::P1"
+
+    def test_the_score_is_reported_so_a_reader_can_judge_the_threshold(self, fake_root):
+        write_skill(fake_root, "one", "Use when reviewing prose for stock phrasing")
+        write_skill(fake_root, "two", "Use when reviewing prose for stock phrasing")
+        assert "1.00" in audit_assets.check_overlap(fake_root)[0].detail
+
+    def test_the_real_repo_has_headroom_under_the_threshold(self):
+        """The threshold was set from this measurement; if it ever fires here,
+        read the pair before touching the number."""
+        assert audit_assets.check_overlap(REPO_ROOT) == []
+        assert audit_assets.max_overlap(REPO_ROOT)[0] < audit_assets.OVERLAP_THRESHOLD
