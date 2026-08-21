@@ -11,6 +11,7 @@ or ledgered" checkable rather than asserted.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import audit_assets
@@ -309,3 +310,108 @@ class TestBaselineTaskThree:
             "scripts/preflight.py",
             "scripts/toolgaps.py",
         ]
+
+
+class TestSha:
+    def test_file_sha_is_content_addressed(self, tmp_path):
+        p = tmp_path / "a.txt"
+        p.write_text("one")
+        first = audit_assets.sha(p)
+        p.write_text("two")
+        assert first != audit_assets.sha(p)
+
+    def test_directory_sha_covers_its_markdown(self, tmp_path):
+        """P2 findings name a directory, so suppression needs a hash for one."""
+        d = tmp_path / "skill"
+        d.mkdir()
+        (d / "SKILL.md").write_text("a")
+        first = audit_assets.sha(d)
+        (d / "patterns.md").write_text("b")
+        assert first != audit_assets.sha(d)
+
+    def test_renaming_a_reference_file_expires_the_exception(self, tmp_path):
+        d = tmp_path / "skill"
+        d.mkdir()
+        (d / "patterns.md").write_text("a")
+        first = audit_assets.sha(d)
+        (d / "patterns.md").rename(d / "catalog.md")
+        assert first != audit_assets.sha(d)
+
+    def test_missing_path_is_none_rather_than_an_error(self, tmp_path):
+        assert audit_assets.sha(tmp_path / "gone") is None
+
+
+class TestLedger:
+    def entry(self, asset, principle, asset_sha):
+        return (
+            "[[decision]]\n"
+            f'asset = "{asset}"\n'
+            f"principle = {principle}\n"
+            'date = "2026-08-21"\n'
+            'cause = "working-as-designed"\n'
+            'outcome = "tier-0"\n'
+            f'asset_sha = "{asset_sha}"\n'
+            'note = "because"\n'
+        )
+
+    def test_matching_sha_suppresses_the_finding(self, fake_root):
+        target = fake_root / "scripts" / "mute.py"
+        target.write_text("x = 1\n")
+        f = audit_assets.Finding(4, "scripts/mute.py", "detail")
+        ledger = {f.key: audit_assets.sha(target)}
+        live, suppressed = audit_assets.partition([f], ledger, fake_root)
+        assert live == [] and suppressed == [f]
+
+    def test_stale_sha_lets_the_finding_return(self, fake_root):
+        target = fake_root / "scripts" / "mute.py"
+        target.write_text("x = 1\n")
+        f = audit_assets.Finding(4, "scripts/mute.py", "detail")
+        live, suppressed = audit_assets.partition([f], {f.key: "stale"}, fake_root)
+        assert live == [f] and suppressed == []
+
+    def test_a_ledger_entry_is_scoped_to_one_principle(self, fake_root):
+        target = fake_root / "scripts" / "mute.py"
+        target.write_text("x = 1\n")
+        ledger = {"scripts/mute.py::P4": audit_assets.sha(target)}
+        other = audit_assets.Finding(5, "scripts/mute.py", "detail")
+        live, _ = audit_assets.partition([other], ledger, fake_root)
+        assert live == [other]
+
+    def test_missing_ledger_file_is_not_an_error(self, tmp_path):
+        assert audit_assets.load_ledger(tmp_path / "none.toml") == {}
+
+    def test_entry_missing_a_required_field_fails_loudly(self, tmp_path):
+        """Without asset_sha the exception would never expire, which is how
+        friction-ledger's count_at_decision rule fails when omitted."""
+        p = tmp_path / "l.toml"
+        p.write_text('[[decision]]\nasset = "a"\nprinciple = 1\n')
+        with pytest.raises(SystemExit) as e:
+            audit_assets.load_ledger(p)
+        assert "asset_sha" in str(e.value)
+
+    def test_loaded_entries_are_keyed_asset_and_principle(self, tmp_path):
+        p = tmp_path / "l.toml"
+        p.write_text(self.entry("scripts/x.py", 5, "abc"))
+        assert audit_assets.load_ledger(p) == {"scripts/x.py::P5": "abc"}
+
+
+class TestCli:
+    def test_sha_flag_prints_a_hash_so_a_ledger_entry_needs_no_source_read(
+        self, capsys
+    ):
+        rc = audit_assets.main(["--sha", "scripts/friction.py"])
+        out = capsys.readouterr().out.strip()
+        assert rc == 0 and len(out) == 64
+
+    def test_sha_flag_on_a_missing_asset_is_an_error(self):
+        assert audit_assets.main(["--sha", "scripts/ghost.py"]) == 2
+
+    def test_json_reports_live_and_suppressed_separately(self, capsys):
+        audit_assets.main(["--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert set(payload) == {"findings", "suppressed"}
+
+    def test_no_ledger_reports_accepted_exceptions_as_findings(self, capsys):
+        audit_assets.main(["--json", "--no-ledger"])
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["suppressed"] == []

@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -29,6 +30,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+LEDGER = REPO_ROOT / "audit-ledger.toml"
 
 # Measured at the time of writing plus deliberately tight headroom. Raising
 # one of these should feel heavier than adding a sentence, which is the point.
@@ -393,6 +395,65 @@ def render(findings: list[Finding]) -> None:
         print(f"        {f.detail}")
 
 
+REQUIRED_LEDGER_FIELDS = frozenset(
+    {"asset", "principle", "date", "cause", "outcome", "asset_sha"}
+)
+
+
+def sha(path: Path) -> str | None:
+    """Content hash of a file, or of a skill directory's markdown.
+
+    Directories are handled because P2 findings name one. Filenames go into
+    the digest alongside contents, so renaming a reference file expires the
+    exception too.
+    """
+    if path.is_file():
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    if path.is_dir():
+        h = hashlib.sha256()
+        for child in sorted(path.glob("*.md")):
+            h.update(child.name.encode())
+            h.update(child.read_bytes())
+        return h.hexdigest()
+    return None
+
+
+def load_ledger(path: Path = LEDGER) -> dict[str, str]:
+    """`asset::P<n>` -> the asset's sha when the exception was granted.
+
+    A missing field exits rather than warning: an entry without `asset_sha`
+    would suppress its finding forever, which is exactly how
+    friction-ledger.toml's `count_at_decision` rule fails when omitted.
+    """
+    if not path.exists():
+        return {}
+    out = {}
+    for d in tomllib.loads(path.read_text()).get("decision", []):
+        missing = REQUIRED_LEDGER_FIELDS - set(d)
+        if missing:
+            raise SystemExit(
+                f"{path.name}: entry for {d.get('asset', '?')} is missing "
+                f"{sorted(missing)}. Every field is required; asset_sha most "
+                "of all, since without it the exception never expires."
+            )
+        out[f"{d['asset']}::P{d['principle']}"] = d["asset_sha"]
+    return out
+
+
+def partition(
+    findings: list[Finding], ledger: dict[str, str], root: Path = REPO_ROOT
+) -> tuple[list[Finding], list[Finding]]:
+    """(live, suppressed). An exception is granted to the asset as it stood."""
+    live: list[Finding] = []
+    suppressed: list[Finding] = []
+    for f in findings:
+        recorded = ledger.get(f.key)
+        current = sha(root / f.asset)
+        target = suppressed if recorded and current and recorded == current else live
+        target.append(f)
+    return live, suppressed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit this repo's assets against the five agent-asset principles."
@@ -402,13 +463,45 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="machine-readable output, for the config-audit skill",
     )
+    parser.add_argument(
+        "--no-ledger",
+        action="store_true",
+        help="report accepted exceptions as findings too",
+    )
+    parser.add_argument(
+        "--sha",
+        metavar="ASSET",
+        help="print an asset's content hash, for writing a ledger entry",
+    )
     args = parser.parse_args(argv)
+
+    if args.sha:
+        digest = sha(REPO_ROOT / args.sha)
+        if digest is None:
+            print(f"no such asset: {args.sha}", file=sys.stderr)
+            return 2
+        print(digest)
+        return 0
+
     findings = audit()
+    live, suppressed = (
+        (findings, []) if args.no_ledger else partition(findings, load_ledger())
+    )
     if args.json:
-        print(json.dumps({"findings": [asdict(f) for f in findings]}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "findings": [asdict(f) for f in live],
+                    "suppressed": [asdict(f) for f in suppressed],
+                },
+                indent=2,
+            )
+        )
     else:
-        render(findings)
-    return 1 if findings else 0
+        render(live)
+        if suppressed:
+            print(f"\n{len(suppressed)} ledgered exception(s); --no-ledger to show.")
+    return 1 if live else 0
 
 
 if __name__ == "__main__":

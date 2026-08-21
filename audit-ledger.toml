@@ -1,0 +1,18 @@
+# Accepted exceptions to the five agent-asset principles, found by
+# `pixi run audit` and decided by the config-audit skill.
+#
+# Keyed on asset + principle: an exception is granted to one asset for one
+# principle, never to an asset wholesale.
+#
+# `asset_sha` is what makes this converge instead of going blind.
+# friction-ledger.toml reopens a class when its count doubles, because a
+# friction is an event stream. An audit finding is a statement about a file,
+# so the analogous rule is that the exception expires when the file changes:
+# a decision about a file is only valid for the file it was made about. Get
+# the value with `python scripts/audit_assets.py --sha <asset>`.
+#
+# Every field is required. An entry missing `asset_sha` would suppress its
+# finding forever, so loading one is a hard error rather than a warning.
+#
+# `cause` comes from the reflect skill's taxonomy; `outcome` from its tier
+# ladder. `tier-0` -- no artifact created -- is the expected outcome.
