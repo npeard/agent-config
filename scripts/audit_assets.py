@@ -112,6 +112,16 @@ def rel(path: Path, root: Path = REPO_ROOT) -> str:
     return path.relative_to(root).as_posix()
 
 
+def skill_texts(root: Path = REPO_ROOT) -> list[tuple[Path, str]]:
+    """Every SKILL.md with its contents, read once.
+
+    Three checks want the same text -- the trigger clause, the budgets, and
+    the overlap scan -- and each walking skill_files itself meant the same
+    file was read three times and the same two lines written three times.
+    """
+    return [(path, path.read_text()) for path in skill_files(root)]
+
+
 def first_clause(text: str) -> str:
     """Up to the first sentence- or clause-ending mark.
 
@@ -124,8 +134,8 @@ def first_clause(text: str) -> str:
 def check_trigger_shaped(root: Path = REPO_ROOT) -> list[Finding]:
     """P1: the description is the trigger."""
     out = []
-    for path in skill_files(root):
-        value = description(path.read_text())
+    for path, text in skill_texts(root):
+        value = description(text)
         if not value:
             out.append(Finding(1, rel(path, root), "no description in frontmatter"))
             continue
@@ -197,8 +207,8 @@ def overlap_pairs(root: Path = REPO_ROOT) -> list[tuple[float, str, str]]:
     itself, which was twenty duplicated lines earning nothing.
     """
     described = []
-    for path in skill_files(root):
-        value = description(path.read_text())
+    for path, text in skill_texts(root):
+        value = description(text)
         if value:
             described.append((rel(path.parent, root), content_words(value)))
     scored = []
@@ -260,8 +270,7 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
                 3, "CLAUDE.md", f"{n} words, over the {CLAUDE_MD_MAX_WORDS} ceiling"
             )
         )
-    for path in skill_files(root):
-        text = path.read_text()
+    for path, text in skill_texts(root):
         n = words(text)
         if n > SKILL_BODY_MAX_WORDS:
             out.append(
@@ -610,8 +619,10 @@ def partition(
     for f in findings:
         recorded = ledger.get(f.key)
         current = asset_sha(root, f.asset)
-        target = suppressed if recorded and current and recorded == current else live
-        target.append(f)
+        if recorded and current and recorded == current:
+            suppressed.append(f)
+        else:
+            live.append(f)
     return live, suppressed
 
 

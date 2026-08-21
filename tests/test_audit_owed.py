@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import run_git
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK = REPO_ROOT / "hooks" / "audit-owed.py"
@@ -35,17 +36,22 @@ def fake_master(tmp_path: Path, git_repo_factory) -> Path:
 
 @pytest.fixture
 def git_repo_factory():
+    """A repo at an arbitrary path, seeded with one commit.
+
+    conftest's `git_repo` fixture is fixed to tmp_path; these tests need the
+    repo at the specific location master_repo() resolves to, and a second one
+    beside it for the sibling-directory case. Only the path varies, so the git
+    invocation itself comes from conftest.
+    """
+
     def make(path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)
-        run = lambda *a: subprocess.run(
-            ["git", *a], cwd=path, check=True, capture_output=True
-        )
-        run("init", "-q", "-b", "main", ".")
-        run("config", "user.email", "test@example.invalid")
-        run("config", "user.name", "test")
+        run_git(path, "init", "-q", "-b", "main", ".")
+        run_git(path, "config", "user.email", "test@example.invalid")
+        run_git(path, "config", "user.name", "test")
         (path / "README.md").write_text("seed\n")
-        run("add", "README.md")
-        run("commit", "-qm", "seed")
+        run_git(path, "add", "README.md")
+        run_git(path, "commit", "-qm", "seed")
         return path
 
     return make
@@ -55,13 +61,8 @@ def commit(repo: Path, relative: str, body: str = "x\n") -> None:
     target = repo / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(body)
-    subprocess.run(["git", "add", relative], cwd=repo, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-qm", f"touch {relative}"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
+    run_git(repo, "add", relative)
+    run_git(repo, "commit", "-qm", f"touch {relative}")
 
 
 def run_hook(payload, home: Path, repo: Path | None = None) -> str:
@@ -254,26 +255,11 @@ class TestCommitShapes:
     def test_a_merge_commit_is_seen(self, fake_master, tmp_path):
         """How config assets usually reach the default branch. Without -m,
         diff-tree reports no paths for a merge at all."""
-        subprocess.run(
-            ["git", "checkout", "-q", "-b", "feat"],
-            cwd=fake_master,
-            check=True,
-            capture_output=True,
-        )
+        run_git(fake_master, "checkout", "-q", "-b", "feat")
         commit(fake_master, "scripts/from_branch.py")
-        subprocess.run(
-            ["git", "checkout", "-q", "main"],
-            cwd=fake_master,
-            check=True,
-            capture_output=True,
-        )
+        run_git(fake_master, "checkout", "-q", "main")
         commit(fake_master, "docs/other.md")
-        subprocess.run(
-            ["git", "merge", "-q", "--no-ff", "feat", "-m", "merge"],
-            cwd=fake_master,
-            check=True,
-            capture_output=True,
-        )
+        run_git(fake_master, "merge", "-q", "--no-ff", "feat", "-m", "merge")
         assert fired(run_hook(payload(fake_master), tmp_path))
         assert "scripts/from_branch.py" in (fake_master / MARKER).read_text()
 
@@ -281,13 +267,10 @@ class TestCommitShapes:
         """A parentless commit reports no paths without --root."""
         repo = tmp_path / "Documents" / "Projects" / "claude-config"
         repo.mkdir(parents=True)
-        run = lambda *a: subprocess.run(
-            ["git", *a], cwd=repo, check=True, capture_output=True
-        )
-        run("init", "-q", "-b", "main", ".")
-        run("config", "user.email", "t@e.invalid")
-        run("config", "user.name", "t")
+        run_git(repo, "init", "-q", "-b", "main", ".")
+        run_git(repo, "config", "user.email", "t@e.invalid")
+        run_git(repo, "config", "user.name", "t")
         (repo / "CLAUDE.md").write_text("x\n")
-        run("add", "CLAUDE.md")
-        run("commit", "-qm", "root")
+        run_git(repo, "add", "CLAUDE.md")
+        run_git(repo, "commit", "-qm", "root")
         assert fired(run_hook(payload(repo), tmp_path))
