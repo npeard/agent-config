@@ -303,6 +303,67 @@ def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
     return out
 
 
+# This file's own name. Every pattern below appears here as data, so without
+# an explicit exclusion the check reports itself and the finding can never be
+# resolved. Moving the patterns to a data file would fix that and make the
+# script unusable when copied, which is a worse trade.
+SELF = Path(__file__).name
+
+UNTRUSTED_SOURCES = {
+    "transcript": re.compile(r"\.claude/projects|\.jsonl"),
+    "network": re.compile(r"\burllib\b|\brequests\b|\bsocket\b|https?://"),
+    "foreign-manifest": re.compile(
+        r"pixi\.toml|pyproject\.toml|package\.json|Cargo\.toml|Makefile"
+    ),
+    "shell-out": re.compile(r"osascript|shell=True|os\.system"),
+}
+
+# `print(` of anything that is not a bare string literal. The negative
+# lookahead for `=` keeps a keyword argument (`print(file=...)`) from counting
+# as emitted content.
+EMIT_SINKS = {
+    "agent-context": re.compile(r"additionalContext"),
+    "shell-argument": re.compile(r"osascript|shell=True|os\.system"),
+    "stdout-nonliteral": re.compile(
+        r"print\(\s*(?:f[\"']|[A-Za-z_][A-Za-z0-9_]*\b(?!\s*=))"
+    ),
+}
+
+
+def check_read_and_emit(root: Path = REPO_ROOT) -> list[Finding]:
+    """P5: enumerate where content this repo did not author reaches agent
+    context, a shell, or stdout an agent reads.
+
+    Reports the conjunction and never a verdict. Whether a path is
+    exploitable, and what the right trust boundary is, is judgement --
+    skills/config-audit's job. Enumerating the surface is this check's job.
+
+    Deliberately wide: `shell-out` is both a source and a sink, because
+    passing text to osascript is simultaneously the untrusted read and the
+    dangerous emission. If a future audit's P5 section is mostly re-reading
+    ledger entries, narrow this to agent-context and shell-argument and drop
+    plain stdout.
+    """
+    out = []
+    for path in [*script_files(root), *hook_files(root)]:
+        if path.name == SELF:
+            continue
+        text = path.read_text()
+        sources = sorted(k for k, r in UNTRUSTED_SOURCES.items() if r.search(text))
+        sinks = sorted(k for k, r in EMIT_SINKS.items() if r.search(text))
+        if sources and sinks:
+            out.append(
+                Finding(
+                    5,
+                    rel(path, root),
+                    f"reads {'/'.join(sources)} and emits via {'/'.join(sinks)}; "
+                    "state the trust boundary in a comment, or ledger why none "
+                    "is needed",
+                )
+            )
+    return out
+
+
 # Extended by later tasks. Order here is the order findings are collected in;
 # `audit` sorts, so it does not affect output.
 CHECKS = (
@@ -311,6 +372,7 @@ CHECKS = (
     check_evidence,
     check_script_help,
     check_script_references,
+    check_read_and_emit,
 )
 
 

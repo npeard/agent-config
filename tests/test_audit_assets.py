@@ -247,3 +247,65 @@ class TestBaselineTaskTwo:
 
     def test_p4_reference_baseline_is_clean(self):
         assert audit_assets.check_script_references(REPO_ROOT) == []
+
+
+class TestReadAndEmit:
+    def test_untrusted_read_plus_emit_is_reported(self, fake_root):
+        (fake_root / "scripts" / "leaky.py").write_text(
+            "import argparse\n"
+            "from pathlib import Path\n"
+            "t = Path('~/.claude/projects/a.jsonl').read_text()\n"
+            "print(t)\n"
+        )
+        found = audit_assets.check_read_and_emit(fake_root)
+        assert [f.asset for f in found] == ["scripts/leaky.py"]
+        assert found[0].principle == 5
+        assert "transcript" in found[0].detail
+
+    def test_read_without_emit_is_silent(self, fake_root):
+        (fake_root / "scripts" / "quiet.py").write_text(
+            "from pathlib import Path\nt = Path('a.jsonl').read_text()\n"
+        )
+        assert audit_assets.check_read_and_emit(fake_root) == []
+
+    def test_emit_without_untrusted_read_is_silent(self, fake_root):
+        (fake_root / "scripts" / "talky.py").write_text("x = 1\nprint(x)\n")
+        assert audit_assets.check_read_and_emit(fake_root) == []
+
+    def test_print_of_a_bare_literal_is_not_an_emit(self, fake_root):
+        (fake_root / "scripts" / "lit.py").write_text(
+            "from pathlib import Path\nPath('a.jsonl').read_text()\nprint('done')\n"
+        )
+        assert audit_assets.check_read_and_emit(fake_root) == []
+
+    def test_hooks_are_covered_and_agent_context_is_a_sink(self, fake_root):
+        (fake_root / "hooks" / "h.py").write_text(
+            "import json\n"
+            "from pathlib import Path\n"
+            "t = Path('pixi.toml').read_text()\n"
+            'print(json.dumps({"additionalContext": t}))\n'
+        )
+        found = audit_assets.check_read_and_emit(fake_root)
+        assert [f.asset for f in found] == ["hooks/h.py"]
+        assert "agent-context" in found[0].detail
+
+    def test_the_audit_script_does_not_report_itself(self):
+        """It holds every pattern as data, so a naive scan flags it and the
+        finding can never be resolved."""
+        found = audit_assets.check_read_and_emit(REPO_ROOT)
+        assert audit_assets.SELF not in [Path(f.asset).name for f in found]
+
+
+class TestBaselineTaskThree:
+    def test_p5_baseline_is_the_six_enumerated_candidates(self):
+        """The spec's Baseline names these. Six of eleven is wide on purpose;
+        four are expected to end up ledgered with a stated trust boundary."""
+        found = audit_assets.check_read_and_emit(REPO_ROOT)
+        assert sorted(f.asset for f in found) == [
+            "hooks/notify.py",
+            "hooks/prose-writing.py",
+            "hooks/task-list.py",
+            "scripts/friction.py",
+            "scripts/preflight.py",
+            "scripts/toolgaps.py",
+        ]
