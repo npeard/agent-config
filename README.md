@@ -82,6 +82,16 @@ pixi run all                        # format, lint, ascii, spell,
 - `skills/reflect/` -- diagnoses *why* a friction recurs before deciding
   what to change, and prefers a hook over a script over a skill over
   prose, because a hook does not gate on context.
+- `skills/config-audit/` -- audits the assembled config against five
+  agent-asset principles, which `AGENT_ASSET_PRINCIPLES.md` defines on
+  demand in the same arrangement as `CODING_STANDARDS.md`. The boundary
+  against `reflect` is one sentence: reflect asks why something went
+  wrong, this asks whether the system as assembled is still worth what
+  it costs, so it needs no incident to run. It consumes
+  `pixi run audit --json` rather than re-reading every asset, and it is
+  forbidden from proposing new skills -- `reflect` owns the tier ladder,
+  and without that boundary an auditing skill becomes the skill factory
+  reflect exists to prevent.
 - `skills/writing-orchestration/` -- the prose counterpart to
   `workflow-orchestration`. The split is one sentence:
   `workflow-orchestration` owns deliverables whose correctness a test

@@ -216,6 +216,40 @@ class TestScriptReferences:
         found = audit_assets.check_script_references(fake_root)
         assert any("instructs reading" in f.detail for f in found)
 
+    def test_a_read_instruction_inside_a_fence_is_an_example_not_a_directive(
+        self, fake_root
+    ):
+        """AGENT_ASSET_PRINCIPLES.md documents this anti-pattern with a Flag:
+        example, so a check that cannot tell a counter-example from a
+        directive reports the file teaching the rule as breaking it."""
+        (fake_root / "scripts" / "real.py").write_text("import argparse\n")
+        write_skill(
+            fake_root,
+            "ref",
+            "Use when ref",
+            "# B\n\n```markdown\n# Flag\nRead scripts/real.py for the flags.\n```\n",
+        )
+        assert audit_assets.check_script_references(fake_root) == []
+
+    def test_a_read_instruction_in_prose_is_still_reported(self, fake_root):
+        """The fence exemption must not swallow the real case."""
+        (fake_root / "scripts" / "real.py").write_text("import argparse\n")
+        write_skill(
+            fake_root,
+            "ref",
+            "Use when ref",
+            "# B\n\nRead scripts/real.py for the flags.\n\n```\nx = 1\n```\n",
+        )
+        assert audit_assets.check_script_references(fake_root)
+
+    def test_a_name_inside_a_fence_still_has_to_resolve(self, fake_root):
+        """Only the instruction check is fence-exempt. A pointer in a fenced
+        command block is still a pointer a reader will follow."""
+        write_skill(
+            fake_root, "ref", "Use when ref", "# B\n\n```\npixi run nope\n```\n"
+        )
+        assert audit_assets.check_script_references(fake_root)
+
     def test_claude_md_is_covered_too(self, fake_root):
         (fake_root / "CLAUDE.md").write_text("Run scripts/ghost.py\n")
         assert any(

@@ -247,6 +247,25 @@ READ_THE_SOURCE = re.compile(
 )
 
 
+FENCED_BLOCK = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+
+
+def unfenced(text: str) -> str:
+    """`text` with fenced code blocks removed.
+
+    Applied to READ_THE_SOURCE only. That check is about an instruction to
+    the reader, and inside a fence the same sentence is an illustration --
+    AGENT_ASSET_PRINCIPLES.md documents this very anti-pattern with a `Flag:`
+    example, and a check that cannot tell a counter-example from a directive
+    reports the file teaching the rule as breaking it.
+
+    Not applied to the name-resolution checks: a script path or task name in
+    a fence is still a pointer a reader will follow, and README's command
+    block is exactly that.
+    """
+    return FENCED_BLOCK.sub("", text)
+
+
 def prose_files(root: Path = REPO_ROOT) -> list[Path]:
     """Everything that can name a script and so can name one that is gone."""
     candidates = [
@@ -293,7 +312,7 @@ def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
                     f"names `pixi run {name}`, which is not a task in pixi.toml",
                 )
             )
-        for hit in READ_THE_SOURCE.findall(text):
+        for hit in READ_THE_SOURCE.findall(unfenced(text)):
             out.append(
                 Finding(
                     4,
