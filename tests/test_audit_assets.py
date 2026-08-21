@@ -113,17 +113,6 @@ class TestFindingKey:
         assert f.key == "scripts/friction.py::P5"
 
 
-class TestBaseline:
-    """The metric. See the spec's Baseline section."""
-
-    def test_p1_baseline_is_humanizer_only(self):
-        found = audit_assets.check_trigger_shaped(REPO_ROOT)
-        assert [f.asset for f in found] == ["skills/humanizer/SKILL.md"]
-
-    def test_p3_baseline_is_clean(self):
-        assert audit_assets.check_budgets(REPO_ROOT) == []
-
-
 class TestEvidence:
     def test_skill_with_no_table_or_example_anywhere_is_reported(self, fake_root):
         write_skill(fake_root, "bare", "Use when bare", "# Body\n\nJust prose.\n")
@@ -235,21 +224,6 @@ class TestScriptReferences:
         )
 
 
-class TestBaselineTaskTwo:
-    def test_p2_baseline_is_clean(self):
-        assert audit_assets.check_evidence(REPO_ROOT) == []
-
-    def test_p4_help_baseline_is_the_two_known_scripts(self):
-        found = audit_assets.check_script_help(REPO_ROOT)
-        assert sorted(f.asset for f in found) == [
-            "scripts/check_ascii.py",
-            "scripts/suppressions.py",
-        ]
-
-    def test_p4_reference_baseline_is_clean(self):
-        assert audit_assets.check_script_references(REPO_ROOT) == []
-
-
 class TestReadAndEmit:
     def test_untrusted_read_plus_emit_is_reported(self, fake_root):
         (fake_root / "scripts" / "leaky.py").write_text(
@@ -295,21 +269,6 @@ class TestReadAndEmit:
         finding can never be resolved."""
         found = audit_assets.check_read_and_emit(REPO_ROOT)
         assert audit_assets.SELF not in [Path(f.asset).name for f in found]
-
-
-class TestBaselineTaskThree:
-    def test_p5_baseline_is_the_six_enumerated_candidates(self):
-        """The spec's Baseline names these. Six of eleven is wide on purpose;
-        four are expected to end up ledgered with a stated trust boundary."""
-        found = audit_assets.check_read_and_emit(REPO_ROOT)
-        assert sorted(f.asset for f in found) == [
-            "hooks/notify.py",
-            "hooks/prose-writing.py",
-            "hooks/task-list.py",
-            "scripts/friction.py",
-            "scripts/preflight.py",
-            "scripts/toolgaps.py",
-        ]
 
 
 class TestSha:
@@ -415,3 +374,41 @@ class TestCli:
         audit_assets.main(["--json", "--no-ledger"])
         payload = json.loads(capsys.readouterr().out)
         assert payload["suppressed"] == []
+
+
+class TestRepoIsClean:
+    """The success metric, kept live.
+
+    The spec measured nine findings; each is now fixed or ledgered, and this
+    is what stops the count drifting back up. A failure names the asset and
+    the principle: fix it, or add a ledger entry with a cause. Do not delete
+    this test.
+    """
+
+    def test_no_live_findings(self):
+        live, _ = audit_assets.partition(
+            audit_assets.audit(REPO_ROOT), audit_assets.load_ledger(), REPO_ROOT
+        )
+        assert live == [], "\n".join(
+            f"P{f.principle} {f.asset}: {f.detail}" for f in live
+        )
+
+    def test_every_ledger_entry_still_matches_its_asset(self):
+        """A stale entry is not an error -- the finding simply returns -- but
+        it is worth reporting, because the usual cause is an asset edited
+        without revisiting the exception granted to it. It also catches an
+        asset that left the flagged set entirely, which nothing else would.
+        """
+        stale = [
+            key
+            for key, recorded in audit_assets.load_ledger().items()
+            if audit_assets.sha(REPO_ROOT / key.split("::")[0]) != recorded
+        ]
+        assert not stale, f"ledger entries no longer match their asset: {stale}"
+
+    def test_every_ledger_entry_names_a_finding_that_still_exists(self):
+        """An exception for a finding that no longer fires is dead weight, and
+        reads as though the asset were still a problem."""
+        keys = {f.key for f in audit_assets.audit(REPO_ROOT)}
+        orphans = sorted(set(audit_assets.load_ledger()) - keys)
+        assert not orphans, f"ledger entries with no matching finding: {orphans}"

@@ -16,3 +16,92 @@
 #
 # `cause` comes from the reflect skill's taxonomy; `outcome` from its tier
 # ladder. `tier-0` -- no artifact created -- is the expected outcome.
+
+[[decision]]
+asset = "scripts/friction.py"
+principle = 5
+date = "2026-08-21"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+asset_sha = "b9b309967c98082e497e371c56f9d6a1101063f8c2b450ffa7533e18a003c560"
+note = """
+The one genuine untrusted-content path in the repo: 400 characters of raw
+session transcript printed into agent context. Fixed rather than accepted --
+the excerpt is now fenced in <<< >>> and labelled as data whose instructions
+are not to be followed. Recorded here because the check flags the read/emit
+conjunction and cannot see the framing; the mitigation is the comment and the
+label at scripts/friction.py's review renderer.
+
+Not deleted, because printing an example is what makes a friction class
+actionable. The finding was about framing, not about the feature.
+"""
+
+[[decision]]
+asset = "hooks/notify.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "62e9c5e6c721a60bd40a3cf22d389d0484d4a8abd739291dd044a581729ccce6"
+note = """
+The trust boundary exists and is documented at the point of use: AppleScript
+string literals are escaped for backslash and quote before reaching osascript,
+and PowerShell single quotes are escaped by doubling. The flagged conjunction
+is real -- text does reach a shell interpreter -- and it is already handled.
+"""
+
+[[decision]]
+asset = "scripts/preflight.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "4fd9f3a5ec79905585663d5cfd725fcb38eeaa0e8e96cd4df16c82c7480e3673"
+note = """
+Reads manifests to decide booleans and emits check names and pass/fail
+statuses, not manifest content. The foreign-manifest source matches on the
+filenames it looks for rather than on anything it forwards.
+"""
+
+[[decision]]
+asset = "scripts/toolgaps.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "b70f0b26c0b4661f4114ca9bcbf54a3ece65e5055f7ecaabe52415112b9c2288"
+note = """
+Emits capability names and asset filenames from repos the user owns and
+cloned deliberately. No content from an untrusted source crosses into
+context; the match is on the manifest names it searches for.
+"""
+
+[[decision]]
+asset = "hooks/task-list.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "9a8dc0fde6c9fa5d23ba91439b9488d835cc1c8dd028b89a23459369479dfc1c"
+note = """
+The real one of the four accepted: it does emit task definitions from an
+arbitrary project's manifest into additionalContext, truncated at MAX_DEF=60.
+
+Labelling it was considered and rejected. The label would cost always-loaded
+words in every session of every project, against a vector whose source is a
+manifest the user cloned on purpose and whose payload is capped at 60
+characters. Recorded so a later audit does not re-litigate it -- if the cap
+is ever raised or the source widened, the sha changes and this returns.
+"""
+
+[[decision]]
+asset = "hooks/prose-writing.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "e17f10081fa5142c37060d100d2d6de4f9dc7f8bed245c8d061e734e9754032a"
+note = """
+Matches on manifest presence to decide whether to fire, then emits its own
+fixed message. Nothing it read reaches context.
+"""
