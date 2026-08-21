@@ -167,8 +167,8 @@ def main() -> None:
                         f"This branch has changed {len(known)} claude-config "
                         f"asset(s) ({listed}{more}). Before integrating, run "
                         "`pixi run audit` and invoke the config-audit skill "
-                        "once -- not once per commit. Delete .audit-owed when "
-                        "the audit is done."
+                        "once -- not once per commit, then "
+                        "`pixi run audit --clear-owed`."
                     ),
                 }
             }
