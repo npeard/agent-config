@@ -176,6 +176,10 @@ OVERLAP_STOPWORDS = frozenset(
 # the number. `max_overlap` prints the current figure.
 OVERLAP_THRESHOLD = 0.35
 
+# Joins the two halves of a pairwise finding's asset. "+" cannot appear in
+# a skill directory name, so splitting on it is unambiguous.
+PAIR_SEP = "+"
+
 
 def content_words(text: str) -> set[str]:
     return {
@@ -185,28 +189,39 @@ def content_words(text: str) -> set[str]:
     }
 
 
-def max_overlap(root: Path = REPO_ROOT) -> tuple[float, str, str]:
-    """The most similar pair of descriptions, as (score, asset, asset).
+def overlap_pairs(root: Path = REPO_ROOT) -> list[tuple[float, str, str]]:
+    """Every description pair and its Jaccard score, most similar first.
 
-    Exposed so a test can assert headroom under the threshold rather than
-    only that nothing currently fires -- the second passes just as well when
-    the threshold has drifted up to hide a real pair.
+    One scan with two consumers: `check_overlap` filters it by the threshold,
+    `max_overlap` takes its head. An earlier version had each walk the pairs
+    itself, which was twenty duplicated lines earning nothing.
     """
     described = []
     for path in skill_files(root):
         value = description(path.read_text())
         if value:
             described.append((rel(path.parent, root), content_words(value)))
-    best = (0.0, "", "")
+    scored = []
     for i, (a_name, a_words) in enumerate(described):
         for b_name, b_words in described[i + 1 :]:
             union = a_words | b_words
             if not union:
                 continue
-            score = len(a_words & b_words) / len(union)
-            if score > best[0]:
-                best = (score, *sorted((a_name, b_name)))
-    return best
+            first, second = sorted((a_name, b_name))
+            scored.append((len(a_words & b_words) / len(union), first, second))
+    return sorted(scored, reverse=True)
+
+
+def max_overlap(root: Path = REPO_ROOT) -> tuple[float, str, str]:
+    """The most similar pair, as (score, asset, asset).
+
+    Exposed so a test can bound the measurement with a literal rather than
+    against OVERLAP_THRESHOLD -- comparing it to the threshold is implied by
+    `check_overlap` returning nothing, and both keep passing if the threshold
+    is raised to hide a real pair.
+    """
+    pairs = overlap_pairs(root)
+    return pairs[0] if pairs else (0.0, "", "")
 
 
 def check_overlap(root: Path = REPO_ROOT) -> list[Finding]:
@@ -216,34 +231,23 @@ def check_overlap(root: Path = REPO_ROOT) -> list[Finding]:
     overlapping skills should narrow its trigger, or whether they should
     merge, is the judgement `reflect`'s boundary-sentence test exists for.
 
-    Keyed on the alphabetically first of the pair so the ledger entry for an
-    accepted adjacency does not move when an unrelated skill is added.
+    Keyed on BOTH assets, joined by PAIR_SEP. Keying it on one would break
+    the ledger two ways: A-overlaps-B and A-overlaps-C would collide on one
+    key, so reviewing one silently suppresses the other, and `asset_sha`
+    would cover only one side -- rewriting the *other* skill's description to
+    be near-identical would leave the exception in force.
     """
-    out = []
-    described = []
-    for path in skill_files(root):
-        value = description(path.read_text())
-        if value:
-            described.append((rel(path.parent, root), content_words(value)))
-    for i, (a_name, a_words) in enumerate(described):
-        for b_name, b_words in described[i + 1 :]:
-            union = a_words | b_words
-            if not union:
-                continue
-            score = len(a_words & b_words) / len(union)
-            if score < OVERLAP_THRESHOLD:
-                continue
-            first, second = sorted((a_name, b_name))
-            out.append(
-                Finding(
-                    1,
-                    first,
-                    f"trigger overlaps {second} at {score:.2f} (threshold "
-                    f"{OVERLAP_THRESHOLD:.2f}); a reader has to choose between "
-                    "them and will sometimes choose wrong",
-                )
-            )
-    return out
+    return [
+        Finding(
+            1,
+            f"{first}{PAIR_SEP}{second}",
+            f"trigger overlaps at {score:.2f} (threshold "
+            f"{OVERLAP_THRESHOLD:.2f}); a reader has to choose between them "
+            "and will sometimes choose wrong",
+        )
+        for score, first, second in overlap_pairs(root)
+        if score >= OVERLAP_THRESHOLD
+    ]
 
 
 def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
@@ -371,10 +375,18 @@ def unfenced(text: str) -> str:
 
 
 def prose_files(root: Path = REPO_ROOT) -> list[Path]:
-    """Everything that can name a script and so can name one that is gone."""
+    """Everything that can name a script and so can name one that is gone.
+
+    The ledgers are included, and not as an afterthought: audit-ledger.toml's
+    own header named `python scripts/audit_assets.py --sha` -- the exact P4
+    anti-pattern this check exists to find -- in the one file the check could
+    not see.
+    """
     candidates = [
         root / "CLAUDE.md",
         root / "README.md",
+        root / "audit-ledger.toml",
+        root / "friction-ledger.toml",
         *sorted((root / "skills").glob("*/*.md")),
     ]
     return [p for p in candidates if p.exists()]
@@ -519,27 +531,52 @@ def render(findings: list[Finding]) -> None:
         print(f"        {f.detail}")
 
 
+# `note` is required for the same reason as `asset_sha`: an entry that
+# suppresses a finding forever with no recorded reason is worse than no entry,
+# because it reads as decided.
 REQUIRED_LEDGER_FIELDS = frozenset(
-    {"asset", "principle", "date", "cause", "outcome", "asset_sha"}
+    {"asset", "principle", "date", "cause", "outcome", "asset_sha", "note"}
 )
 
 
 def sha(path: Path) -> str | None:
-    """Content hash of a file, or of a skill directory's markdown.
+    """Content hash of a file, or of a directory's files.
 
-    Directories are handled because P2 findings name one. Filenames go into
-    the digest alongside contents, so renaming a reference file expires the
-    exception too.
+    Directories are handled because P2 findings name one. Every regular file
+    counts, not just `*.md`: a skill's evidence can be a code sample or a
+    fixture, and hashing only markdown left the ledger's "expires when the
+    file changes" promise false for those. Relative paths go into the digest
+    alongside contents, so renaming or deleting a file expires the exception
+    too. __pycache__ is excluded because it is a build artifact, not content.
     """
     if path.is_file():
         return hashlib.sha256(path.read_bytes()).hexdigest()
     if path.is_dir():
         h = hashlib.sha256()
-        for child in sorted(path.glob("*.md")):
-            h.update(child.name.encode())
+        for child in sorted(path.rglob("*")):
+            if not child.is_file() or "__pycache__" in child.parts:
+                continue
+            h.update(child.relative_to(path).as_posix().encode())
             h.update(child.read_bytes())
         return h.hexdigest()
     return None
+
+
+def asset_sha(root: Path, asset: str) -> str | None:
+    """Hash of an asset, including a pairwise one.
+
+    A pair hashes both halves in order, so editing either side expires the
+    exception -- which is the whole point of keying the finding on the pair.
+    """
+    digests = []
+    for part in asset.split(PAIR_SEP):
+        digest = sha(root / part)
+        if digest is None:
+            return None
+        digests.append(digest)
+    if len(digests) == 1:
+        return digests[0]
+    return hashlib.sha256("".join(digests).encode()).hexdigest()
 
 
 def load_ledger(path: Path = LEDGER) -> dict[str, str]:
@@ -553,7 +590,7 @@ def load_ledger(path: Path = LEDGER) -> dict[str, str]:
         return {}
     out = {}
     for d in tomllib.loads(path.read_text()).get("decision", []):
-        missing = REQUIRED_LEDGER_FIELDS - set(d)
+        missing = REQUIRED_LEDGER_FIELDS - {k for k, v in d.items() if str(v).strip()}
         if missing:
             raise SystemExit(
                 f"{path.name}: entry for {d.get('asset', '?')} is missing "
@@ -572,7 +609,7 @@ def partition(
     suppressed: list[Finding] = []
     for f in findings:
         recorded = ledger.get(f.key)
-        current = sha(root / f.asset)
+        current = asset_sha(root, f.asset)
         target = suppressed if recorded and current and recorded == current else live
         target.append(f)
     return live, suppressed
@@ -593,14 +630,33 @@ def main(argv: list[str] | None = None) -> int:
         help="report accepted exceptions as findings too",
     )
     parser.add_argument(
+        "--clear-owed",
+        action="store_true",
+        help="delete .audit-owed once the audit is done",
+    )
+    parser.add_argument(
         "--sha",
         metavar="ASSET",
         help="print an asset's content hash, for writing a ledger entry",
     )
     args = parser.parse_args(argv)
 
+    if args.clear_owed:
+        # A warning nobody can clear is a warning everyone learns to ignore,
+        # which is the failure the house rule about flaky gates names. The
+        # hook that wrote the marker says to delete it in additionalContext --
+        # i.e. in exactly the context this design calls unreliable -- so
+        # clearing it has to be a command the skill can name.
+        marker = REPO_ROOT / ".audit-owed"
+        if marker.is_file():
+            marker.unlink()
+            print(f"cleared {marker.name}")
+        else:
+            print("no audit owed")
+        return 0
+
     if args.sha:
-        digest = sha(REPO_ROOT / args.sha)
+        digest = asset_sha(REPO_ROOT, args.sha)
         if digest is None:
             print(f"no such asset: {args.sha}", file=sys.stderr)
             return 2

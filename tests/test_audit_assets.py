@@ -322,6 +322,51 @@ class TestSha:
         (d / "patterns.md").write_text("b")
         assert first != audit_assets.sha(d)
 
+    def test_directory_sha_covers_non_markdown_evidence(self, tmp_path):
+        """Hashing only *.md left the ledger's expiry promise false for a
+        skill whose evidence is a code sample or a fixture."""
+        d = tmp_path / "skill"
+        d.mkdir()
+        (d / "SKILL.md").write_text("a")
+        (d / "example.py").write_text("x = 1")
+        first = audit_assets.sha(d)
+        (d / "example.py").write_text("x = 2")
+        assert first != audit_assets.sha(d)
+
+    def test_directory_sha_ignores_pycache(self, tmp_path):
+        d = tmp_path / "skill"
+        (d / "__pycache__").mkdir(parents=True)
+        (d / "SKILL.md").write_text("a")
+        first = audit_assets.sha(d)
+        (d / "__pycache__" / "x.pyc").write_bytes(b"\x00")
+        assert first == audit_assets.sha(d)
+
+
+class TestPairSha:
+    def make(self, root, name, text):
+        d = root / "skills" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(text)
+
+    def test_either_half_changing_expires_the_pair(self, fake_root):
+        self.make(fake_root, "aaa", "one")
+        self.make(fake_root, "bbb", "two")
+        asset = "skills/aaa+skills/bbb"
+        first = audit_assets.asset_sha(fake_root, asset)
+        self.make(fake_root, "bbb", "changed")
+        assert first != audit_assets.asset_sha(fake_root, asset)
+
+    def test_a_single_asset_hashes_to_its_own_digest(self, fake_root):
+        target = fake_root / "scripts" / "x.py"
+        target.write_text("x = 1\n")
+        assert audit_assets.asset_sha(fake_root, "scripts/x.py") == audit_assets.sha(
+            target
+        )
+
+    def test_a_missing_half_is_none_so_nothing_is_suppressed(self, fake_root):
+        self.make(fake_root, "aaa", "one")
+        assert audit_assets.asset_sha(fake_root, "skills/aaa+skills/gone") is None
+
     def test_renaming_a_reference_file_expires_the_exception(self, tmp_path):
         d = tmp_path / "skill"
         d.mkdir()
@@ -372,6 +417,24 @@ class TestLedger:
 
     def test_missing_ledger_file_is_not_an_error(self, tmp_path):
         assert audit_assets.load_ledger(tmp_path / "none.toml") == {}
+
+    def test_entry_missing_a_note_fails_loudly(self, tmp_path):
+        """A suppression with no recorded reason is worse than no entry: it
+        reads as decided."""
+        p = tmp_path / "l.toml"
+        p.write_text(
+            self.entry("scripts/x.py", 5, "abc").replace('note = "because"', "")
+        )
+        with pytest.raises(SystemExit) as e:
+            audit_assets.load_ledger(p)
+        assert "note" in str(e.value)
+
+    def test_entry_with_a_blank_note_fails_loudly(self, tmp_path):
+        p = tmp_path / "l.toml"
+        p.write_text(self.entry("scripts/x.py", 5, "abc").replace('"because"', '"   "'))
+        with pytest.raises(SystemExit) as e:
+            audit_assets.load_ledger(p)
+        assert "note" in str(e.value)
 
     def test_entry_missing_a_required_field_fails_loudly(self, tmp_path):
         """Without asset_sha the exception would never expire, which is how
@@ -459,8 +522,7 @@ class TestOverlap:
         found = audit_assets.check_overlap(fake_root)
         assert len(found) == 1
         assert found[0].principle == 1
-        assert "skills/one" in found[0].asset
-        assert "two" in found[0].detail
+        assert found[0].asset == "skills/one+skills/two"
 
     def test_distinct_descriptions_are_silent(self, fake_root):
         write_skill(fake_root, "one", "Use when drawing quantum circuit diagrams")
@@ -474,13 +536,19 @@ class TestOverlap:
         write_skill(fake_root, "two", "Use when the beta pipeline stalls")
         assert audit_assets.check_overlap(fake_root) == []
 
-    def test_the_pair_is_keyed_on_the_first_asset_so_the_ledger_is_stable(
-        self, fake_root
-    ):
+    def test_the_pair_is_ordered_so_the_ledger_key_is_stable(self, fake_root):
         write_skill(fake_root, "bbb", "Use when reviewing prose for stock filler words")
         write_skill(fake_root, "aaa", "Use when reviewing prose for filler stock words")
         found = audit_assets.check_overlap(fake_root)
-        assert found[0].asset == "skills/aaa" and found[0].key == "skills/aaa::P1"
+        assert found[0].key == "skills/aaa+skills/bbb::P1"
+
+    def test_two_overlaps_sharing_one_skill_get_distinct_keys(self, fake_root):
+        """Keyed on one asset, A-overlaps-B and A-overlaps-C collided, so a
+        ledger entry reviewed for one silently suppressed the other."""
+        for name in ("aaa", "bbb", "ccc"):
+            write_skill(fake_root, name, "Use when reviewing prose for stock filler")
+        keys = {f.key for f in audit_assets.check_overlap(fake_root)}
+        assert len(keys) == 3
 
     def test_the_score_is_reported_so_a_reader_can_judge_the_threshold(self, fake_root):
         write_skill(fake_root, "one", "Use when reviewing prose for stock phrasing")
@@ -490,5 +558,25 @@ class TestOverlap:
     def test_the_real_repo_has_headroom_under_the_threshold(self):
         """The threshold was set from this measurement; if it ever fires here,
         read the pair before touching the number."""
-        assert audit_assets.check_overlap(REPO_ROOT) == []
-        assert audit_assets.max_overlap(REPO_ROOT)[0] < audit_assets.OVERLAP_THRESHOLD
+        score, first, second = audit_assets.max_overlap(REPO_ROOT)
+        # A literal bound, not OVERLAP_THRESHOLD: comparing against the
+        # threshold is implied by check_overlap returning nothing, and both
+        # assertions keep passing if the threshold is raised to hide a pair.
+        assert score < 0.25, f"{first} and {second} now overlap at {score:.2f}"
+
+
+class TestClearOwed:
+    """A warning nobody can clear is a warning everyone learns to ignore."""
+
+    def test_clear_owed_removes_the_marker(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)
+        marker = tmp_path / ".audit-owed"
+        marker.write_text("scripts/x.py\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert not marker.exists()
+        assert "cleared" in capsys.readouterr().out
+
+    def test_clear_owed_with_no_marker_says_so(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert "no audit owed" in capsys.readouterr().out
