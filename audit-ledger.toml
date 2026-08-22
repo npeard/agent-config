@@ -62,16 +62,32 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "9a8dc0fde6c9fa5d23ba91439b9488d835cc1c8dd028b89a23459369479dfc1c"
+asset_sha = "6dec360499c0209662716f1961c42369aacee69907004b60b2bf04203fc47926"
 note = """
-The real one of the four accepted: it does emit task definitions from an
-arbitrary project's manifest into additionalContext, truncated at MAX_DEF=60.
+Re-decided 2026-08-21 after the previous note turned out to be wrong, and the
+way it was wrong is the lesson. It read: "whose payload is capped at 60
+characters ... if the cap is ever raised the sha changes and this returns."
+MAX_DEF caps the *definition* and never the *name*. Four of the five parsers
+bound names by charset; json_scripts cannot, because package.json keys are
+arbitrary JSON strings with newlines permitted. A crafted manifest therefore
+injected free-standing prose into SessionStart context -- the highest-trust
+position in the window -- in every project this hook fires in. Confirmed by
+running the hook against a hostile manifest, not by reading it.
 
-Labelling it was considered and rejected. The label would cost always-loaded
-words in every session of every project, against a vector whose source is a
-manifest the user cloned on purpose and whose payload is capped at 60
-characters. Recorded so a later audit does not re-litigate it -- if the cap
-is ever raised or the source widened, the sha changes and this returns.
+So the exception was granted on a premise that was never true, and asset_sha
+could not expire it because nothing about the file had changed. That is a
+failure mode neither the check nor the skill anticipated: a *specific, wrong*
+note is more durable than a vague one, because it looks like it was thought
+about. The skill's red-flag table warns against notes that all say the same
+thing; it should warn about notes whose stated boundary is never re-tested.
+
+Now accepted on a boundary that holds and is enforced in code: task names must
+fullmatch a shell-word charset, filtered in discover() where all five parsers
+converge rather than in json_scripts, so a parser added later cannot
+reintroduce it; and definitions have whitespace collapsed before truncation,
+because a definition well under the cap could still carry a newline and break
+out of the rendered list. Tests cover the newline name, the overlong name, the
+newline definition, and that ordinary names survive.
 """
 
 [[decision]]

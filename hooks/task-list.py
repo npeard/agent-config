@@ -119,6 +119,32 @@ SOURCES = (
 )
 
 
+# A task name is something you type after `pixi run`, so it is a shell word.
+# Four of the five parsers already enforce that by charset; json_scripts cannot,
+# because package.json keys are arbitrary JSON strings -- newlines included.
+# A crafted manifest therefore injected free-standing prose into SessionStart
+# context, the highest-trust position in the window, in every project this hook
+# fires in. MAX_DEF did not help: it caps the definition, never the name.
+#
+# Filtered here rather than inside json_scripts because discover() is the one
+# place every parser's output converges, so a parser added later cannot
+# reintroduce the hole.
+SAFE_NAME = re.compile(r"[A-Za-z0-9_.:@/-]{1,40}\Z")
+
+
+def safe_definition(value):
+    """Whitespace collapsed, then truncated.
+
+    Truncation alone was not enough: a definition well under MAX_DEF can still
+    contain a newline and break out of the list this renders into. Collapsing
+    first means the cap is a cap on what is displayed, not on what is quoted.
+    """
+    collapsed = " ".join(str(value).split())
+    if len(collapsed) > MAX_DEF:
+        return collapsed[: MAX_DEF - 3] + "..."
+    return collapsed
+
+
 def discover(root):
     out = []
     for filename, prefix, parse in SOURCES:
@@ -129,6 +155,7 @@ def discover(root):
             tasks = parse(path.read_text(errors="replace"))
         except OSError:
             continue
+        tasks = {n: v for n, v in tasks.items() if SAFE_NAME.match(str(n))}
         if tasks:
             out.append((prefix, tasks))
     return out
@@ -142,9 +169,7 @@ def render(discovered):
         lines.append(f"Task commands available ({prefix} <name>):")
         width = max(len(n) for n in shown)
         for name in shown:
-            definition = tasks[name]
-            if len(definition) > MAX_DEF:
-                definition = definition[: MAX_DEF - 3] + "..."
+            definition = safe_definition(tasks[name])
             lines.append(
                 f"  {name:<{width}}  {definition}" if definition else f"  {name}"
             )

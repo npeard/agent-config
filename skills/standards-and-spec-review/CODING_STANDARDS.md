@@ -15,8 +15,11 @@ better than a general preference does.
 1. Project standards override anything here.
 2. Skip whatever tooling already enforces. Formatting, import order,
    line length, trailing whitespace, spelling and non-ASCII are owned by
-   ruff, codespell, mdformat and `check_ascii.py`. A reviewer spending
-   attention there duplicates a hook that cannot be forgotten.
+   ruff, codespell, mdformat and `check_ascii.py`. `suppressions.py`
+   owns rule 2's "does the suppression say why", and `thresholds.py`
+   owns rule 6's detection half -- run them rather than reading for
+   either. A reviewer spending attention there duplicates a hook that
+   cannot be forgotten.
 
 Note the asymmetry with rule 7: never report formatting itself, but do
 report an author who hand-fixed formatting instead of running the tool.
@@ -163,7 +166,7 @@ adopting both.
 
 ## Fallback lens: the classic smells
 
-Weaker signals than the nine rules above -- prefer a concrete rule when
+Weaker signals than the ten rules above -- prefer a concrete rule when
 one applies. All are judgement calls; distinguish a hard violation from
 a matter of taste, and say which you are reporting. From Fowler,
 *Refactoring*, ch. 3.

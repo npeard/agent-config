@@ -29,8 +29,10 @@ Reason from its output. Do not re-read every asset to form your own view
 of what it already told you -- principle 3 applies to the auditor, and
 the mechanical pass is the cheap half by construction.
 
-`pixi run audit --owed` lists the assets this branch actually changed,
-which is the scope the judgement below applies to.
+`pixi run audit --owed` lists what the marker has recorded since it was
+last cleared -- not necessarily everything the branch changed, since
+clearing mid-branch resets it. For the branch's true scope use
+`git diff --name-only main...HEAD`.
 
 `--help` for the rest. `--sha <asset>` gives the hash a ledger entry
 needs, so writing one never requires opening the script.
@@ -106,15 +108,16 @@ A pass that changes nothing is a successful pass. Say so and stop.
 
 ## Red flags
 
-| Thought                                             | Reality                                                                                                                           |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| "The audit found nothing, so it was wasted"         | Tier 0 is the expected outcome. Report it and stop.                                                                               |
-| "This asset needs a new skill"                      | Not yours to propose. Hand it to `reflect`.                                                                                       |
-| "I'll read each skill and judge it myself"          | The script already did the mechanical pass. Read its JSON.                                                                        |
-| "The report is noisy, I'll loosen the check"        | Only if the check misjudged a compliant asset. Otherwise ledger the exception with a cause, so it expires when the asset changes. |
-| "I'll ledger this false positive to quiet it"       | A ledger entry claims the finding is real and accepted. Fix the check instead, and add a regression test.                         |
-| "Every P5 candidate gets the same note"             | Then the notes record nothing. State each asset's actual boundary.                                                                |
-| "This asset is under its ceiling, so it is fine"    | A ceiling bounds growth. It does not make content worth reading.                                                                  |
-| "These two skills feel similar, I'll merge them"    | State the boundary first. If you can state it, they are distinct.                                                                 |
-| "I'll skip the ledger and mention it in the report" | The report is gone next session. The ledger is what stops re-litigation.                                                          |
-| "The audit is done, I'll leave the marker"          | `preflight` warns on presence, not completion. `pixi run audit --clear-owed`.                                                     |
+| Thought                                              | Reality                                                                                                                                                                                                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "The audit found nothing, so it was wasted"          | Tier 0 is the expected outcome. Report it and stop.                                                                                                                                                                          |
+| "This asset needs a new skill"                       | Not yours to propose. Hand it to `reflect`.                                                                                                                                                                                  |
+| "I'll read each skill and judge it myself"           | The script already did the mechanical pass. Read its JSON.                                                                                                                                                                   |
+| "The report is noisy, I'll loosen the check"         | Only if the check misjudged a compliant asset. Otherwise ledger the exception with a cause, so it expires when the asset changes.                                                                                            |
+| "I'll ledger this false positive to quiet it"        | A ledger entry claims the finding is real and accepted. Fix the check instead, and add a regression test.                                                                                                                    |
+| "Every P5 candidate gets the same note"              | Then the notes record nothing. State each asset's actual boundary.                                                                                                                                                           |
+| "This note states a real boundary, so it is settled" | Re-test the boundary, do not re-read the note. `task-list.py`'s said the payload was capped at 60 characters; the cap was on the definition, never the name, and `asset_sha` could not expire a premise that was never true. |
+| "This asset is under its ceiling, so it is fine"     | A ceiling bounds growth. It does not make content worth reading.                                                                                                                                                             |
+| "These two skills feel similar, I'll merge them"     | State the boundary first. If you can state it, they are distinct.                                                                                                                                                            |
+| "I'll skip the ledger and mention it in the report"  | The report is gone next session. The ledger is what stops re-litigation.                                                                                                                                                     |
+| "The audit is done, I'll leave the marker"           | `preflight` warns on presence, not completion. `pixi run audit --clear-owed`.                                                                                                                                                |
