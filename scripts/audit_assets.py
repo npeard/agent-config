@@ -479,6 +479,40 @@ def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
 # an explicit exclusion the check reports itself and the finding can never be
 # resolved. Moving the patterns to a data file would fix that and make the
 # script unusable when copied, which is a worse trade.
+def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
+    """P4: an asset the README does not name is one you must read the tree to find.
+
+    The reverse direction of check_script_references, which only asks whether a
+    *named* script exists. Nothing asked the other way, so an asset could ship
+    undocumented and be invisible to every gate here -- and it had:
+    promotion-check.py, task-list.py and skills/quantikz were named nowhere in
+    the Layout section, one of them for months.
+
+    Matched on the bare name as well as the path, because README groups the
+    generic scripts into one bullet that lists filenames rather than paths.
+    """
+    readme = root / "README.md"
+    if not readme.is_file():
+        return []
+    text = readme.read_text()
+    assets = [*hook_files(root), *script_files(root)]
+    assets += [d for d in sorted((root / "skills").glob("*")) if d.is_dir()]
+    out = []
+    for path in assets:
+        name = path.name
+        if name in text or rel(path, root) in text:
+            continue
+        out.append(
+            Finding(
+                4,
+                rel(path, root),
+                "not named in README.md, so it can only be discovered by "
+                "reading the tree; add a Layout entry saying why it exists",
+            )
+        )
+    return out
+
+
 SELF = Path(__file__).name
 
 UNTRUSTED_SOURCES = {
@@ -572,6 +606,7 @@ CHECKS = (
     check_evidence,
     check_script_help,
     check_script_references,
+    check_asset_documented,
     check_read_and_emit,
 )
 

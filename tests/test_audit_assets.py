@@ -717,3 +717,48 @@ class TestProseFilesDepth:
         )
         found = audit_assets.check_script_references(fake_root)
         assert any("ghost.py" in f.detail for f in found)
+
+
+class TestAssetDocumented:
+    """The reverse direction of check_script_references. Nothing asked whether
+    an asset was documented, so three shipped undocumented and no gate saw it.
+    """
+
+    def readme(self, root, body):
+        (root / "README.md").write_text(body)
+
+    def test_an_undocumented_hook_is_reported(self, fake_root):
+        (fake_root / "hooks" / "ghost.py").write_text("x = 1\n")
+        self.readme(fake_root, "# r\n")
+        found = audit_assets.check_asset_documented(fake_root)
+        assert "hooks/ghost.py" in [f.asset for f in found]
+        assert found[0].principle == 4
+
+    def test_a_bare_filename_counts_as_documented(self, fake_root):
+        """README groups the generic scripts into one bullet listing filenames
+        rather than paths."""
+        (fake_root / "scripts" / "tool.py").write_text("x = 1\n")
+        self.readme(fake_root, "- `scripts/` -- generic tools (`tool.py`)\n")
+        # Not `== []`: the fixture ships an undocumented `alpha` skill, so the
+        # assertion has to be about this asset rather than about the whole tree.
+        assert "scripts/tool.py" not in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_full_path_counts_as_documented(self, fake_root):
+        (fake_root / "hooks" / "h.py").write_text("x = 1\n")
+        self.readme(fake_root, "- `hooks/h.py` -- does a thing\n")
+        assert "hooks/h.py" not in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_an_undocumented_skill_directory_is_reported(self, fake_root):
+        write_skill(fake_root, "orphan", "Use when orphan")
+        self.readme(fake_root, "# r\n")
+        assert "skills/orphan" in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_missing_readme_is_not_an_error(self, fake_root):
+        (fake_root / "hooks" / "h.py").write_text("x = 1\n")
+        assert audit_assets.check_asset_documented(fake_root) == []

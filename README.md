@@ -120,6 +120,27 @@ pixi run all                        # format, lint, ascii, spell,
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/promotion-check.py` -- fires when a `CLAUDE.md`, memory or
+  skill file is written *outside* this repo, asking whether the
+  preference is general enough to belong here instead. It resolves
+  symlinks before matching, because `install.sh` links this repo into
+  `~/.claude`, so editing the config through its installed path would
+  otherwise look like editing a foreign project and the hook would tell
+  you to promote a file you are already editing here.
+- `hooks/task-list.py` -- injects the project's actual short-form task
+  commands at session start. It replaced a rule that said "use the
+  project's task commands" with the information that rule was a proxy
+  for: the observed failure was not ignorance of the rule but not
+  knowing that `pixi run format` existed and covered the work. It parses
+  the manifest with a regex rather than `tomllib`, because the
+  interpreter that runs a hook is named in `~/.claude/settings.json` --
+  a file outside this repo's checks -- and a task list is worth having
+  approximately when that file is stale.
+- `skills/quantikz/` -- drawing and debugging quantum circuit diagrams
+  in LaTeX. The one domain skill here rather than a workflow one, and
+  the reason `.pre-commit-config.yaml` excludes its directory from
+  `mdformat`: the reference material is full of bare backslashes, and
+  the formatter turns `\gate` into `\\gate`.
 - `hooks/audit-owed.py` -- on a commit touching `skills/`, `scripts/`,
   `hooks/` or `CLAUDE.md`, records the asset in a gitignored
   `.audit-owed` and asks for *one* audit at branch end rather than one
