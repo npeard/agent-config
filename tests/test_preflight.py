@@ -386,15 +386,55 @@ class TestInterpreter:
         preflight.check_interpreter(report, tmp_path)
         assert statuses(report, "interpreter") == [WARN]
 
-    def test_a_failing_interpreter_stops_the_other_checks(
-        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    def test_an_env_reached_through_a_symlink_is_local(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """A wrong interpreter makes later results untrustworthy and some of
-        them unrunnable, so preflight reports and stops rather than guessing.
-        """
+        """A git worktree commonly symlinks `.pixi` at the parent checkout's
+        environment. Compared as written, that read as a foreign interpreter,
+        which then discarded the entire step-0 gate in every worktree."""
+        shared = tmp_path / "parent" / ".pixi"
+        (shared / "envs" / "dev").mkdir(parents=True)
+        root = tmp_path / "worktree"
+        root.mkdir()
+        (root / "pixi.toml").write_text('python = ">=3.0"\n')
+        (root / ".pixi").symlink_to(shared)
+        monkeypatch.setattr("sys.prefix", str(root / ".pixi" / "envs" / "dev"))
+        report = preflight.Report()
+        preflight.check_interpreter(report, root)
+        assert statuses(report, "interpreter") == [OK]
+
+    def test_a_project_with_no_pixi_manifest_only_warns(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """These scripts are advertised as copyable into any project, and a
+        conda named env or ~/.virtualenvs lives outside the checkout by
+        design. Failing there reported one problem and inspected nothing."""
+        monkeypatch.setattr("sys.prefix", "/opt/conda/envs/thesis")
+        report = preflight.Report()
+        preflight.check_interpreter(report, tmp_path)
+        assert statuses(report, "interpreter") == [WARN]
+
+    def test_a_non_local_interpreter_does_not_stop_the_other_checks(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ):
+        """Locality says nothing about whether the remaining checks can run,
+        and stopping on it printed two rows and skipped the branch, tree,
+        pre-commit and test checks -- the whole gate."""
         monkeypatch.chdir(git_repo)
         monkeypatch.setattr("sys.prefix", "/usr/local")
+        assert preflight.main([]) == 0
+        assert "clean working tree" in capsys.readouterr().out
+
+    def test_an_interpreter_below_the_floor_stops_the_other_checks(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ):
+        """Too old is the case that genuinely makes later checks unrunnable:
+        detect_test_command imports tomllib."""
+        (git_repo / "pixi.toml").write_text('python = ">=99.0"\n')
+        monkeypatch.chdir(git_repo)
+        self.local_env(monkeypatch, git_repo)
         assert preflight.main(["--strict"]) == 1
+        assert "clean working tree" not in capsys.readouterr().out
 
 
 class TestAuditOwed:
@@ -478,3 +518,53 @@ class TestAuditOwedBranchScoping:
         self.on_branch(git_repo, "feat/x")
         (git_repo / ".audit-owed").write_text("scripts/legacy.py\n")
         assert "1 config asset(s)" in self.report_for(git_repo)[0][2]
+
+
+class TestSkillsLinked:
+    """Skills reach a session only through symlinks that install.sh writes,
+    so an added skill is invisible until it is re-run -- machine state, like
+    hook registration, which is why it is reported rather than tested. Adding
+    a skill and forgetting the install left `pixi run all` green and the
+    skill absent from every session.
+    """
+
+    def project(self, root: Path, *names: str) -> Path:
+        (root / "install.sh").write_text("#!/bin/sh\n")
+        for name in names:
+            (root / "skills" / name).mkdir(parents=True)
+        installed = root / "installed"
+        installed.mkdir()
+        return installed
+
+    def test_ok_when_every_skill_is_linked(self, tmp_path: Path):
+        installed = self.project(tmp_path, "alpha", "beta")
+        for name in ("alpha", "beta"):
+            (installed / name).symlink_to(tmp_path / "skills" / name)
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, installed)
+        assert statuses(report, "skills linked") == [OK]
+
+    def test_warns_about_a_skill_that_was_never_linked(self, tmp_path: Path):
+        installed = self.project(tmp_path, "alpha", "beta")
+        (installed / "alpha").symlink_to(tmp_path / "skills" / "alpha")
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, installed)
+        assert statuses(report, "skills linked") == [WARN]
+        assert "beta" in details(report, "skills linked")
+
+    def test_warns_about_a_link_whose_skill_is_gone(self, tmp_path: Path):
+        installed = self.project(tmp_path, "alpha")
+        (installed / "alpha").symlink_to(tmp_path / "skills" / "alpha")
+        (installed / "renamed-away").symlink_to(tmp_path / "skills" / "renamed-away")
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, installed)
+        assert statuses(report, "skills linked") == [WARN]
+        assert "renamed-away" in details(report, "skills linked")
+
+    def test_silent_in_a_project_that_installs_no_skills(self, tmp_path: Path):
+        """preflight is copied into projects verbatim, and a `skills/`
+        directory with no installer says nothing about this machine."""
+        (tmp_path / "skills").mkdir()
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, tmp_path / "installed")
+        assert report.rows == []

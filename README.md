@@ -22,8 +22,10 @@ registered hooks name `.pixi/envs/dev/bin/python` in their command, so
 registering before the environment exists writes hooks that cannot
 start. Requires `pixi` on PATH.
 
-Re-running `install.sh` is safe -- it replaces existing symlinks and
-backs up any real file it would otherwise overwrite (`<path>.bak`).
+Re-running `install.sh` is safe -- it replaces existing symlinks, prunes
+links to skills this repo no longer has, and backs up any real file it
+would otherwise overwrite (`<path>.<timestamp>.bak`, dated so that a
+second run cannot destroy the first run's backup).
 
 ## Development commands
 
@@ -32,7 +34,13 @@ project carries its own environment with a current interpreter -- never
 the system `python3`, which on macOS is still 3.9 and quietly pushes
 scripts and hooks into contortions for a version nobody chose.
 `pixi run preflight` fails rather than warns if it is running outside a
-project-local environment, or below the floor the project declares.
+project-local environment, or below the floor the project declares. A
+project with no `pixi.toml` gets a warning instead, since these scripts
+are copied into repos that manage their environments some other way. An
+env reached through a symlink counts as local, which is what a git
+worktree sharing the parent checkout's `.pixi` has. Only a too-old
+interpreter stops the remaining checks -- the alternative was a copy of
+preflight reporting one failure and inspecting nothing.
 
 Hooks in `~/.claude/settings.json` must therefore name this repo's
 environment python explicitly, not `python3`. `./install.sh` writes that
@@ -63,6 +71,11 @@ pixi run all                        # format, lint, ascii, spell,
 - `CLAUDE.md` -- symlinked to `~/.claude/CLAUDE.md`, loaded in every
   Claude Code session.
 - `skills/<name>/` -- each symlinked to `~/.claude/skills/<name>/`.
+  `preflight` reports a skill this repo carries that is not linked on
+  this machine, and a link left behind by one that was renamed or
+  deleted -- machine state, like hook registration, and the same manual
+  step nothing verified. `./install.sh` writes the missing links and
+  prunes the stale ones.
 - `skills/standards-and-spec-review/CODING_STANDARDS.md` -- the single
   definition of the house coding rules. The master `CLAUDE.md` names
   them as triggers and points here; nothing restates them.

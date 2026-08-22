@@ -149,7 +149,31 @@ def declared_floor(root: Path) -> tuple[int, int] | None:
     return None
 
 
-def check_interpreter(report: Report, root: Path) -> None:
+# Conventional in-checkout environment directories. A named conda env or a
+# ~/.virtualenvs entry is deliberately absent: those live outside the
+# checkout by design, and the point below is to tell "not local" apart from
+# "this project does not work that way".
+LOCAL_ENV_DIRS = (".pixi", ".venv", "venv", "env")
+
+
+def is_local_env(prefix: Path, root: Path) -> bool:
+    """Whether `prefix` is an environment belonging to the checkout at `root`.
+
+    Each candidate is resolved because a git worktree commonly symlinks
+    `.pixi` at the parent checkout's environment: compared as written, the
+    worktree's own interpreter read as foreign, and a foreign interpreter
+    used to discard every remaining check.
+    """
+    owned = [root.resolve()]
+    owned += [
+        (root / name).resolve() for name in LOCAL_ENV_DIRS if (root / name).is_dir()
+    ]
+    return any(
+        prefix == candidate or candidate in prefix.parents for candidate in owned
+    )
+
+
+def check_interpreter(report: Report, root: Path) -> bool:
     """Verify the interpreter is project-local and current.
 
     Every project gets a local environment with a recent interpreter, rather
@@ -157,28 +181,37 @@ def check_interpreter(report: Report, root: Path) -> None:
     still 3.9, which quietly pushes scripts and hooks towards contortions
     for a constraint nobody chose. Checking it here makes the requirement
     mechanical instead of a line of prose that decays.
+
+    Returns whether the remaining checks can be trusted to run, which is a
+    question about the *version* only. Locality used to stop them too, so a
+    copy of this script into any conda-based project reported one failure and
+    inspected nothing -- no branch, tree, pre-commit or test check at all.
     """
     running = sys.version_info[:2]
     prefix = Path(sys.prefix).resolve()
-    local = root.resolve() in prefix.parents or prefix == root.resolve()
     version = f"{running[0]}.{running[1]}"
-
-    if not local:
-        # A failure, not a warning: every project is meant to carry its own
-        # environment, and an inherited interpreter is how scripts end up
-        # contorted for whatever version the machine happens to ship.
-        report.add(
-            FAIL,
-            "interpreter",
-            f"{version} from {prefix} is not a project-local env "
-            "(run via the project's task runner)",
-        )
-        return
-
     floor = declared_floor(root)
-    if floor is None:
+    current = floor is None or running >= floor
+
+    if not is_local_env(prefix, root):
+        detail = (
+            f"{version} from {prefix} is not a project-local env "
+            "(run via the project's task runner)"
+        )
+        if not current:
+            # Named in the same row rather than a second one, so the reason
+            # the remaining checks were skipped is visible.
+            detail += f"; also below the declared floor {floor[0]}.{floor[1]}"
+        # A failure only where the project declares a pixi environment: there,
+        # an inherited interpreter is how scripts end up contorted for
+        # whatever version the machine ships. Elsewhere it is how the project
+        # is built, and preflight is advertised as copyable verbatim.
+        report.add(
+            FAIL if (root / "pixi.toml").is_file() else WARN, "interpreter", detail
+        )
+    elif floor is None:
         report.add(WARN, "interpreter", f"{version}, but no floor is declared")
-    elif running < floor:
+    elif not current:
         report.add(
             FAIL,
             "interpreter",
@@ -188,6 +221,7 @@ def check_interpreter(report: Report, root: Path) -> None:
         report.add(
             OK, "interpreter", f"{version}, local env, floor {floor[0]}.{floor[1]}"
         )
+    return current
 
 
 def check_precommit_installed(report: Report, root: Path) -> None:
@@ -522,6 +556,42 @@ def check_hooks(report: Report, root: Path) -> None:
     )
 
 
+def check_skills(report: Report, root: Path, installed: Path) -> None:
+    """Report skills the repo carries that this machine cannot see.
+
+    Machine state, like hook registration: skills reach a session only through
+    the symlinks install.sh writes, so a skill added without re-running it is
+    invisible to every session while the whole suite stays green -- the same
+    "manual step nothing verifies" class as the hook that shipped inert.
+
+    Matched by name rather than by link target, because a git worktree's
+    skills are legitimately linked from the parent checkout and comparing
+    targets would report every one of them as wrong. Silent in projects with
+    no installer, since preflight is copied into repos that install nothing.
+    """
+    source = root / "skills"
+    if not source.is_dir() or not (root / "install.sh").is_file():
+        return
+    carried = {p.name for p in source.iterdir() if p.is_dir()}
+    # exists() follows the link, so a dangling one reads as absent -- which is
+    # what it is, from a session's point of view.
+    unlinked = sorted(name for name in carried if not (installed / name).exists())
+    dangling = sorted(
+        p.name
+        for p in (installed.iterdir() if installed.is_dir() else [])
+        if p.is_symlink() and not p.exists() and p.name not in carried
+    )
+    if not unlinked and not dangling:
+        report.add(OK, "skills linked", f"{len(carried)} linked")
+        return
+    parts = []
+    if unlinked:
+        parts.append(f"not linked: {', '.join(unlinked)}")
+    if dangling:
+        parts.append(f"stale link: {', '.join(dangling)}")
+    report.add(WARN, "skills linked", "; ".join(parts) + " (./install.sh)")
+
+
 def detect_test_command(root: Path) -> str | None:
     for filename, command, defines_test in TEST_RUNNERS:
         path = root / filename
@@ -573,10 +643,10 @@ def main(argv: list[str]) -> int:
         return 1 if args.strict else 0
 
     root = Path(git("rev-parse", "--show-toplevel") or ".")
-    check_interpreter(report, root)
-    if any(status == FAIL for status, _, _ in report.rows):
-        # A wrong interpreter makes every later result untrustworthy, and
-        # some of them unrunnable. Report and stop rather than guessing.
+    if not check_interpreter(report, root):
+        # An interpreter below the project's floor makes later checks
+        # unrunnable, not merely untrustworthy: detect_test_command imports
+        # tomllib. Report and stop rather than dying mid-run.
         report.render()
         return 1 if args.strict else 0
 
@@ -587,6 +657,7 @@ def main(argv: list[str]) -> int:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
     check_hooks(report, root)
+    check_skills(report, root, Path.home() / ".claude" / "skills")
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)
