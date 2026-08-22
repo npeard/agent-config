@@ -53,37 +53,27 @@ def is_config_asset(path: str) -> bool:
 def failed(response) -> bool:
     """True only when the payload positively says the command failed.
 
-    Narrow on purpose. PostToolUse's `tool_response` for Bash carries
-    stdout/stderr/interrupted and no exit status, so an exit code cannot be
-    read from it -- an earlier version looked for `exit_code`/`is_error`, which
-    are transcript fields rather than hook-payload ones, and the guard was
-    inert. `staged_changes` below is the real check; this catches the one case
-    the payload does report.
+    This is the whole success guard, and it is deliberately incomplete. The
+    Bash payload carries stdout/stderr/interrupted and no exit status, so a
+    pre-commit rejection is invisible here. Two git-based proxies were tried
+    and both were wrong: "is the index clean" suppressed a path-limited commit
+    that had genuinely landed an asset, and "is the asset still staged" cost a
+    third subprocess -- three git calls at five seconds each against the ten
+    second budget register_hooks.py writes, so the hook could be killed
+    mid-run.
+
+    What is left unguarded is bounded and cheap: on a failed commit HEAD is the
+    *previous* commit, whose assets the idempotence check below has already
+    recorded, so nothing is emitted. The single exception is a branch's
+    first-ever commit failing, which records one line in a gitignored marker
+    that `pixi run audit --clear-owed` removes. That is a better trade than a
+    proxy wrong in a new way each round.
+
+    An earlier version also looked for `exit_code`/`is_error`, which are
+    transcript fields rather than hook-payload ones, so that guard was inert.
+    `interrupted` is the one failure the payload does report.
     """
     return bool(isinstance(response, dict) and response.get("interrupted"))
-
-
-def staged_changes(repo: str) -> bool:
-    """True when the index still holds staged changes.
-
-    A payload-independent success signal, which is what the above cannot be. A
-    commit that completed leaves the index clean; one that pre-commit rejected
-    leaves the staged set restored -- and this repo runs ruff with
-    --exit-non-zero-on-fix, so a rejected-then-retried commit is routine.
-
-    Returns False when git cannot answer, so an unexpected environment
-    degrades to recording rather than to silence.
-    """
-    try:
-        out = subprocess.run(
-            ["git", "-C", repo, "diff", "--cached", "--quiet"],
-            capture_output=True,
-            check=False,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return out.returncode != 0
 
 
 def current_branch(repo: str) -> str:
@@ -94,7 +84,11 @@ def current_branch(repo: str) -> str:
             capture_output=True,
             text=True,
             check=True,
-            timeout=5,
+            # Two git calls at four seconds fit inside the ten second
+            # budget register_hooks.py writes for every hook. Three at
+            # five did not, and a killed hook loses the graceful paths
+            # below entirely.
+            timeout=4,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -134,7 +128,7 @@ def committed_paths(repo: str) -> list[str]:
             # Under the 10s timeout register_hooks.py writes for every hook.
             # At 20s Claude Code kills the hook first and the graceful
             # `return []` below is unreachable.
-            timeout=5,
+            timeout=4,
         )
     except (OSError, subprocess.SubprocessError):
         return []
@@ -156,10 +150,27 @@ def main() -> None:
     if "git commit" not in command:
         return
 
-    if failed(data.get("tool_response")) or staged_changes(repo):
+    if failed(data.get("tool_response")):
         return
 
-    touched = {p for p in committed_paths(repo) if is_config_asset(p)}
+    # Where the commit happened. Without this the hook judged any `git commit`
+    # anywhere against the master repo's HEAD, so a commit in an unrelated
+    # project re-armed the obligation -- defeating --clear-owed -- and a commit
+    # in a worktree was recorded under the main checkout's branch. A rewrite
+    # dropped this guard and three tests kept passing, because they only ever
+    # asserted silence and the master repo's HEAD had no config asset in it.
+    cwd = data.get("cwd")
+    if not cwd:
+        return
+    # Realpath first: install.sh symlinks this repo into ~/.claude, so a
+    # session can hold a path that resolves here without looking like it. The
+    # trailing separator stops a bare prefix test from also swallowing a
+    # sibling directory like "claude-config-other".
+    resolved = os.path.realpath(cwd)
+    if resolved != repo and not resolved.startswith(repo + os.sep):
+        return
+
+    touched = {p for p in committed_paths(resolved) if is_config_asset(p)}
     if not touched:
         return
 
@@ -169,7 +180,7 @@ def main() -> None:
     # The format is duplicated in scripts/audit_assets.py rather than imported,
     # because a hook must run under whatever interpreter settings.json names
     # and cannot depend on this repo's layout.
-    branch = current_branch(repo)
+    branch = current_branch(resolved)
     marker = os.path.join(repo, MARKER)
     try:
         with open(marker) as fh:

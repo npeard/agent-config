@@ -125,21 +125,42 @@ class TestFiring:
     def test_commit_outside_the_master_repo_is_silent(
         self, fake_master, tmp_path, git_repo_factory
     ):
-        """The hook is scoped to this repo; promotion-check.py covers the
-        'you wrote a skill elsewhere' case."""
+        """The config asset is committed in the master repo *and* the cwd points
+        elsewhere. An earlier version of this test left the master repo's HEAD
+        holding only the seed commit, so it passed whether or not the hook
+        looked at cwd at all -- and a rewrite that deleted the cwd guard kept
+        it green."""
+        commit(fake_master, "scripts/x.py")
         other = git_repo_factory(tmp_path / "Documents" / "Projects" / "other")
-        commit(other, "scripts/x.py")
+        commit(other, "docs/note.md")
         assert run_hook(payload(other), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
 
     def test_a_sibling_directory_is_not_the_master_repo(
         self, fake_master, tmp_path, git_repo_factory
     ):
         """A bare prefix test would swallow claude-config-other."""
+        commit(fake_master, "scripts/x.py")
         sibling = git_repo_factory(
             tmp_path / "Documents" / "Projects" / "claude-config-other"
         )
-        commit(sibling, "scripts/x.py")
+        commit(sibling, "scripts/y.py")
         assert run_hook(payload(sibling), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    def test_clearing_then_committing_elsewhere_does_not_re_arm(
+        self, fake_master, tmp_path, git_repo_factory
+    ):
+        """The concrete consequence of the missing guard: finish the audit,
+        clear the marker, commit in any other project, and the marker came
+        back -- the standing warning this design exists to prevent."""
+        commit(fake_master, "scripts/x.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        (fake_master / MARKER).unlink()
+        other = git_repo_factory(tmp_path / "Documents" / "Projects" / "other")
+        commit(other, "docs/note.md")
+        assert run_hook(payload(other), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
 
     def test_a_subdirectory_of_the_master_repo_still_fires(self, fake_master, tmp_path):
         commit(fake_master, "scripts/x.py")
@@ -158,7 +179,9 @@ class TestFiring:
         assert run_hook(bad, tmp_path) == ""
 
     def test_missing_cwd_is_silent(self, fake_master, tmp_path):
+        commit(fake_master, "scripts/x.py")
         assert run_hook({"tool_input": {"command": "git commit"}}, tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
 
     def test_missing_tool_input_is_silent(self, fake_master, tmp_path):
         assert run_hook({"cwd": str(fake_master)}, tmp_path) == ""
@@ -253,18 +276,28 @@ class TestCommitActuallyHappened:
     runs ruff with --exit-non-zero-on-fix, so a rejected-then-retried commit is
     routine rather than hypothetical."""
 
-    def test_a_commit_that_left_staged_changes_records_nothing(
+    def test_a_path_limited_commit_still_records(self, fake_master, tmp_path):
+        """ "Is the index clean" was tried as a success proxy and rejected: this
+        commit really did land a config asset while an unrelated file stayed
+        staged, and that proxy dropped it."""
+        (fake_master / "scripts").mkdir(exist_ok=True)
+        (fake_master / "scripts" / "x.py").write_text("x\n")
+        (fake_master / "other.txt").write_text("o\n")
+        run_git(fake_master, "add", "scripts/x.py", "other.txt")
+        run_git(fake_master, "commit", "-qm", "cfg", "--", "scripts/x.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        assert "scripts/x.py" in (fake_master / MARKER).read_text()
+
+    def test_a_failed_retry_emits_nothing_because_the_asset_is_already_owed(
         self, fake_master, tmp_path
     ):
-        """The shape a pre-commit rejection leaves behind: the staged set is
-        restored, so the index is dirty and HEAD is the *previous* commit."""
-        commit(fake_master, "docs/seed.md")
-        target = fake_master / "scripts" / "x.py"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("x\n")
-        run_git(fake_master, "add", "scripts/x.py")
+        """What replaces the dropped proxy. On a failed commit HEAD is the
+        previous commit, whose assets are already recorded, so the idempotence
+        check keeps the hook silent without needing to detect the failure."""
+        commit(fake_master, "scripts/x.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        # HEAD unchanged, as after a rejected commit.
         assert run_hook(payload(fake_master), tmp_path) == ""
-        assert not (fake_master / MARKER).exists()
 
     def test_an_interrupted_response_records_nothing(self, fake_master, tmp_path):
         """`interrupted` is the one failure the Bash payload actually reports;

@@ -62,16 +62,18 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "0fc6442f840b43c20b8bcc484a42b734d0f671ea20ef0f80c2d88a9fcee49c64"
+asset_sha = "7e5e48731eca27087742662bb44c4610b3899cdd42ddbb811209b774255cc1d7"
 note = """
 Reads manifests to decide booleans and emits check names and pass/fail
 statuses, not manifest content. The foreign-manifest source matches on the
 filenames it looks for rather than on anything it forwards.
 
-Re-granted twice on 2026-08-21, each time because the hash expired exactly as
-designed when check_audit_owed was added and then reworked. The new code reads
-a gitignored marker in this repo and emits a count, not content, so the
-judgement above is unchanged.
+Re-granted three times on 2026-08-21 as check_audit_owed was added and then
+reworked twice. The hash expiring each time is the mechanism working, but the
+repetition is itself the lesson: the judgement here is about a property of the
+file -- it emits check names, statuses and counts, never content it read -- and
+that property is what a future re-grant should re-check, rather than re-reading
+the diff.
 """
 
 [[decision]]
@@ -123,7 +125,7 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "885369c8dd874fa529e88fd7a8b7cc64a0682701601e57ff0aa3167febe90f4b"
+asset_sha = "dff5be0c1222b2947cc894aab8f12f1a2417bc8fcc833120f6daf75b7886fa84"
 note = """
 Found by code review, not by the check: the P5 classifier had no source
 pattern for subprocess output, so this branch's own hook -- which puts `git
@@ -138,4 +140,7 @@ emitted as a JSON string literal, the same framing rule friction.py's excerpt
 uses, so a crafted filename cannot terminate its own quoting. The paths are
 also this repo's own git history rather than a foreign source, and are capped
 at four.
+
+Re-granted 2026-08-21 after review restored the cwd guard and dropped the
+staged-changes proxy; the hash expired as designed. The framing is unchanged.
 """

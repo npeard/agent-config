@@ -431,6 +431,11 @@ def check_audit_owed(report: Report, root: Path) -> None:
     except OSError:
         return
     branch = git("rev-parse", "--abbrev-ref", "HEAD") or ""
+    # On the default branch, report every branch's entries, not just this one's.
+    # An obligation recorded against feat/x whose work has been merged is now an
+    # obligation about the default branch's contents, and reporting only
+    # matching lines meant merging without auditing lost it silently.
+    on_default = bool(branch) and branch == default_branch()
     assets = set()
     for line in lines:
         recorded, _, asset = line.partition("\t")
@@ -438,7 +443,7 @@ def check_audit_owed(report: Report, root: Path) -> None:
         # obligation with no recorded owner is that it is still owed.
         if not asset:
             assets.add(recorded)
-        elif recorded == branch:
+        elif on_default or recorded == branch:
             assets.add(asset)
     if not assets:
         return

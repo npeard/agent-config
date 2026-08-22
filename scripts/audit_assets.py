@@ -331,7 +331,11 @@ def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
     """
     out = []
     for path in skill_files(root):
-        texts = [p.read_text() for p in sorted(path.parent.glob("*.md"))]
+        # rglob, not glob: the finding text and sha() both say "anywhere in the
+        # skill directory", and references/<file>.md is the layout
+        # superpowers:writing-skills prescribes -- reporting such a skill as
+        # evidence-free is the punishing-compliance failure binding rule 2 names.
+        texts = [p.read_text() for p in sorted(path.parent.rglob("*.md"))]
         if not any(r.search(text) for text in texts for r in EVIDENCE):
             out.append(
                 Finding(
@@ -694,27 +698,67 @@ def owed_assets(root: Path, branch: str) -> list[str]:
     return sorted(out)
 
 
+def live_branches(root: Path) -> set[str]:
+    """Branch names git still knows about."""
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/heads",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return {line.strip() for line in out.stdout.splitlines() if line.strip()}
+
+
 def clear_owed(root: Path) -> str:
-    """Drop this branch's entries, keeping any other branch's. Returns a report."""
+    """Drop this branch's entries plus any dead branch's. Returns a report.
+
+    Reports honestly when git cannot name the branch: an earlier version kept
+    every scoped line in that case and still printed "cleared", so the audit
+    looked closed while preflight went on warning forever.
+
+    Dead-branch lines are pruned because they are otherwise unreachable --
+    clearing only ever touched the current branch, so every merged-and-deleted
+    branch left a line nobody could remove.
+    """
     marker = root / MARKER
     if not marker.is_file():
         return "no audit owed"
     branch = current_branch(root)
-    # An unscoped line is dropped by whichever branch clears first. It has no
-    # tab, so its "branch" field is the asset path itself -- testing that
-    # against the current branch never matched and the line could never be
-    # cleared at all. owed_assets counts such a line as owed for every branch,
-    # so clearing it from any of them is the consistent reading.
-    kept = [
-        line
-        for line in marker.read_text().splitlines()
-        if line.strip() and "\t" in line and line.partition("\t")[0] != branch
-    ]
+    lines = [ln for ln in marker.read_text().splitlines() if ln.strip()]
+    if not branch:
+        # Only unscoped lines can be attributed to "here" with confidence.
+        kept = [ln for ln in lines if "\t" in ln]
+        if len(kept) == len(lines):
+            return (
+                f"git could not name the current branch, so {len(kept)} "
+                "branch-scoped entry(s) were left alone. Nothing cleared."
+            )
+    else:
+        alive = live_branches(root)
+        kept = [
+            ln
+            for ln in lines
+            if "\t" in ln
+            and ln.partition("\t")[0] != branch
+            and ln.partition("\t")[0] in alive
+        ]
+    dropped = len(lines) - len(kept)
     if kept:
         marker.write_text("\n".join(kept) + "\n")
-        return f"cleared {branch or 'unscoped'}; {len(kept)} entry(s) left for other branches"
+        return f"cleared {dropped} entry(s); {len(kept)} left for other branches"
     marker.unlink()
-    return f"cleared {marker.name}"
+    return f"cleared {marker.name} ({dropped} entry(s))"
 
 
 def main(argv: list[str] | None = None) -> int:
