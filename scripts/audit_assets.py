@@ -335,7 +335,19 @@ def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
         # skill directory", and references/<file>.md is the layout
         # superpowers:writing-skills prescribes -- reporting such a skill as
         # evidence-free is the punishing-compliance failure binding rule 2 names.
-        texts = [p.read_text() for p in sorted(path.parent.rglob("*.md"))]
+        files = [
+            f
+            for f in sorted(path.parent.rglob("*"))
+            if f.is_file() and "__pycache__" not in f.parts
+        ]
+        # A non-markdown file in a skill directory is a worked artifact -- a
+        # code sample or a fixture -- and counts on its own. sha() already
+        # hashes every file for this asset and says so; scanning only markdown
+        # here meant the two disagreed about what "the skill directory" holds,
+        # so a skill whose evidence is examples/demo.py was a false P2.
+        if any(f.suffix != ".md" for f in files):
+            continue
+        texts = [f.read_text() for f in files]
         if not any(r.search(text) for text in texts for r in EVIDENCE):
             out.append(
                 Finding(
@@ -406,7 +418,11 @@ def prose_files(root: Path = REPO_ROOT) -> list[Path]:
         root / "README.md",
         root / "audit-ledger.toml",
         root / "friction-ledger.toml",
-        *sorted((root / "skills").glob("*/*.md")),
+        # rglob: top-level-only was the same depth bug fixed in check_evidence.
+        # A dangling scripts/... reference inside skills/*/references/*.md was
+        # invisible, latent only because every reference file in this repo
+        # currently sits at its skill's top level.
+        *sorted((root / "skills").rglob("*.md")),
     ]
     return [p for p in candidates if p.exists()]
 

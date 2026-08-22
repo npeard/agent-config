@@ -671,3 +671,49 @@ class TestP5Severity:
             'print(json.dumps({"additionalContext": msg}))\n',
         )
         assert self.assets(fake_root) == set()
+
+
+class TestEvidenceDepthAndKind:
+    """Found by a subagent pressure test, not by a check: check_evidence read
+    only markdown while sha() hashed every file, so the two disagreed about
+    what a skill directory contains."""
+
+    def test_a_code_sample_is_evidence_on_its_own(self, fake_root):
+        write_skill(fake_root, "sample", "Use when sample", "# B\n\nSee example.py.\n")
+        (fake_root / "skills" / "sample" / "example.py").write_text("x = 1\n")
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_a_fixture_in_a_subdirectory_is_evidence(self, fake_root):
+        write_skill(fake_root, "fx", "Use when fx", "# B\n\nprose only\n")
+        (fake_root / "skills" / "fx" / "fixtures").mkdir()
+        (fake_root / "skills" / "fx" / "fixtures" / "in.json").write_text("{}")
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_prose_only_markdown_at_any_depth_is_still_reported(self, fake_root):
+        write_skill(fake_root, "bare", "Use when bare", "# B\n\nprose only\n")
+        (fake_root / "skills" / "bare" / "references").mkdir()
+        (fake_root / "skills" / "bare" / "references" / "more.md").write_text("prose\n")
+        assert [f.asset for f in audit_assets.check_evidence(fake_root)] == [
+            "skills/bare"
+        ]
+
+    def test_pycache_alone_is_not_evidence(self, fake_root):
+        write_skill(fake_root, "cached", "Use when cached", "# B\n\nprose only\n")
+        (fake_root / "skills" / "cached" / "__pycache__").mkdir()
+        (fake_root / "skills" / "cached" / "__pycache__" / "x.pyc").write_bytes(b"\x00")
+        assert [f.asset for f in audit_assets.check_evidence(fake_root)] == [
+            "skills/cached"
+        ]
+
+
+class TestProseFilesDepth:
+    def test_a_dangling_reference_in_a_subdirectory_is_found(self, fake_root):
+        """Latent only because every reference file in this repo currently sits
+        at its skill's top level."""
+        write_skill(fake_root, "deep", "Use when deep")
+        (fake_root / "skills" / "deep" / "references").mkdir()
+        (fake_root / "skills" / "deep" / "references" / "r.md").write_text(
+            "Run scripts/ghost.py\n"
+        )
+        found = audit_assets.check_script_references(fake_root)
+        assert any("ghost.py" in f.detail for f in found)
