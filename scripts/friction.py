@@ -85,7 +85,26 @@ CLASSES: tuple[tuple[str, str], ...] = (
 # Counting those inflates every total, so they are bucketed separately
 # rather than left in `unclassified`, which would otherwise be dominated by
 # noise and stop being a useful coverage signal.
+# Start-anchored, deliberately. Every Claude Code Bash error begins "Exit code
+# N", and most carry harmless trailing output -- `grep` with no match echoing
+# context, a `||` fallback. Requiring the whole line to be bare was tried and
+# is worse: it files that noise as unclassified, and the unclassified rate is
+# supposed to measure classifier decay rather than shell noise.
 BENIGN_EXIT = re.compile(r"^\s*Exit code \d+")
+
+# What disqualifies the benign bucket regardless of how the line starts. Without
+# it "Exit code 2 Segmentation fault" and "Exit code 143 Command timed out"
+# were both filed as benign -- 45 of 61 observed errors landed there, and the
+# real cost was the deflated unclassified count: a genuinely new failure class
+# went into the noise bucket instead of the coverage signal, so the loop could
+# not discover a class it had no regex for. That is the opposite of what
+# "measure friction, do not rely on noticing it" promises.
+HARD_FAILURE = re.compile(
+    r"segmentation fault|bus error|core dumped|\bkilled\b|out of memory|"
+    r"timed out|traceback \(most recent call last\)|parse error|syntax error|"
+    r"command not found|permission denied|no such file or directory",
+    re.IGNORECASE,
+)
 BENIGN = "benign-nonzero-exit"
 
 UNCLASSIFIED = "unclassified"
@@ -169,15 +188,18 @@ def iter_errors(paths: list[Path], since: str = ""):
 def classify(text: str) -> list[str]:
     """All classes matching this error text.
 
-    Falls back to BENIGN for a bare non-zero exit with no recognizable
-    error in it, and only to UNCLASSIFIED for something genuinely
-    unrecognized -- so the unclassified rate measures classifier decay
-    rather than shell noise.
+    Falls back to BENIGN for a non-zero exit carrying no recognizable failure,
+    and to UNCLASSIFIED for something genuinely unrecognized -- so the
+    unclassified rate measures classifier decay rather than shell noise. What
+    counts as "no recognizable failure" is HARD_FAILURE above; without it this
+    bucket swallowed segfaults and timeouts.
     """
     matched = [name for name, pattern in CLASSES if re.search(pattern, text)]
     if matched:
         return matched
-    return [BENIGN] if BENIGN_EXIT.match(text) else [UNCLASSIFIED]
+    if BENIGN_EXIT.match(text) and not HARD_FAILURE.search(text):
+        return [BENIGN]
+    return [UNCLASSIFIED]
 
 
 class Tally:

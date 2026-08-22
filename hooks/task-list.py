@@ -93,9 +93,11 @@ def yaml_tasks(text):
 
 
 def json_scripts(text):
+    # TypeError as well: {"scripts": 5} decodes fine and then is not
+    # iterable, so any project the user opens could kill this hook.
     try:
         return dict(json.loads(text).get("scripts", {}))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         return {}
 
 

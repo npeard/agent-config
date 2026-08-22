@@ -762,3 +762,40 @@ class TestAssetDocumented:
     def test_a_missing_readme_is_not_an_error(self, fake_root):
         (fake_root / "hooks" / "h.py").write_text("x = 1\n")
         assert audit_assets.check_asset_documented(fake_root) == []
+
+
+class TestUntrackedJunk:
+    """macOS supplies a .DS_Store for free on a Finder visit. Two checks
+    depended on directory contents and both mishandled it."""
+
+    def test_a_dotfile_does_not_count_as_evidence(self, fake_root):
+        """ "Any non-markdown file is evidence" meant one .DS_Store silently
+        exempted a skill from the evidence check."""
+        write_skill(fake_root, "bare", "Use when bare", "# B\n\nprose only\n")
+        (fake_root / "skills" / "bare" / ".DS_Store").write_bytes(b"\x00")
+        assert [f.asset for f in audit_assets.check_evidence(fake_root)] == [
+            "skills/bare"
+        ]
+
+    def test_a_named_evidence_suffix_still_counts(self, fake_root):
+        write_skill(fake_root, "sample", "Use when sample", "# B\n\nprose only\n")
+        (fake_root / "skills" / "sample" / "demo.py").write_text("x = 1\n")
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_a_dotfile_does_not_change_the_digest(self, tmp_path):
+        """It expired a ledgered exception with no content change, and since
+        `audit` is a dependency of `pixi run all`, turned the build red."""
+        d = tmp_path / "skill"
+        d.mkdir()
+        (d / "SKILL.md").write_text("a")
+        first = audit_assets.sha(d)
+        (d / ".DS_Store").write_bytes(b"\x00")
+        assert audit_assets.sha(d) == first
+
+    def test_a_dotfile_in_a_subdirectory_is_also_ignored(self, tmp_path):
+        d = tmp_path / "skill"
+        (d / "references").mkdir(parents=True)
+        (d / "SKILL.md").write_text("a")
+        first = audit_assets.sha(d)
+        (d / "references" / ".DS_Store").write_bytes(b"\x00")
+        assert audit_assets.sha(d) == first

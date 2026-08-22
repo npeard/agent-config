@@ -12,6 +12,7 @@ from pathlib import Path
 
 import preflight
 import pytest
+from conftest import run_git
 
 OK, WARN, FAIL = preflight.OK, preflight.WARN, preflight.FAIL
 
@@ -428,6 +429,11 @@ class TestAuditOwed:
 class TestAuditOwedBranchScoping:
     """Each line is `<branch>\tasset`. Unscoped, the warning follows you to an
     unrelated branch, and clearing it there discards the original obligation.
+
+    Driven through a real throwaway repo rather than a bare tmp_path: reading
+    the branch from the process cwd made these tests depend on whichever branch
+    the checkout was on, and two of them failed on `main` -- the state step 0
+    requires to be green.
     """
 
     def report_for(self, root):
@@ -435,27 +441,40 @@ class TestAuditOwedBranchScoping:
         preflight.check_audit_owed(report, root)
         return report.rows
 
-    def current(self):
-        return preflight.git("rev-parse", "--abbrev-ref", "HEAD") or ""
+    def on_branch(self, repo, name):
+        run_git(repo, "checkout", "-q", "-b", name)
+        return repo
 
-    def test_this_branch_s_entries_are_counted(self, tmp_path):
-        (tmp_path / ".audit-owed").write_text(
-            f"{self.current()}\tscripts/x.py\n{self.current()}\tCLAUDE.md\n"
+    def test_this_branch_s_entries_are_counted(self, git_repo):
+        self.on_branch(git_repo, "feat/x")
+        (git_repo / ".audit-owed").write_text(
+            "feat/x\tscripts/x.py\nfeat/x\tCLAUDE.md\n"
         )
-        assert "2 config asset(s)" in self.report_for(tmp_path)[0][2]
+        assert "2 config asset(s)" in self.report_for(git_repo)[0][2]
 
-    def test_another_branch_s_entries_are_ignored(self, tmp_path):
-        (tmp_path / ".audit-owed").write_text("some-other-branch\tscripts/x.py\n")
-        assert self.report_for(tmp_path) == []
+    def test_another_branch_s_entries_are_ignored(self, git_repo):
+        self.on_branch(git_repo, "feat/x")
+        (git_repo / ".audit-owed").write_text("feat/other\tscripts/x.py\n")
+        assert self.report_for(git_repo) == []
 
-    def test_a_mixed_marker_counts_only_this_branch(self, tmp_path):
-        (tmp_path / ".audit-owed").write_text(
-            f"other\tscripts/a.py\n{self.current()}\tscripts/b.py\n"
+    def test_a_mixed_marker_counts_only_this_branch(self, git_repo):
+        self.on_branch(git_repo, "feat/x")
+        (git_repo / ".audit-owed").write_text(
+            "feat/other\tscripts/a.py\nfeat/x\tscripts/b.py\n"
         )
-        assert "1 config asset(s)" in self.report_for(tmp_path)[0][2]
+        assert "1 config asset(s)" in self.report_for(git_repo)[0][2]
 
-    def test_an_unscoped_line_still_counts(self, tmp_path):
+    def test_the_default_branch_sees_every_branch_s_entries(self, git_repo):
+        """Merged work is now the default branch's contents, so an obligation
+        recorded against a feature branch is no longer someone else's."""
+        (git_repo / ".audit-owed").write_text(
+            "feat/a\tscripts/a.py\nfeat/b\tscripts/b.py\n"
+        )
+        assert "2 config asset(s)" in self.report_for(git_repo)[0][2]
+
+    def test_an_unscoped_line_still_counts(self, git_repo):
         """Written before scoping existed; the safe reading of an obligation
         with no recorded owner is that it is still owed."""
-        (tmp_path / ".audit-owed").write_text("scripts/legacy.py\n")
-        assert "1 config asset(s)" in self.report_for(tmp_path)[0][2]
+        self.on_branch(git_repo, "feat/x")
+        (git_repo / ".audit-owed").write_text("scripts/legacy.py\n")
+        assert "1 config asset(s)" in self.report_for(git_repo)[0][2]

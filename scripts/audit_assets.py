@@ -315,6 +315,11 @@ EVIDENCE_EXAMPLE = re.compile(
 )
 EVIDENCE = (EVIDENCE_TABLE, EVIDENCE_FENCE, EVIDENCE_EXAMPLE)
 
+# A worked artifact beside the prose counts as evidence on its own.
+EVIDENCE_SUFFIXES = frozenset(
+    {".py", ".js", ".ts", ".sh", ".tex", ".json", ".yaml", ".yml", ".toml", ".csv"}
+)
+
 
 def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
     """P2: built from real expertise, so it carries evidence.
@@ -345,7 +350,10 @@ def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
         # hashes every file for this asset and says so; scanning only markdown
         # here meant the two disagreed about what "the skill directory" holds,
         # so a skill whose evidence is examples/demo.py was a false P2.
-        if any(f.suffix != ".md" for f in files):
+        # A named set, not "any non-markdown file": the latter meant a single
+        # .DS_Store -- which macOS supplies for free on a Finder visit --
+        # silently exempted a skill from the evidence check.
+        if any(f.suffix in EVIDENCE_SUFFIXES for f in files):
             continue
         texts = [f.read_text() for f in files]
         if not any(r.search(text) for text in texts for r in EVIDENCE):
@@ -651,7 +659,14 @@ def sha(path: Path) -> str | None:
     if path.is_dir():
         h = hashlib.sha256()
         for child in sorted(path.rglob("*")):
+            # Dotfiles and caches are excluded, not just __pycache__: a
+            # .DS_Store appearing changed the digest, expired a ledgered
+            # exception with no content change, and -- since `audit` is a
+            # dependency of `pixi run all` -- turned the build red until
+            # someone re-ran --sha.
             if not child.is_file() or "__pycache__" in child.parts:
+                continue
+            if any(part.startswith(".") for part in child.relative_to(path).parts):
                 continue
             h.update(child.relative_to(path).as_posix().encode())
             h.update(child.read_bytes())
@@ -759,6 +774,49 @@ def owed_assets(root: Path, branch: str) -> list[str]:
     return sorted(out)
 
 
+def default_branch(root: Path) -> str:
+    """Best-effort default-branch name. Mirrors preflight's resolver."""
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "symbolic-ref",
+                "--short",
+                "refs/remotes/origin/HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        if out.stdout.strip():
+            return out.stdout.strip().split("/", 1)[-1]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    for candidate in ("main", "master"):
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    f"refs/heads/{candidate}",
+                ],
+                capture_output=True,
+                check=True,
+                timeout=10,
+            )
+            return candidate
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return "main"
+
+
 def live_branches(root: Path) -> set[str]:
     """Branch names git still knows about."""
     try:
@@ -805,6 +863,13 @@ def clear_owed(root: Path) -> str:
                 f"git could not name the current branch, so {len(kept)} "
                 "branch-scoped entry(s) were left alone. Nothing cleared."
             )
+    elif branch == default_branch(root):
+        # preflight reports every branch's entries once you are on the default
+        # branch, because merged work is now this branch's contents. Clearing
+        # had to follow: filtering to the current branch left a warning that
+        # no command could clear until the feature branch was deleted, which is
+        # the standing warning this whole mechanism exists to avoid.
+        kept = []
     else:
         alive = live_branches(root)
         kept = [

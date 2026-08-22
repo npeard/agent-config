@@ -42,8 +42,17 @@ def main():
         # Malformed or empty stdin: a hook that tracebacks is noisier than
         # one that declines. task-list.py guards the identical call.
         return
-    tool_input = data.get("tool_input", {})
-    tool_response = data.get("tool_response", {})
+    if not isinstance(data, dict):
+        # json.load only raises for *malformed* JSON, so a valid non-object body
+        # decodes fine and then has no .get -- the rule prose-writing.py
+        # documents and these two hooks broke.
+        return
+    # `tool_response: null` is what PostToolUse sends for a rejected or aborted
+    # tool call, so `or {}` rather than a default: the key is present and None.
+    tool_input = data.get("tool_input") or {}
+    tool_response = data.get("tool_response") or {}
+    if not isinstance(tool_input, dict) or not isinstance(tool_response, dict):
+        return
     file_path = tool_input.get("file_path") or tool_response.get("filePath")
     if not file_path:
         return

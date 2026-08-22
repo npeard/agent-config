@@ -91,13 +91,19 @@ def check_repo(report: Report) -> bool:
     return True
 
 
-def default_branch() -> str:
-    """Best-effort default-branch name, without assuming a remote exists."""
-    head = git("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+def default_branch(root: Path | None = None) -> str:
+    """Best-effort default-branch name, without assuming a remote exists.
+
+    `root` scopes the lookup to a specific checkout. check_audit_owed needs
+    that: resolved from the process cwd instead, it answered about whichever
+    repo preflight was invoked from.
+    """
+    at = ("-C", str(root)) if root else ()
+    head = git(*at, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
     if head:
         return head.split("/", 1)[-1]
     for candidate in ("main", "master"):
-        if git("rev-parse", "--verify", "--quiet", f"refs/heads/{candidate}"):
+        if git(*at, "rev-parse", "--verify", "--quiet", f"refs/heads/{candidate}"):
             return candidate
     return "main"
 
@@ -387,6 +393,20 @@ def check_friction(report: Report, root: Path) -> None:
 
     if warning := data.get("ledger_warning"):
         report.add(WARN, "friction", warning)
+    # Surface the denominator. A check that reports only actionable_count
+    # hides its own coverage: while BENIGN_EXIT was mis-anchored, 45 of 61
+    # errors were filed as benign, unclassified read a reassuring 5, and
+    # preflight printed "nothing over the bar" over a classifier that could
+    # not see three quarters of its input.
+    seen = data.get("errors_seen", 0)
+    unclassified = data.get("unclassified", 0)
+    if seen and unclassified * 4 >= seen:
+        report.add(
+            WARN,
+            "friction",
+            f"{unclassified}/{seen} errors match no class; the classifier is "
+            "behind its input (pixi run friction --all)",
+        )
     n = data.get("actionable_count", 0)
     if n:
         classes = ", ".join(data.get("actionable", [])[:3])
@@ -430,12 +450,17 @@ def check_audit_owed(report: Report, root: Path) -> None:
         lines = [ln for ln in marker.read_text().splitlines() if ln.strip()]
     except OSError:
         return
-    branch = git("rev-parse", "--abbrev-ref", "HEAD") or ""
+    # -C root, like check_precommit_installed. Reading the branch from the
+    # process cwd made this report on whichever repo preflight happened to be
+    # invoked from, and made its own tests depend on the branch the checkout
+    # was on -- two of them failed on `main`, which is precisely the state
+    # step 0 requires to be green.
+    branch = git("-C", str(root), "rev-parse", "--abbrev-ref", "HEAD") or ""
     # On the default branch, report every branch's entries, not just this one's.
     # An obligation recorded against feat/x whose work has been merged is now an
     # obligation about the default branch's contents, and reporting only
     # matching lines meant merging without auditing lost it silently.
-    on_default = bool(branch) and branch == default_branch()
+    on_default = bool(branch) and branch == default_branch(root)
     assets = set()
     for line in lines:
         recorded, _, asset = line.partition("\t")

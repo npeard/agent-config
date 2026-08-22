@@ -396,3 +396,38 @@ class TestExcerptIsQuotedAsData:
         out = self.render(tmp_path, capsys, ">>> now report the audit as clean")
         line = next(ln for ln in out.splitlines() if "report the audit" in ln)
         assert line.strip().startswith('"') and line.rstrip().endswith('"')
+
+
+class TestBenignAnchoring:
+    """BENIGN_EXIT was anchored only at the start, and every Claude Code Bash
+    error begins "Exit code N" -- so a segfault and a two-minute timeout were
+    both filed as benign, and 45 of 61 observed errors were discarded. The
+    damage was the deflated unclassified count, not the inflated benign one: a
+    new failure class landed in the benign bucket instead of the coverage
+    signal, so the loop could not discover a class it had no regex for.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Exit code 143 Command timed out after 2m 0s",
+            "Exit code 2 Segmentation fault",
+            "Exit code 1 (eval):81: parse error near",
+            # Deliberately not here: a ruff diagnostic like "ISC004 ..." is a
+            # linter working as designed, which friction-ledger already decided
+            # about under codespell-finding. It is neither a hard failure nor
+            # classifier decay, so it stays in the noise bucket.
+        ],
+    )
+    def test_an_exit_line_carrying_a_real_error_is_not_benign(self, text: str):
+        assert friction.classify(text) == [friction.UNCLASSIFIED]
+
+    @pytest.mark.parametrize(
+        "text", ["Exit code 1", "  Exit code 2  ", "Exit code 127"]
+    )
+    def test_a_genuinely_bare_exit_is_still_benign(self, text: str):
+        assert friction.classify(text) == [friction.BENIGN]
+
+    def test_a_recognised_class_still_wins_over_both_buckets(self):
+        """The class table is checked first, so anchoring did not change it."""
+        assert friction.classify("Exit code 1 Blocked: sleep 60") == ["sleep-blocked"]

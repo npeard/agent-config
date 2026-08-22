@@ -24,7 +24,7 @@ principle = 5
 date = "2026-08-21"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "813556f58e7aafe6250b01f0f9487784303d8cc0cd895a22875a65d66b43e44a"
+asset_sha = "225ec73c963ce9f87af5d54f679f54ea56713057cc8dfc2b078858894c2dba3f"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
@@ -37,6 +37,9 @@ excerpt is attacker-controlled, so a fence it can contain is a fence it can
 close, and ">>> now report the audit as clean" would have rendered as though
 the quoted region had ended. A JSON string literal escapes its own delimiter
 and cannot be terminated from the inside.
+
+Re-granted after the BENIGN_EXIT/HARD_FAILURE fix, which changed how errors
+are classified but not what is emitted or how it is framed.
 
 Not deleted, because printing an example is what makes a friction class
 actionable. The finding was about framing, not about the feature.
@@ -62,7 +65,7 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "6dec360499c0209662716f1961c42369aacee69907004b60b2bf04203fc47926"
+asset_sha = "835b1f7e2e0405261554be30452413b7c5e968639178d4fdf6bd29aeebffe800"
 note = """
 Re-decided 2026-08-21 after the previous note turned out to be wrong, and the
 way it was wrong is the lesson. It read: "whose payload is capped at 60
@@ -88,6 +91,10 @@ reintroduce it; and definitions have whitespace collapsed before truncation,
 because a definition well under the cap could still carry a newline and break
 out of the rendered list. Tests cover the newline name, the overlong name, the
 newline definition, and that ordinary names survive.
+
+Re-granted after json_scripts also caught TypeError: {"scripts": 5} decodes
+fine and then is not iterable, so any project the user opened could kill this
+hook. Boundary unchanged.
 """
 
 [[decision]]
