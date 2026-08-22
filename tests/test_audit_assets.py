@@ -965,3 +965,30 @@ class TestUntrackedJunk:
         first = audit_assets.sha(d)
         (d / "references" / ".DS_Store").write_bytes(b"\x00")
         assert audit_assets.sha(d) == first
+
+
+class TestBinaryFilesInSkillDirs:
+    """`audit` is a dependency of `pixi run all`, so a crash here breaks the
+    whole build. An earlier version read every file it listed, so one stray
+    image did exactly that."""
+
+    def test_a_binary_file_does_not_crash_the_evidence_check(self, fake_root):
+        write_skill(fake_root, "img", "Use when img")
+        (fake_root / "skills" / "img" / "diagram.png").write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00"
+        )
+        assert audit_assets.check_evidence(fake_root) == []
+
+    def test_a_binary_file_is_not_itself_evidence(self, fake_root):
+        """It is not in EVIDENCE_SUFFIXES, so it must not exempt a skill that
+        has no evidence at all."""
+        write_skill(fake_root, "bare", "Use when bare", "# B\n\nprose only\n")
+        (fake_root / "skills" / "bare" / "diagram.png").write_bytes(b"\x89PNG\r\n")
+        assert [f.asset for f in audit_assets.check_evidence(fake_root)] == [
+            "skills/bare"
+        ]
+
+    def test_the_whole_audit_survives_a_binary_file(self, fake_root):
+        write_skill(fake_root, "img", "Use when img")
+        (fake_root / "skills" / "img" / "x.png").write_bytes(b"\x00\x01\x02")
+        audit_assets.audit(fake_root)

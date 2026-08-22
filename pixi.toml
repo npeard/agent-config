@@ -24,7 +24,7 @@ preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"
 toolgaps = "python scripts/toolgaps.py"
 suppressions = "python scripts/suppressions.py"
-thresholds = "python scripts/thresholds.py"
+thresholds = "python scripts/thresholds.py --strict"
 register-hooks = "python scripts/register_hooks.py"
 audit = "python scripts/audit_assets.py"
 

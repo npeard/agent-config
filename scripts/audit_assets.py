@@ -450,7 +450,13 @@ def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
         # silently exempted a skill from the evidence check.
         if any(f.suffix in EVIDENCE_SUFFIXES for f in files):
             continue
-        texts = [f.read_text() for f in files]
+        # Only markdown is read. An earlier version read every file it had
+        # listed, so one .png or .DS_Store in a skill directory raised
+        # UnicodeDecodeError -- and since `audit` is a dependency of
+        # `pixi run all`, a stray binary broke the whole build. Presence is
+        # what qualifies a worked artifact above; text is only needed for the
+        # prose patterns below.
+        texts = [f.read_text() for f in files if f.suffix == ".md"]
         if not any(r.search(text) for text in texts for r in EVIDENCE):
             out.append(
                 Finding(
