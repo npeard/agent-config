@@ -31,6 +31,13 @@ from pathlib import Path
 
 MAX_TASKS = 20
 MAX_DEF = 60
+# A name longer than this is not a task anyone types, so refusing it bounds
+# how much a crafted manifest can push into context. Kept well above any real
+# name: at 40 it silently swallowed ordinary 45-character npm scripts.
+MAX_NAME = 120
+# The longest name no longer sets the indent for every other line, so one
+# 100-character name costs one long line instead of padding twenty.
+MAX_WIDTH = 24
 
 
 def task_definition(value):
@@ -131,7 +138,14 @@ SOURCES = (
 # Filtered here rather than inside json_scripts because discover() is the one
 # place every parser's output converges, so a parser added later cannot
 # reintroduce the hole.
-SAFE_NAME = re.compile(r"[A-Za-z0-9_.:@/-]{1,40}\Z")
+#
+# The charset is the security property and is deliberately an allowlist. A task
+# name is not just text in context, it is text the reader is invited to type
+# after `npm run`, so a name carrying `;`, `|`, `$(` or a backtick would be
+# command injection at the point of use. Length is a separate concern and now
+# lives in MAX_NAME: bundling the two inside this regex is what made a
+# legitimate 45-character script indistinguishable from an attack.
+SAFE_NAME = re.compile(r"[A-Za-z0-9_.:@/-]+\Z")
 
 
 def safe_definition(value):
@@ -147,7 +161,20 @@ def safe_definition(value):
     return collapsed
 
 
+def usable(name) -> bool:
+    name = str(name)
+    return len(name) <= MAX_NAME and bool(SAFE_NAME.match(name))
+
+
 def discover(root):
+    """[(prefix, safe tasks, count refused)] per manifest present.
+
+    The refused count is carried rather than discarded: a name this hook will
+    not print is still a task the project has, and dropping it before render's
+    accounting meant a project with one unprintable script saw no trace of it.
+    An unexplained gap teaches the reader that this block is incomplete in
+    ways they cannot see, which is worse than a name they have to go look up.
+    """
     out = []
     for filename, prefix, parse in SOURCES:
         path = root / filename
@@ -157,26 +184,31 @@ def discover(root):
             tasks = parse(path.read_text(errors="replace"))
         except OSError:
             continue
-        tasks = {n: v for n, v in tasks.items() if SAFE_NAME.match(str(n))}
-        if tasks:
-            out.append((prefix, tasks))
+        kept = {n: v for n, v in tasks.items() if usable(n)}
+        refused = len(tasks) - len(kept)
+        if kept or refused:
+            out.append((prefix, kept, refused))
     return out
 
 
 def render(discovered):
     lines = []
-    for prefix, tasks in discovered:
+    for prefix, tasks, refused in discovered:
         names = list(tasks)
         shown, hidden = names[:MAX_TASKS], names[MAX_TASKS:]
         lines.append(f"Task commands available ({prefix} <name>):")
-        width = max(len(n) for n in shown)
+        # default=0 because a manifest whose every name was refused reaches
+        # here with nothing to show, and max() of an empty sequence raises --
+        # killing the hook on exactly the input the refusal count exists for.
+        width = min(max((len(n) for n in shown), default=0), MAX_WIDTH)
         for name in shown:
             definition = safe_definition(tasks[name])
             lines.append(
                 f"  {name:<{width}}  {definition}" if definition else f"  {name}"
             )
-        if hidden:
-            lines.append(f"  ... and {len(hidden)} more")
+        unshown = len(hidden) + refused
+        if unshown:
+            lines.append(f"  ... and {unshown} more")
     return "\n".join(lines)
 
 

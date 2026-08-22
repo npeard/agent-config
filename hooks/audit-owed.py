@@ -19,6 +19,8 @@ job with different principles, and promotion-check.py already covers the
 
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 
@@ -45,9 +47,110 @@ MARKER = ".audit-owed"
 CONFIG_PREFIXES = ("skills/", "scripts/", "hooks/")
 CONFIG_FILES = ("CLAUDE.md",)
 
+# git's own options, before the subcommand. The two-argument ones must be
+# skipped as pairs or `git -C commit` would read its path argument as the
+# subcommand and a real `git -C <path> commit` would be missed.
+GIT_OPTIONS_WITH_VALUE = frozenset(
+    {
+        "-C",
+        "-c",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--exec-path",
+        "--config-env",
+    }
+)
+# `;`, `&&` and friends end one command and start another. Newlines are handled
+# by splitting into lines first, because shlex treats a newline as ordinary
+# whitespace and would run two lines together into a single command.
+SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
+# An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
+# with no body, and does not match because `<` is not a valid delimiter start.
+HEREDOC = re.compile(r"<<-?\s*([\"\']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
 
 def is_config_asset(path: str) -> bool:
     return path.startswith(CONFIG_PREFIXES) or path in CONFIG_FILES
+
+
+def without_heredocs(command: str) -> str:
+    """The command with heredoc bodies removed.
+
+    A heredoc body is data being written, not commands being run, so a file
+    whose text happens to contain `git commit` must not read as a commit.
+    Dropping the bodies also makes the line split below safe: without it, a
+    body line is indistinguishable from the next command.
+    """
+    lines = command.splitlines()
+    kept, i = [], 0
+    while i < len(lines):
+        kept.append(lines[i])
+        for match in HEREDOC.finditer(lines[i]):
+            delimiter = match.group(2)
+            i += 1
+            while i < len(lines) and lines[i].strip() != delimiter:
+                i += 1
+        i += 1
+    return "\n".join(kept)
+
+
+def shell_commands(command: str) -> list[list[str]]:
+    """Token lists, one per command in the shell line. [] if unparsable.
+
+    Unparsable means an unbalanced quote, which is not a commit either, so
+    declining is both safe and correct.
+    """
+    out: list[list[str]] = []
+    for line in without_heredocs(command).splitlines():
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        try:
+            tokens = list(lexer)
+        except ValueError:
+            return []
+        current: list[str] = []
+        for token in tokens:
+            if token in SEPARATORS:
+                out.append(current)
+                current = []
+            else:
+                current.append(token)
+        out.append(current)
+    return out
+
+
+def is_commit(tokens: list[str]) -> bool:
+    """Whether one command is a `git commit` that would create a commit."""
+    if not tokens or os.path.basename(tokens[0]) != "git":
+        return False
+    args = tokens[1:]
+    index = 0
+    while index < len(args):
+        if args[index] in GIT_OPTIONS_WITH_VALUE:
+            index += 2
+        elif args[index].startswith("-"):
+            index += 1
+        else:
+            break
+    if index >= len(args) or args[index] != "commit":
+        return False
+    # --dry-run reports what would be committed and writes nothing, so HEAD is
+    # still the previous commit and recording an obligation from it is wrong.
+    return "--dry-run" not in args[index + 1 :]
+
+
+def commits(command: str) -> bool:
+    """Whether the command actually invokes `git commit`.
+
+    The substring test this replaces treated `git log --grep="git commit"`,
+    `git commit --dry-run` and any heredoc quoting the phrase as commits. That
+    matters most right after `pixi run audit --clear-owed`: on a branch whose
+    HEAD touched an asset, one such command recreated the standing warning
+    with nothing having been committed. It was also too narrow in the other
+    direction -- `git -C <path> commit` contains no such substring.
+    """
+    return any(is_commit(tokens) for tokens in shell_commands(command))
 
 
 def failed(response) -> bool:
@@ -76,23 +179,43 @@ def failed(response) -> bool:
     return bool(isinstance(response, dict) and response.get("interrupted"))
 
 
-def current_branch(repo: str) -> str:
-    """The checked-out branch, or "" when git cannot say."""
+def checkout_and_branch(cwd: str) -> tuple[str, str]:
+    """(main checkout, branch) for the repo containing cwd, or ("", "").
+
+    The main checkout, not the toplevel: `git worktree add ../wt` puts the
+    working copy outside the main one, so comparing the raw cwd against the
+    master repo's path failed and the hook went silent -- on exactly the
+    parallel-phase branches CLAUDE.md recommends worktrees for, which are the
+    ones most likely to be changing config assets. `--git-common-dir` is the
+    mapping back: it names the main checkout's .git for a worktree and the
+    local one otherwise.
+
+    Both facts come from one `git rev-parse`, which is not tidiness. Two git
+    calls at four seconds fit inside the ten second timeout
+    register_hooks.py writes for every hook, and committed_paths() below
+    spends one of them; a third would put the hook over budget and Claude
+    Code would kill it before any of these graceful fallbacks could run.
+    """
     try:
         out = subprocess.run(
-            ["git", "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-C", cwd, "rev-parse", "--git-common-dir", "--abbrev-ref", "HEAD"],
             capture_output=True,
             text=True,
             check=True,
-            # Two git calls at four seconds fit inside the ten second
-            # budget register_hooks.py writes for every hook. Three at
-            # five did not, and a killed hook loses the graceful paths
-            # below entirely.
             timeout=4,
         )
     except (OSError, subprocess.SubprocessError):
-        return ""
-    return out.stdout.strip()
+        return "", ""
+    lines = out.stdout.splitlines()
+    if len(lines) != 2:
+        return "", ""
+    # rev-parse reports --git-common-dir relative to its own working
+    # directory, so it comes back as a bare ".git" from a toplevel and as an
+    # absolute path from a worktree. join handles both: an absolute second
+    # argument wins. Asking for --path-format=absolute instead would need
+    # git 2.31.
+    common = os.path.realpath(os.path.join(cwd, lines[0]))
+    return os.path.dirname(common), lines[1].strip()
 
 
 def committed_paths(repo: str) -> list[str]:
@@ -147,7 +270,7 @@ def main() -> None:
         return
 
     command = (data.get("tool_input") or {}).get("command") or ""
-    if "git commit" not in command:
+    if not isinstance(command, str) or not commits(command):
         return
 
     if failed(data.get("tool_response")):
@@ -160,16 +283,26 @@ def main() -> None:
     # dropped this guard and three tests kept passing, because they only ever
     # asserted silence and the master repo's HEAD had no config asset in it.
     cwd = data.get("cwd")
-    if not cwd:
+    if not isinstance(cwd, str) or not cwd:
         return
     # Realpath first: install.sh symlinks this repo into ~/.claude, so a
-    # session can hold a path that resolves here without looking like it. The
-    # trailing separator stops a bare prefix test from also swallowing a
-    # sibling directory like "claude-config-other".
+    # session can hold a path that resolves here without looking like it.
     resolved = os.path.realpath(cwd)
-    if resolved != repo and not resolved.startswith(repo + os.sep):
+    # The comparison is on the main checkout rather than on the cwd itself, so
+    # a sibling worktree of this repo is recognized as this repo. A cwd that is
+    # not a git repo at all yields "" and declines: no commit happened there.
+    # The trailing separator stops a bare prefix test from also swallowing a
+    # sibling directory like "claude-config-other", or a worktree named one.
+    checkout, branch = checkout_and_branch(resolved)
+    if not checkout:
+        return
+    if checkout != repo and not checkout.startswith(repo + os.sep):
         return
 
+    # HEAD and the branch are read in the worktree, since that is where the
+    # commit landed; only the marker goes to the main checkout, because a
+    # worktree is deleted when its branch merges and an obligation recorded
+    # inside one dies with it.
     touched = {p for p in committed_paths(resolved) if is_config_asset(p)}
     if not touched:
         return
@@ -180,12 +313,17 @@ def main() -> None:
     # The format is duplicated in scripts/audit_assets.py rather than imported,
     # because a hook must run under whatever interpreter settings.json names
     # and cannot depend on this repo's layout.
-    branch = current_branch(resolved)
     marker = os.path.join(repo, MARKER)
     try:
         with open(marker) as fh:
             lines = {line.rstrip("\n") for line in fh if line.strip()}
     except OSError:
+        lines = set()
+    except ValueError:
+        # Text mode, so a stray non-UTF-8 byte anywhere in the file raises
+        # UnicodeDecodeError -- a ValueError, not the OSError above. Treating
+        # the marker as empty is safe now that the write only appends: the
+        # existing entries stay on disk regardless of whether they were read.
         lines = set()
 
     mine = {f"{branch}\t{asset}" for asset in touched}
@@ -194,13 +332,28 @@ def main() -> None:
         # later commit is the nagging this design exists to avoid.
         return
 
-    lines |= mine
+    # Appended, never rewritten. The read-modify-write this replaces lost
+    # entries whenever two agents committed against one marker: each read the
+    # set, added its own, and wrote the whole file back over the other's. With
+    # eight at once it kept one entry in eight, and truncate-on-open meant a
+    # kill at the hook's 10s timeout left the file empty or torn mid-line --
+    # both observed. A single small O_APPEND write cannot interleave and
+    # cannot truncate, which is prose-writing.py's O_CREAT|O_EXCL idiom again:
+    # let the filesystem do the mutual exclusion rather than a read and a
+    # hope. Both readers de-duplicate and sort at the point of display, so
+    # nothing needed the file to be a sorted set on disk.
+    body = "".join(f"{line}\n" for line in sorted(mine)).encode()
     try:
-        with open(marker, "w") as fh:
-            fh.write("\n".join(sorted(lines)) + "\n")
+        fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            os.write(fd, body)
+        finally:
+            os.close(fd)
     except OSError:
         # Cannot record it, so do not claim it was recorded.
         return
+
+    lines |= mine
 
     # A set, not a list: a marker written before branch scoping existed holds
     # unscoped lines, and an asset present both ways was listed twice. Found in

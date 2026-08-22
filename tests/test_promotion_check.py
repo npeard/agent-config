@@ -8,6 +8,7 @@ are refactored.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -150,3 +151,156 @@ class TestInstalledSymlinkPaths:
         link = tmp_path / "linked-CLAUDE.md"
         link.symlink_to(target)
         assert fired(write(str(link)))
+
+
+def bash(command: str, cwd: str = OTHER) -> dict:
+    return {"tool_input": {"command": command}, "cwd": cwd}
+
+
+class TestBashWrites:
+    """Sessions are routinely told to edit files with `sed`, a heredoc or a
+    short script rather than the Write and Edit tools, and in such a session a
+    hook registered only for Write|Edit never fires at all. Verified on this
+    repo's own history: 22 commits of exactly the work this hook exists to
+    catch, zero firings. audit-owed.py already reads `tool_input.command` for
+    the same reason.
+    """
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            f"sed -i '' 's/a/b/' {OTHER}/CLAUDE.md",
+            f"sed -i.bak 's/a/b/' {OTHER}/skills/s/SKILL.md",
+            f"echo hi >> {OTHER}/CLAUDE.md",
+            f"echo hi > {OTHER}/memory/fact.md",
+            f"cat > {OTHER}/CLAUDE.md <<EOF\nbody\nEOF",
+            f"tee -a {OTHER}/CLAUDE.md < /dev/null",
+            f"cp draft.md {OTHER}/CLAUDE.md",
+            f"mv draft.md {OTHER}/skills/s/SKILL.md",
+            f"printf x > {OTHER}/CLAUDE.md 2>/dev/null",
+            f"true; echo hi > {OTHER}/CLAUDE.md",
+        ],
+    )
+    def test_a_write_shaped_command_fires(self, command: str):
+        assert fired(bash(command)), command
+
+    def test_a_relative_path_resolves_against_the_payload_cwd(self):
+        """Resolving against the hook process's own cwd instead would land in
+        whatever directory Claude Code happened to start the hook in."""
+        assert fired(bash("echo hi > CLAUDE.md", cwd=OTHER))
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            f"grep -rn TODO {OTHER}/CLAUDE.md",
+            f"cat {OTHER}/CLAUDE.md",
+            f"ls {OTHER}/skills",
+            f"wc -l {OTHER}/CLAUDE.md {OTHER}/skills/s/SKILL.md",
+            "grep CLAUDE.md -r .",
+        ],
+    )
+    def test_a_read_only_command_is_silent(self, command: str):
+        assert not fired(bash(command)), command
+
+    def test_a_read_redirected_elsewhere_does_not_flag_the_file_read(self):
+        """`> out.txt` makes the command write-shaped, but CLAUDE.md is still
+        only being read. Flagging every path in any write-shaped command would
+        make the advisory fire on searches."""
+        assert not fired(bash(f"grep TODO {OTHER}/CLAUDE.md > out.txt"))
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            f"echo hi > {OTHER}/notes.md",
+            f"sed -i '' 's/a/b/' {OTHER}/src/main.py",
+            f"echo hi > {MASTER}/CLAUDE.md",
+            f"sed -i '' 's/a/b/' {MASTER}/skills/quantikz/SKILL.md",
+        ],
+    )
+    def test_uninteresting_or_master_repo_targets_are_silent(self, command: str):
+        assert not fired(bash(command)), command
+
+    def test_an_unparsable_command_is_silent(self):
+        assert not fired(bash("echo 'oops > x/CLAUDE.md"))
+
+    def test_no_part_of_the_command_reaches_the_output(self):
+        """The command is the one field here that can carry text the session
+        did not author -- a filename pasted from another tool's output, say --
+        so quoting any of it back would be the untrusted-content-into-context
+        path principle 5 exists to forbid. The message is fixed prose.
+        """
+        marker = "ZZUNIQUEZZ"
+        out = run_hook(bash(f"echo hi > {OTHER}/{marker}/CLAUDE.md"))
+        assert out
+        assert marker not in out
+        assert OTHER not in out
+
+
+class TestRegistration:
+    """A Bash branch that nothing routes Bash events to is dead code.
+
+    Asserted through register_hooks' own parser rather than by matching the
+    marker text, so this checks the registration the harness would receive.
+    One marker with an alternation rather than two markers: apply() finds an
+    existing entry by filename alone, so two markers for one file under one
+    event fight over a single entry and `--check` never comes back clean.
+    """
+
+    def test_the_hook_is_registered_for_bash_as_well_as_write_and_edit(self):
+        import register_hooks
+
+        declared = register_hooks.declared_hooks()
+        matchers = [m for name, event, m in declared if name == HOOK.name]
+        assert len(matchers) == 1, matchers
+        assert set(matchers[0].split("|")) == {"Write", "Edit", "Bash"}
+
+    def test_registration_is_idempotent(self):
+        import register_hooks
+
+        settings: dict = {}
+        register_hooks.apply(settings, register_hooks.declared_hooks())
+        assert register_hooks.apply(settings, register_hooks.declared_hooks()) == []
+
+
+class TestSharedShellParser:
+    """The command parser is duplicated in hooks/prose-writing.py.
+
+    A hook is invoked by absolute path under whatever interpreter
+    ~/.claude/settings.json names, so it may depend on nothing but the standard
+    library, and a shared module under hooks/ is not available either:
+    register_hooks registers every hooks/*.py and a test fails on any file
+    there without an event marker. So the copies are deliberate, and this
+    pins them to the same behaviour rather than to the same text -- a drift
+    that changes nothing observable is not worth a failing test.
+    """
+
+    def module(self, name: str):
+        # The filenames have hyphens, so neither is importable by name.
+        path = HOOK.parent / name
+        spec = importlib.util.spec_from_file_location(name.replace("-", "_"), path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "echo x > a/CLAUDE.md",
+            "echo x >> a/b.tex",
+            "cat > a/b.tex <<EOF\nbody > decoy.tex\nEOF",
+            "sed -i '' 's/a/b/' a/b.tex",
+            "sed 's/a/b/' a/b.tex",
+            "tee a.md b.md < in",
+            "cp a b/c",
+            "mv a b",
+            "grep TODO a.tex > out",
+            "grep TODO a.tex",
+            "echo 'unbalanced > a.tex",
+            "true; echo x > a.tex && echo y > b.tex",
+            "printf x > a.tex 2>/dev/null",
+        ],
+    )
+    def test_both_hooks_extract_the_same_written_paths(self, command: str):
+        here = self.module("promotion-check.py")
+        there = self.module("prose-writing.py")
+        assert here.written_paths(command, "/w") == there.written_paths(command, "/w")

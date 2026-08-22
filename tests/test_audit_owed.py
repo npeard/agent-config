@@ -204,18 +204,25 @@ class TestIdempotence:
         commit(fake_master, "hooks/y.py")
         assert fired(run_hook(payload(fake_master), tmp_path))
 
-    def test_the_marker_accumulates_a_sorted_unique_set(self, fake_master, tmp_path):
+    def test_the_marker_accumulates_a_unique_set(self, fake_master, tmp_path):
+        """Uniqueness is the property that matters; line order is not.
+
+        Both readers -- this hook and audit_assets.owed_assets -- build a set
+        and sort at the point of display, so nothing depends on the file being
+        sorted on disk. It is asserted no longer because keeping it would mean
+        rewriting the whole file on every commit, which is what lost a
+        concurrent agent's entries.
+        """
         for relative in ("scripts/x.py", "hooks/y.py", "CLAUDE.md"):
             commit(fake_master, relative)
             run_hook(payload(fake_master), tmp_path)
         lines = (fake_master / MARKER).read_text().splitlines()
-        assert lines == sorted(set(lines))
-        assert [line.split("\t")[1] for line in lines] == [
-            "CLAUDE.md",
-            "hooks/y.py",
-            "scripts/x.py",
-        ]
-        assert {line.split("\t")[0] for line in lines} == {"main"}
+        assert len(lines) == len(set(lines))
+        assert set(lines) == {
+            "main\tCLAUDE.md",
+            "main\thooks/y.py",
+            "main\tscripts/x.py",
+        }
 
 
 class TestBranchScoping:
@@ -369,3 +376,203 @@ class TestLegacyMarker:
             "hooks/legacy.py"
             in json.loads(out)["hookSpecificOutput"]["additionalContext"]
         )
+
+
+class TestCommandGate:
+    """A substring test on "git commit" is not evidence a commit happened.
+
+    The concrete consequence: immediately after `pixi run audit --clear-owed`
+    on a branch whose HEAD touched an asset, any command merely quoting the
+    phrase recreated the standing warning -- the nagging this whole design
+    exists to avoid -- with nothing having been committed.
+    """
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            'git log --grep="git commit"',
+            "git commit --dry-run",
+            "git commit --dry-run -m x",
+            'echo "remember to git commit"',
+            "git status",
+            "cat > note.txt <<EOF\ngit commit -m x\nEOF",
+            "git log --oneline | grep 'git commit'",
+        ],
+    )
+    def test_a_command_that_did_not_commit_is_silent(
+        self, fake_master, tmp_path, command
+    ):
+        commit(fake_master, "scripts/x.py")
+        (fake_master / MARKER).unlink(missing_ok=True)
+        assert run_hook(payload(fake_master, command=command), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git commit -m x",
+            "git commit --amend --no-edit",
+            "git commit -m 'git log --grep=x'",
+            "git -C /somewhere commit -m x",
+            "/usr/bin/git commit -m x",
+            "git add -A && git commit -m x",
+            "git add -A\ngit commit -m x",
+            "cat > note.txt <<EOF\nhello\nEOF\ngit commit -am x",
+            "git commit -n -m x",
+        ],
+    )
+    def test_a_real_commit_still_fires(self, fake_master, tmp_path, command):
+        commit(fake_master, "scripts/x.py")
+        (fake_master / MARKER).unlink(missing_ok=True)
+        assert fired(run_hook(payload(fake_master, command=command), tmp_path))
+
+    def test_an_unparsable_command_is_silent(self, fake_master, tmp_path):
+        """An unbalanced quote is not a commit, and a hook that raises on one
+        is worse than a hook that declines."""
+        commit(fake_master, "scripts/x.py")
+        out = run_hook(payload(fake_master, command="git commit -m 'oops"), tmp_path)
+        assert out == ""
+
+
+class TestWorktrees:
+    """`git worktree add ../wt` puts the checkout outside the main one.
+
+    The cwd guard compared the payload's cwd against the master repo's path,
+    so a sibling worktree failed it and the hook went silent -- while CLAUDE.md
+    recommends worktrees for exactly the parallel-phase work most likely to
+    change config assets. The branches this hook exists to catch armed nothing.
+    """
+
+    @pytest.fixture
+    def worktree(self, fake_master, tmp_path):
+        def make(repo: Path, name: str = "feat/x") -> Path:
+            path = tmp_path / "worktrees" / name.replace("/", "-")
+            run_git(repo, "worktree", "add", "-q", str(path), "-b", name)
+            return path
+
+        return make
+
+    def test_a_commit_in_a_worktree_arms_the_main_checkout(
+        self, fake_master, tmp_path, worktree
+    ):
+        tree = worktree(fake_master)
+        commit(tree, "hooks/x.py")
+        assert fired(run_hook(payload(tree), tmp_path))
+        assert (fake_master / MARKER).read_text() == "feat/x\thooks/x.py\n"
+
+    def test_the_marker_lands_in_the_main_checkout_not_the_worktree(
+        self, fake_master, tmp_path, worktree
+    ):
+        """A worktree is deleted when its branch merges. An obligation recorded
+        inside one dies with it, which is the opposite of why it is a file."""
+        tree = worktree(fake_master)
+        commit(tree, "scripts/x.py")
+        assert fired(run_hook(payload(tree), tmp_path))
+        assert not (tree / MARKER).exists()
+
+    def test_a_worktree_of_an_unrelated_repo_is_still_silent(
+        self, fake_master, tmp_path, git_repo_factory, worktree
+    ):
+        commit(fake_master, "scripts/x.py")
+        other = git_repo_factory(tmp_path / "Documents" / "Projects" / "other")
+        tree = worktree(other, name="other-branch")
+        commit(tree, "scripts/y.py")
+        assert run_hook(payload(tree), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    def test_a_cwd_that_is_not_a_git_repo_is_silent(self, fake_master, tmp_path):
+        loose = tmp_path / "loose"
+        loose.mkdir()
+        commit(fake_master, "scripts/x.py")
+        assert run_hook(payload(loose), tmp_path) == ""
+
+
+class TestConcurrentWrites:
+    """Two agents committing in one checkout must not lose each other's work.
+
+    The marker was a read-modify-write: read the set, union, then
+    `open(marker, "w")`. Whichever process wrote last wrote over the other's
+    entry, and truncate-on-open meant a kill at the hook's 10s timeout left an
+    empty file behind. Deterministic once the write is a single append, since
+    an append cannot interleave and cannot truncate -- so this test can only
+    fail against an implementation that reintroduces the race.
+    """
+
+    def test_existing_lines_are_preserved_verbatim(self, fake_master, tmp_path):
+        """The deterministic half, and the mechanism the concurrent case needs.
+
+        A rewrite normalizes the whole file, so lines it did not author come
+        back reordered; an append cannot touch them. Seeded out of sorted
+        order precisely so that a rewrite is visible without a race.
+        """
+        seeded = "zz/late\tscripts/z.py\naa/early\tscripts/a.py\n"
+        (fake_master / MARKER).write_text(seeded)
+        commit(fake_master, "hooks/new.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        assert (fake_master / MARKER).read_text() == seeded + "main\thooks/new.py\n"
+
+    def test_a_marker_with_undecodable_bytes_does_not_crash(
+        self, fake_master, tmp_path
+    ):
+        """Read in text mode, so one stray byte raised UnicodeDecodeError --
+        a ValueError, not the OSError the read was guarding against."""
+        (fake_master / MARKER).write_bytes(b"main\tscripts/old.py\n\xff\xfe\n")
+        commit(fake_master, "hooks/new.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        assert b"hooks/new.py" in (fake_master / MARKER).read_bytes()
+
+    def test_no_entry_is_lost_when_hooks_run_at_once(self, fake_master, tmp_path):
+        count = 8
+        trees = []
+        for index in range(count):
+            branch = f"feat/{index}"
+            tree = tmp_path / "worktrees" / str(index)
+            run_git(fake_master, "worktree", "add", "-q", str(tree), "-b", branch)
+            commit(tree, f"hooks/h{index}.py")
+            trees.append((branch, tree))
+
+        # The race exists at any marker size; a large file only widens the
+        # read-modify-write window from microseconds to milliseconds, so the
+        # result is the mechanism rather than scheduler luck. At this size the
+        # old implementation kept one entry in eight.
+        (fake_master / MARKER).write_text(
+            "".join(f"old/{n}\tskills/s{n}/SKILL.md\n" for n in range(50_000))
+        )
+
+        env = {
+            **os.environ,
+            "HOME": str(tmp_path),
+            "CLAUDE_CONFIG_REPO": str(fake_master),
+        }
+        # Started before any stdin is written, so all eight are already past
+        # interpreter startup and blocked on the read when the payloads land.
+        # Handing each its payload at spawn time would stagger them by the
+        # startup cost, which is far longer than the window being tested.
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(HOOK)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
+            for _, _ in trees
+        ]
+        try:
+            for proc, (_, tree) in zip(procs, trees):
+                proc.stdin.write(json.dumps(payload(tree)))
+            for proc in procs:
+                proc.stdin.close()
+            for proc in procs:
+                assert proc.wait() == 0, proc.stderr.read()
+        finally:
+            # Popen does not close the pipes it opened, and eight leaked pairs
+            # surface as PytestUnraisableExceptionWarning during collection of
+            # some later test, which is a confusing place to debug from.
+            for proc in procs:
+                proc.__exit__(None, None, None)
+
+        lines = set((fake_master / MARKER).read_text().splitlines())
+        expected = {f"{branch}\thooks/h{i}.py" for i, (branch, _) in enumerate(trees)}
+        assert expected <= lines
