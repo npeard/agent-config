@@ -91,8 +91,23 @@ The patterns themselves are in `patterns.md`. Read it before rewriting.
 ```
 
 **Mechanical:** `CLAUDE.md`, skill bodies and skill descriptions each
-have a ceiling, defined once in `scripts/audit_assets.py` and imported
-by `tests/test_context_budget.py`.
+have a ceiling; so does every reference file, and so does a skill's
+per-invocation cost -- its body plus every reference an imperative step
+tells the reader to read -- which is set at one body plus one full
+reference. All are defined once in `scripts/audit_assets.py`;
+`tests/test_context_budget.py` imports them and separately pins each as
+a literal upper bound, so a ceiling cannot be loosened without editing a
+test.
+
+Reference files went unmeasured at first, which made moving prose out of
+`SKILL.md` the sanctioned route under the body ceiling: it converted a
+measured cost into an invisible one, and a 17-word `SKILL.md` beside a
+50,006-word catalog produced no finding. The per-invocation ceiling sits
+above the body ceiling deliberately, because measured against the body
+ceiling it reports `standards-and-spec-review` and `config-audit`, whose
+split into a body plus one reference is what this principle asks for --
+binding rule 2 again. What it catches is accumulation: a body that fits
+only because the catalogs it always reads sit outside it.
 
 **Judged:** whether an asset under its ceiling still earns what it
 costs. A ceiling bounds growth; it does not make the content worth

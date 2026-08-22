@@ -107,6 +107,111 @@ class TestBudgets:
         assert audit_assets.check_budgets(fake_root) == []
 
 
+class TestReferenceBudgets:
+    """Nothing measured a reference file, so the sanctioned way to bring a
+    skill under its body ceiling was to move prose into a file no check could
+    see. Verified before this existed: a 17-word SKILL.md beside a
+    50,006-word catalog.md produced no finding at all.
+    """
+
+    def reference(self, root: Path, skill: str, name: str, n: int) -> None:
+        (root / "skills" / skill / name).write_text("word " * n)
+
+    def test_an_oversized_reference_file_is_reported(self, fake_root):
+        write_skill(fake_root, "big", "Use when big")
+        self.reference(
+            fake_root, "big", "catalog.md", audit_assets.REFERENCE_MAX_WORDS + 1
+        )
+        found = audit_assets.check_budgets(fake_root)
+        assert "skills/big/catalog.md" in [f.asset for f in found]
+        assert all(f.principle == 3 for f in found)
+
+    def test_a_reference_within_its_ceiling_is_silent(self, fake_root):
+        write_skill(fake_root, "big", "Use when big")
+        self.reference(fake_root, "big", "catalog.md", audit_assets.REFERENCE_MAX_WORDS)
+        assert audit_assets.check_budgets(fake_root) == []
+
+    def test_a_nested_reference_is_measured_too(self, fake_root):
+        """references/<file>.md is the layout superpowers:writing-skills
+        prescribes, so a top-level-only scan would miss the common case."""
+        write_skill(fake_root, "deep", "Use when deep")
+        (fake_root / "skills" / "deep" / "references").mkdir()
+        self.reference(
+            fake_root,
+            "deep",
+            "references/r.md",
+            audit_assets.REFERENCE_MAX_WORDS + 1,
+        )
+        assert "skills/deep/references/r.md" in [
+            f.asset for f in audit_assets.check_budgets(fake_root)
+        ]
+
+    def test_required_references_count_toward_the_invocation_cost(self, fake_root):
+        """Each file is under its own ceiling; together they are what one
+        invocation of the skill actually costs."""
+        write_skill(
+            fake_root,
+            "heavy",
+            "Use when heavy",
+            "Read `a.md`.\n\nRead `b.md`.\n\n" + "word " * 1900,
+        )
+        self.reference(fake_root, "heavy", "a.md", 1900)
+        self.reference(fake_root, "heavy", "b.md", 1900)
+        found = audit_assets.check_budgets(fake_root)
+        assert "skills/heavy" in [f.asset for f in found]
+        assert "per invocation" in next(
+            f.detail for f in found if f.asset == "skills/heavy"
+        )
+
+    def test_a_reference_nothing_tells_the_reader_to_read_does_not_count(
+        self, fake_root
+    ):
+        """The cost of a genuinely conditional file is not paid every time,
+        and charging for it would punish exactly the arrangement principle 3
+        asks for."""
+        write_skill(fake_root, "heavy", "Use when heavy", "Deeper detail in a.md.\n")
+        self.reference(fake_root, "heavy", "a.md", 1900)
+        self.reference(fake_root, "heavy", "b.md", 1900)
+        assert audit_assets.check_budgets(fake_root) == []
+
+    def test_read_on_demand_is_not_an_imperative_step(self, fake_root):
+        """config-audit's own phrasing: the file is *named* before the word
+        "read", and the sentence says the read is conditional."""
+        write_skill(
+            fake_root,
+            "ondemand",
+            "Use when ondemand",
+            "The rules are defined in `a.md`, read on demand.\n",
+        )
+        self.reference(fake_root, "ondemand", "a.md", 1900)
+        assert audit_assets.check_budgets(fake_root) == []
+
+    def test_a_read_instruction_inside_a_fence_is_an_example_not_a_step(
+        self, fake_root
+    ):
+        write_skill(
+            fake_root,
+            "quoted",
+            "Use when quoted",
+            "A flagged example:\n\n```\nRead `a.md` before rewriting.\n```\n",
+        )
+        self.reference(fake_root, "quoted", "a.md", 1900)
+        assert audit_assets.check_budgets(fake_root) == []
+
+    def test_a_named_file_that_is_not_in_the_skill_directory_is_not_charged(
+        self, fake_root
+    ):
+        """A skill may tell the reader to read the *project's* file of the
+        same name; only this repo's own copy is a cost this repo controls."""
+        write_skill(
+            fake_root,
+            "outside",
+            "Use when outside",
+            "Read `CLAUDE.md` first.\n" + "word " * 1900,
+        )
+        assert audit_assets.check_budgets(fake_root) == []
+
+
 class TestFindingKey:
     def test_key_joins_asset_and_principle(self):
         f = audit_assets.Finding(5, "scripts/friction.py", "detail")
@@ -762,6 +867,67 @@ class TestAssetDocumented:
     def test_a_missing_readme_is_not_an_error(self, fake_root):
         (fake_root / "hooks" / "h.py").write_text("x = 1\n")
         assert audit_assets.check_asset_documented(fake_root) == []
+
+    def test_a_mention_only_inside_a_code_fence_does_not_count(self, fake_root):
+        """The finding says "add a Layout entry", and a name in a command
+        block is a usage example rather than a description of the asset.
+        Verified: a README whose only mention was a fenced `ls skills/bloated`
+        satisfied the check."""
+        write_skill(fake_root, "bloated", "Use when bloated")
+        self.readme(fake_root, "## Layout\n\n```\nls skills/bloated\n```\n")
+        assert "skills/bloated" in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_mention_outside_the_layout_section_does_not_count(self, fake_root):
+        write_skill(fake_root, "bloated", "Use when bloated")
+        self.readme(
+            fake_root,
+            "## Install\n\nRun skills/bloated somehow.\n\n## Layout\n\n- nothing\n",
+        )
+        assert "skills/bloated" in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_the_layout_section_ends_at_the_next_heading(self, fake_root):
+        write_skill(fake_root, "bloated", "Use when bloated")
+        self.readme(
+            fake_root,
+            "## Layout\n\n- nothing\n\n## Notes\n\n- `skills/bloated` exists\n",
+        )
+        assert "skills/bloated" in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_name_that_is_only_a_suffix_of_a_documented_one_does_not_count(
+        self, fake_root
+    ):
+        """A future `scripts/ascii.py` passed on README's existing mention of
+        `check_ascii.py`, so the check would stay silent about a genuinely
+        undocumented script."""
+        (fake_root / "scripts" / "ascii.py").write_text("x = 1\n")
+        self.readme(fake_root, "## Layout\n\n- `check_ascii.py` -- checks ascii\n")
+        assert "scripts/ascii.py" in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_readme_with_no_layout_section_falls_back_to_the_whole_file(
+        self, fake_root
+    ):
+        """A missing section is a README problem; reporting every asset at
+        once would be a check nobody reads."""
+        (fake_root / "hooks" / "h.py").write_text("x = 1\n")
+        self.readme(fake_root, "# r\n\n- `hooks/h.py` -- does a thing\n")
+        assert "hooks/h.py" not in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
+
+    def test_a_layout_entry_still_counts(self, fake_root):
+        (fake_root / "hooks" / "h.py").write_text("x = 1\n")
+        self.readme(fake_root, "## Layout\n\n- `hooks/h.py` -- does a thing\n")
+        assert "hooks/h.py" not in [
+            f.asset for f in audit_assets.check_asset_documented(fake_root)
+        ]
 
 
 class TestUntrackedJunk:

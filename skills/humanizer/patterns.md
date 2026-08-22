@@ -1,10 +1,14 @@
-<!-- check-ascii: allow - patterns 14, 18 and 19 are about the shape of the characters themselves, so the examples have to contain them -->
+<!-- check-ascii: allow - patterns 14 and 19 name the characters themselves -->
 
 # Humanizer pattern catalog
 
 The 35 patterns behind the `humanizer` skill. Read this before
 rewriting: the skill file carries the process, this file carries what to
 look for.
+
+Worked before/after rewrites live in `examples.md`, keyed by the same
+numbers. Open an entry there for a pattern you are actually rewriting;
+you do not need it to find one.
 
 ## Content patterns
 
@@ -17,15 +21,7 @@ symbolizing its ongoing/enduring/lasting, contributing to the, setting
 the stage for, marking/shaping the, represents/marks a shift, key
 turning point, evolving landscape, focal point, indelible mark, deeply
 rooted **Problem:** AI writing often claims that ordinary details mark a
-major change, prove a legacy, or reflect a broad trend. **Before:**
-
-> The Statistical Institute of Catalonia was officially established in
-> 1989, marking a pivotal moment in the evolution of regional statistics
-> in Spain. This initiative was part of a broader movement across Spain
-> to decentralize administrative functions and enhance regional
-> governance. **After:** The Statistical Institute of Catalonia was
-> established in 1989, part of a wider decentralization of
-> administrative functions in Spain.
+major change, prove a legacy, or reflect a broad trend.
 
 ### 2. Name-dropping to prove importance
 
@@ -33,12 +29,7 @@ major change, prove a legacy, or reflect a broad trend. **Before:**
 outlets, written by a leading expert, active social media presence
 **Problem:** AI writing often lists well-known publications or follower
 counts to prove that a person matters. The list usually gives no useful
-context. **Before:**
-
-> Her views have been cited in The New York Times, BBC, Financial Times,
-> and The Hindu. She maintains an active social media presence with over
-> 500,000 followers. **After:** Her views have been cited in The New
-> York Times and the BBC.
+context.
 
 If the source explains what the person said and where, keep that useful
 citation. Do not invent context for a shorter version.
@@ -49,14 +40,7 @@ citation. Do not invent context for a shorter version.
 ensuring..., reflecting/symbolizing..., contributing to...,
 cultivating/fostering..., encompassing..., showcasing... **Problem:** AI
 writing often adds an -ing phrase to make a simple fact sound deeper
-than it is. **Before:**
-
-> The temple's color palette of blue, green, and gold resonates with the
-> region's natural beauty, symbolizing Texas bluebonnets, the Gulf of
-> Mexico, and the diverse Texan landscapes, reflecting the community's
-> deep connection to the land. **After:** The temple is painted blue,
-> green, and gold, colors meant to evoke Texas bluebonnets and the Gulf
-> of Mexico.
+than it is.
 
 ### 4. Sales language
 
@@ -65,25 +49,14 @@ enhancing its, showcasing, exemplifies, commitment to, natural beauty,
 nestled, in the heart of, groundbreaking (figurative), renowned,
 breathtaking, must-visit, stunning **Problem:** AI writing often sounds
 like an advertisement, especially when it describes places, culture,
-products, or organizations. **Before:**
-
-> Nestled within the breathtaking region of Gonder in Ethiopia, Alamata
-> Raya Kobo stands as a vibrant town with a rich cultural heritage and
-> stunning natural beauty. **After:** Alamata Raya Kobo is a town in the
-> Gonder region of Ethiopia.
+products, or organizations.
 
 ### 5. Vague sources
 
 **Words to watch:** Industry reports, Observers have cited, Experts
 argue, Some critics argue, several sources/publications (when few cited)
 **Problem:** AI writing often assigns a claim to unnamed experts,
-critics, reports, or observers. **Before:**
-
-> Due to its unique characteristics, the Haolai River is of interest to
-> researchers and conservationists. Experts believe it plays a crucial
-> role in the regional ecosystem. **After:** Researchers and
-> conservationists study the Haolai River for its unusual
-> characteristics.
+critics, reports, or observers.
 
 Name a real source when the source text provides one. Otherwise, remove
 the unsupported claim. Never invent a source.
@@ -94,14 +67,7 @@ the unsupported claim. Never invent a source.
 these challenges, Challenges and Legacy, Future Outlook **Problem:** AI
 articles often add a stock section about challenges, future prospects,
 or continued growth. These sections usually repeat vague claims instead
-of adding facts. **Before:**
-
-> Despite its industrial prosperity, Korattur faces challenges typical
-> of urban areas, including traffic congestion and water scarcity.
-> Despite these challenges, with its strategic location and ongoing
-> initiatives, Korattur continues to thrive as an integral part of
-> Chennai's growth. **After:** Korattur has recurring traffic congestion
-> and water shortages.
+of adding facts.
 
 Add details such as dates or public actions only when they come from the
 source or the user.
@@ -117,27 +83,13 @@ highlight (verb), interplay, intricate/intricacies, key (adjective),
 landscape (abstract noun), pivotal, quietly, showcase, tapestry
 (abstract noun), testament, underscore (verb), valuable, vibrant
 **Problem:** AI writing uses these words much more often than most
-people do, especially in groups. **Before:**
-
-> Additionally, a distinctive feature of Somali cuisine is the
-> incorporation of camel meat. An enduring testament to Italian colonial
-> influence is the widespread adoption of pasta in the local culinary
-> landscape, showcasing how these dishes have integrated into the
-> traditional diet. **After:** Somali cuisine also includes camel meat,
-> which is considered a delicacy. Pasta dishes, introduced during
-> Italian colonization, remain common, especially in the south.
+people do, especially in groups.
 
 ### 8. Avoiding is and are
 
 **Words to watch:** serves as/stands as/marks/represents [a],
 boasts/features/offers [a] **Problem:** AI writing often replaces simple
-verbs such as *is*, *are*, and *has* with longer phrases. **Before:**
-
-> Gallery 825 serves as LAAA's exhibition space for contemporary art.
-> The gallery features four separate spaces and boasts over 3,000 square
-> feet. **After:** Gallery 825 is LAAA's exhibition space for
-> contemporary art. The gallery has four rooms totaling 3,000 square
-> feet.
+verbs such as *is*, *are*, and *has* with longer phrases.
 
 ### 9. Not X but Y and clipped negative endings
 
@@ -145,24 +97,12 @@ verbs such as *is*, *are*, and *has* with longer phrases. **Before:**
 "It's not just X, it's Y."
 
 It also adds clipped endings such as "no guessing" instead of writing a
-clear clause. **Before:**
-
-> It's not just about the beat riding under the vocals; it's part of the
-> aggression and atmosphere. It's not merely a song, it's a statement.
-> **After:** The heavy beat adds to the aggressive tone. **Before
-> (tailing negation):** The options come from the selected item, no
-> guessing. **After:** The options come from the selected item without
-> forcing the user to guess.
+clear clause.
 
 ### 10. Forced groups of three
 
 **Problem:** AI writing often forces ideas into groups of three to sound
-complete. **Before:**
-
-> The event features keynote sessions, panel discussions, and networking
-> opportunities. Attendees can expect innovation, inspiration, and
-> industry insights. **After:** The event includes talks and panels.
-> There's also time for informal networking between sessions.
+complete.
 
 ### 11. Changing names and repeating sentence openings
 
@@ -172,14 +112,6 @@ sentences with the same subject, often *she* or *he*.
 
 Use one clear name for the same subject. For repeated openings, merge
 sentences, change the subject when that helps, or begin with the action.
-**Before (synonym cycling):**
-
-> The protagonist faces many challenges. The main character must
-> overcome obstacles. The central figure eventually triumphs. The hero
-> returns home. **After:** The protagonist faces many challenges but
-> eventually triumphs and returns home. **Before (repeated openings):**
-> She noted the door. She noted the lock on it. She filed both away.
-> **After:** She noted the door and its lock, then filed both away.
 
 Do not ban the repeated word. Fix the repeated sentence pattern. The
 remaining sentence may still start with "She."
@@ -187,22 +119,12 @@ remaining sentence may still start with "She."
 ### 12. False from X to Y ranges
 
 **Problem:** AI writing often uses "from X to Y" when X and Y do not
-form a real range. **Before:**
-
-> Our journey through the universe has taken us from the singularity of
-> the Big Bang to the grand cosmic web, from the birth and death of
-> stars to the enigmatic dance of dark matter. **After:** The book
-> covers the Big Bang, star formation, and current theories about dark
-> matter.
+form a real range.
 
 ### 13. Passive voice and missing subjects
 
 **Problem:** AI writing often hides who acts or drops the subject. Use
-active voice when it makes the actor and action clearer. **Before:**
-
-> No configuration file needed. The results are preserved automatically.
-> **After:** You do not need a configuration file. The system preserves
-> the results automatically.
+active voice when it makes the actor and action clearer.
 
 ## Style patterns
 
@@ -212,19 +134,6 @@ active voice when it makes the actor and action clearer. **Before:**
 (–), unless the writer's sample uses them. Replace a dash with a period,
 comma, colon, or parentheses, or rewrite the sentence. Also check for
 spaced dashes (`—`) and double hyphens (`--`) used as dashes.
-**Before:**
-
-> The term is primarily promoted by Dutch institutions—not by the people
-> themselves. You don't say "Netherlands, Europe" as an address—yet this
-> mislabeling continues—even in official documents. **After:** The term
-> is primarily promoted by Dutch institutions, not by the people
-> themselves. You don't say "Netherlands, Europe" as an address, yet
-> this mislabeling continues in official documents. **Before:** The new
-> policy — announced without warning — affects thousands of workers. The
-> changes -- long overdue according to critics -- will take effect
-> immediately. **After:** The new policy, announced without warning,
-> affects thousands of workers. The changes, long overdue according to
-> critics, will take effect immediately.
 
 Before returning the rewrite, search for `—` and `–`. Remove each one
 unless the writer's sample uses that mark. In that case, match the
@@ -233,56 +142,26 @@ sample's rate.
 ### 15. Too much bold text
 
 **Problem:** AI chatbots often bold words and phrases without a clear
-reason. **Before:**
-
-> It blends **OKRs (Objectives and Key Results)**, **KPIs (Key
-> Performance Indicators)**, and visual strategy tools such as the
-> **Business Model Canvas (BMC)** and **Balanced Scorecard (BSC)**.
-> **After:** It blends OKRs, KPIs, and visual strategy tools like the
-> Business Model Canvas and Balanced Scorecard.
+reason.
 
 ### 16. Lists with bold mini-headings
 
 **Problem:** AI writing often uses vertical lists in which every item
-starts with a bold label and a colon. **Before:**
-
-> - **User Experience:** The user experience has been significantly
->   improved with a new interface.
-> - **Performance:** Performance has been enhanced through optimized
->   algorithms.
-> - **Security:** Security has been strengthened with end-to-end
->   encryption. **After:** The update improves the interface, speeds up
->   load times through optimized algorithms, and adds end-to-end
->   encryption.
+starts with a bold label and a colon.
 
 ### 17. Title case in headings
 
 **Problem:** AI chatbots often capitalize every main word in a heading.
-**Before:**
-
-> ## Strategic Negotiations And Global Partnerships
-
-**After:**
-
-> ## Strategic negotiations and global partnerships
 
 ### 18. Emojis
 
 **Problem:** AI chatbots often add emojis to headings and list items as
-decoration. **Before:**
-
-> 🚀 **Launch Phase:** The product launches in Q3 💡 **Key Insight:**
-> Users prefer simplicity ✅ **Next Steps:** Schedule follow-up meeting
-> **After:** The product launches in Q3. User research showed a
-> preference for simplicity. Next step: schedule a follow-up meeting.
+decoration.
 
 ### 19. Curly quotation marks
 
 **Problem:** ChatGPT often uses curly quotes (“...”) where the writer or
-target format uses straight quotes ("..."). **Before:**
-
-> He said “the project is on track” but others disagreed. **After:** He
-> said "the project is on track" but others disagreed.
+target format uses straight quotes ("...").
 
 ## Chatbot patterns
 
@@ -292,12 +171,7 @@ target format uses straight quotes ("..."). **Before:**
 absolutely right!, Would you like..., Want me to...?, Want me to give
 examples?, Should I continue?, let me know, here is a... **Problem:** A
 chatbot's greeting, offer, or closing sometimes remains in text that
-should stand on its own. **Before:**
-
-> Here is an overview of the French Revolution. I hope this helps! Let
-> me know if you'd like me to expand on any section. **After:** The
-> French Revolution began in 1789 when financial crisis and food
-> shortages led to widespread unrest.
+should stand on its own.
 
 ### 21. Knowledge-limit disclaimers and guesses
 
@@ -309,28 +183,12 @@ up/studied/began\], it is believed that **Problem:** Older models may
 mention the date when their knowledge ends. A model may also explain
 that it could not find a source, then fill the gap with a plausible
 guess. State what the source does not show, or remove the sentence. Do
-not present a guess as a fact. **Before (cutoff disclaimer):**
-
-> While specific details about the company's founding are not
-> extensively documented in readily available sources, it appears to
-> have been established sometime in the 1990s. **After:** The company's
-> founding date is not documented in the available sources. (Or cut the
-> sentence. State a date only if a source provides one.) **Before
-> (speculative gap-fill):** Information about her early life is not
-> publicly available, suggesting she maintains a low profile and keeps
-> personal details private. She likely grew up in a middle-class
-> household, which shaped her later interest in education reform.
-> **After:** Her early life is not documented in the available sources.
-> (Or omit the section.)
+not present a guess as a fact.
 
 ### 22. Overly agreeable tone
 
 **Problem:** AI assistants often praise the user or agree before giving
-the answer. **Before:**
-
-> Great question! You're absolutely right that this is a complex topic.
-> That's an excellent point about the economic factors. **After:** The
-> economic factors you mentioned are relevant here.
+the answer.
 
 ## Filler and hedging
 
@@ -352,21 +210,12 @@ might arguably, in some cases it may, this is an inference **Problem:**
 Repeated editing can add one qualifier after another until every claim
 sounds uncertain. Keep a qualifier only when the source supports it and
 the meaning needs it. Remove caveats that only repair an earlier
-overstatement. **Before:**
-
-> It could potentially possibly be argued that the policy might have
-> some effect on outcomes. **After:** The policy may affect outcomes.
+overstatement.
 
 ### 25. Generic positive endings
 
 **Problem:** AI writing often ends with vague optimism instead of the
-last useful fact. **Before:**
-
-> The future looks bright for the company. Exciting times lie ahead as
-> they continue their journey toward excellence. This represents a major
-> step in the right direction. **After:** (Cut the paragraph. End on the
-> last concrete fact instead of a send-off. If the source states real
-> plans, use those.)
+last useful fact.
 
 ### 26. Too many hyphenated word pairs
 
@@ -375,26 +224,14 @@ data-driven, decision-making, well-known, high-quality, real-time,
 long-term, end-to-end **Problem:** AI writing often hyphenates these
 pairs everywhere. Keep the hyphen before a noun when grammar needs it,
 as in `a high-quality report`. Drop it after the noun, as in
-`the report is high quality`. **Before:**
-
-> The cross-functional team delivered a high-quality, data-driven
-> report. The team is cross-functional, the report is high-quality, and
-> the methodology is data-driven. **After:** The cross-functional team
-> delivered a high-quality, data-driven report. The team is cross
-> functional, the report is high quality, and the methodology is data
-> driven.
+`the report is high quality`.
 
 ### 27. Pretending to reveal a deeper truth
 
 **Phrases to watch:** The real question is, at its core, in reality,
 what really matters, fundamentally, the deeper issue, the heart of the
 matter **Problem:** AI writing uses these phrases to make an ordinary
-point sound like a hidden truth. **Before:**
-
-> The real question is whether teams can adapt. At its core, what really
-> matters is organizational readiness. **After:** The question is
-> whether teams can adapt. That mostly depends on whether the
-> organization is ready to change its habits.
+point sound like a hidden truth.
 
 ### 28. Announcing the next point
 
@@ -403,55 +240,26 @@ down, here's what you need to know, now let's look at, without further
 ado, heads up, quick note, before I forget **Problem:** AI writing often
 announces the next point instead of stating it. A casual phrase such as
 "one thing that bit me" can have the same problem. Remove the
-announcement, not just its formal tone. **Before:**
-
-> Let's dive into how caching works in Next.js. Here's what you need to
-> know. **After:** Next.js caches data at multiple layers, including
-> request memoization, the data cache, and the router cache. **Before
-> (casual register):** One thing that bit me hard, so pay attention to
-> this part: the webpack dev server doesn't send the CORS header by
-> default. **After:** The webpack dev server doesn't send the CORS
-> header by default.
+announcement, not just its formal tone.
 
 ### 29. A heading repeated in the first sentence
 
 **Signs to watch:** A heading followed by a one-line paragraph that
 simply restates the heading before the real content begins. **Problem:**
 AI writing often follows a heading with a sentence that only repeats the
-heading. Remove the repeated sentence. **Before:**
-
-> ## Performance
->
-> Speed matters.
->
-> When users hit a slow page, they leave. **After:**
->
-> ## Performance
->
-> When users hit a slow page, they leave.
+heading. Remove the repeated sentence.
 
 ### 30. Writing about the previous version
 
 **Problem:** Documentation and comments should describe the current
 behavior. Mention the previous version only in change logs, release
-notes, migration guides, and other documents about change. **Before:**
-
-> This function was added to replace the previous approach of iterating
-> through all items, which caused O(n^2) performance. **After:** This
-> function uses a hash map for O(1) lookups, avoiding the O(n^2) cost of
-> naive iteration.
+notes, migration guides, and other documents about change.
 
 ### 31. Forced punchlines and dramatic fragments
 
 **Problem:** AI writing often turns each sentence into a dramatic
 closing line. One short sentence can add emphasis. A row of short
-fragments usually feels forced. **Before:**
-
-> Then AlphaEvolve arrived. It had no preference for symmetry. No
-> aesthetic prior. No nostalgia for human taste. The old rules were
-> gone. **After:** AlphaEvolve changed the search because it did not
-> favor symmetry or human-looking designs. That made some of the older
-> assumptions less useful.
+fragments usually feels forced.
 
 ### 32. Formulaic sayings
 
@@ -459,12 +267,7 @@ fragments usually feels forced. **Before:**
 but a mirror, the language of, the currency of, the architecture of
 **Problem:** AI writing often turns an ordinary claim into a saying that
 sounds deep but adds no detail. Replace the saying with the specific
-claim. **Before:**
-
-> Symmetry is the language of trust. Efficiency becomes a trap when
-> teams forget the human layer. **After:** Symmetric layouts often feel
-> more predictable to users. Teams can over-optimize workflows and miss
-> how people actually use them.
+claim.
 
 ### 33. Fake-candid openings
 
@@ -472,11 +275,7 @@ claim. **Before:**
 Let's be honest, Real talk, when used as standalone hooks or fake-candid
 pauses before an ordinary point. **Problem:** AI writing often starts
 with a staged pause or claim of honesty before making a routine point.
-State the point directly. **Before:**
-
-> Is it worth the price? Honestly? It depends on how often you'll use
-> it. **After:** Whether it's worth the price depends on how often
-> you'll use it.
+State the point directly.
 
 ### 34. Answering objections no one raised
 
@@ -487,13 +286,6 @@ but **Problem:** AI writing may answer an objection that does not appear
 in the text. Watch for an unattributed statement about what the writer
 does not mean, especially when the topic appears nowhere else. A direct
 claim such as "the API is not thread-safe" is not this pattern.
-**Before:**
-
-> This isn't mainly about prompt length, and I'm not arguing that
-> documentation doesn't matter. You could categorize the problem another
-> way, but the issue is whether the agent can use the instruction when
-> it acts. **After:** The issue is whether the agent can use the
-> instruction when it acts.
 
 Remove only the unsupported defense. If it contains a real claim, state
 that claim directly. Keep an objection when the text names its source or
@@ -507,13 +299,7 @@ would be easy to just, Some would suggest **Problem:** AI writing may
 introduce an option that no reader would consider, reject it in a
 clause, and never mention it again. This often leaves an old drafting
 idea in the final text. Remove the fake option and state the real
-constraint directly. **Before:**
-
-> Session tokens are rotated every 24 hours. A tempting approach would
-> be to rotate them by restarting the auth service on a cron job, but
-> that would drop every active session. Rotation happens in place, and
-> clients refresh transparently. **After:** Session tokens are rotated
-> every 24 hours, in place, and clients refresh transparently.
+constraint directly.
 
 One rejected option may be valid. Several short, unrelated rejections
 are a stronger sign. Ask what new information each sentence adds. If it

@@ -21,7 +21,10 @@ maintained by WikiProject AI Cleanup.
 When given text to humanize:
 
 1. **Find AI patterns.** Read `patterns.md` in this skill directory and
-   check the text against all 35 patterns.
+   check the text against all 35 patterns. That file carries what to
+   look for; the worked before/after rewrites sit in `examples.md` under
+   the same numbers. Open an entry there for a pattern you are actually
+   rewriting, not to find one.
 2. **Keep every claim.** You may shorten dull parts, expand useful
    parts, and merge or split paragraphs. Keep the information even when
    you change the structure.

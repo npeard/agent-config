@@ -39,6 +39,42 @@ CLAUDE_MD_MAX_WORDS = 1250
 SKILL_BODY_MAX_WORDS = 2000
 SKILL_DESCRIPTION_MAX_WORDS = 60
 
+# A reference file loads on demand, which is what makes it the cheap tier --
+# but nothing measured one, so moving prose out of SKILL.md turned a measured
+# cost into an invisible one, and that was the *sanctioned* way to get under
+# the body ceiling. Verified before this existed: a 17-word SKILL.md beside a
+# 50,006-word catalog.md produced no finding.
+# The same number as the body, because a file the reader is told to read costs
+# what a body costs. The tier is cheaper for being conditional, not for being
+# unbounded.
+REFERENCE_MAX_WORDS = 2000
+
+# What one invocation actually costs: the body plus every reference an
+# imperative step tells the reader to read. Measured this way, three of the
+# seven skills here exceeded the body ceiling while the gate reported all
+# seven comfortably under -- humanizer at 4878 words, 244% of it.
+#
+# Deliberately larger than the body ceiling. Measured against 2000 this would
+# report standards-and-spec-review (803 + 1390) and config-audit (1165 +
+# 1153), whose split into a body plus one reference is exactly what principle
+# 3 prescribes -- and a check that punishes compliance with one principle in
+# the name of another is worse than no check (AGENT_ASSET_PRINCIPLES.md's
+# binding rule 2). Derived rather than picked, so it cannot be tuned to
+# exempt an asset: a skill may cost one body and one full reference per
+# invocation, and needing more than that means a second catalog should be
+# loading on demand instead.
+SKILL_EFFECTIVE_MAX_WORDS = SKILL_BODY_MAX_WORDS + REFERENCE_MAX_WORDS
+
+# An imperative step naming a markdown file: "Read `patterns.md`", "read
+# CODING_STANDARDS.md next to this file". The verb has to govern the name, so
+# config-audit's "defined in `AGENT_ASSET_PRINCIPLES.md`, read on demand" does
+# not match -- that sentence says the read is conditional, and charging for it
+# would be the punishing-compliance failure again. Same shape as
+# READ_THE_SOURCE below, which reads the same instruction for scripts.
+REQUIRED_READ = re.compile(
+    r"\bread\b[^.\n]{0,40}?`?([A-Za-z0-9_.-]+\.md)`?", re.IGNORECASE
+)
+
 # The openers superpowers:writing-skills already prescribes. Tracking that
 # skill rather than inventing a rule here: a check that disagreed with the
 # authoring guidance would be worse than no check at all.
@@ -261,6 +297,39 @@ def check_overlap(root: Path = REPO_ROOT) -> list[Finding]:
     ]
 
 
+def reference_files(skill_dir: Path) -> list[Path]:
+    """Every markdown file in a skill directory other than SKILL.md.
+
+    rglob, because references/<file>.md is the layout
+    superpowers:writing-skills prescribes and a top-level scan would miss it.
+    Markdown only: a code sample is evidence (see check_evidence), not prose
+    the reader is charged for.
+    """
+    return [p for p in sorted(skill_dir.rglob("*.md")) if p.name != "SKILL.md"]
+
+
+def required_references(path: Path, text: str) -> list[Path]:
+    """The reference files this SKILL.md tells the reader to read outright.
+
+    Fences are stripped for the same reason as in check_script_references's
+    READ_THE_SOURCE: inside a fence, "Read `x.md`" is an illustration of the
+    instruction rather than the instruction.
+
+    A named file that is not in the skill directory is not charged. A skill
+    may point at the *project's* file of the same name, and CLAUDE.md has its
+    own ceiling already.
+    """
+    named = {m.group(1).lower() for m in REQUIRED_READ.finditer(unfenced(text))}
+    return [p for p in reference_files(path.parent) if p.name.lower() in named]
+
+
+def effective_words(path: Path, text: str) -> int:
+    """What one invocation of this skill costs: body plus required references."""
+    return words(text) + sum(
+        words(ref.read_text()) for ref in required_references(path, text)
+    )
+
+
 def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     """P3: spend context wisely."""
     out = []
@@ -295,6 +364,32 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
                     f"description {words(value)} words, over the "
                     f"{SKILL_DESCRIPTION_MAX_WORDS} ceiling; descriptions are "
                     "listed in every session, so this is always-loaded cost",
+                )
+            )
+        for ref in reference_files(path.parent):
+            n = words(ref.read_text())
+            if n > REFERENCE_MAX_WORDS:
+                out.append(
+                    Finding(
+                        3,
+                        rel(ref, root),
+                        f"reference {n} words, over the {REFERENCE_MAX_WORDS} "
+                        "ceiling; an on-demand file is the cheap tier, not a "
+                        "free one",
+                    )
+                )
+        required = required_references(path, text)
+        total = effective_words(path, text)
+        if total > SKILL_EFFECTIVE_MAX_WORDS:
+            named = ", ".join(ref.name for ref in required)
+            out.append(
+                Finding(
+                    3,
+                    rel(path.parent, root),
+                    f"{total} words per invocation (SKILL.md plus {named}, "
+                    "which its own steps say to read), over the "
+                    f"{SKILL_EFFECTIVE_MAX_WORDS} ceiling; make a reference "
+                    "genuinely conditional or split it",
                 )
             )
     return out
@@ -487,6 +582,45 @@ def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
 # an explicit exclusion the check reports itself and the finding can never be
 # resolved. Moving the patterns to a data file would fix that and make the
 # script unusable when copied, which is a worse trade.
+LAYOUT_HEADING = "## Layout"
+
+
+def layout_section(text: str) -> str:
+    """The part of README where naming an asset documents it.
+
+    The finding below says "add a Layout entry", so the check has to mean
+    that: a bare substring anywhere satisfied it, including inside a fence,
+    and a README whose only mention of a skill was `ls skills/bloated` in a
+    command block passed. Fences go for the same reason as in unfenced() --
+    inside one, a name is an example of usage rather than a description of
+    the asset.
+
+    With no Layout heading the whole file is used. A missing section is a
+    README problem, and a check that reports every asset at once is one
+    nobody reads.
+    """
+    body = unfenced(text)
+    start = body.find(LAYOUT_HEADING)
+    if start == -1:
+        return body
+    section = body[start:]
+    end = section.find("\n## ", len(LAYOUT_HEADING))
+    return section if end == -1 else section[:end]
+
+
+def documented(region: str, path: Path, root: Path) -> bool:
+    """Whether `region` names this asset, rather than one it is a substring of.
+
+    A plain `in` test let a future `scripts/ascii.py` pass on README's
+    existing mention of `check_ascii.py`, so the check would have stayed
+    silent about a script that really was undocumented.
+    """
+    for candidate in (rel(path, root), path.name):
+        if re.search(rf"(?<![\w./-]){re.escape(candidate)}(?![\w-])", region):
+            return True
+    return False
+
+
 def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
     """P4: an asset the README does not name is one you must read the tree to find.
 
@@ -502,20 +636,20 @@ def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
     readme = root / "README.md"
     if not readme.is_file():
         return []
-    text = readme.read_text()
+    region = layout_section(readme.read_text())
     assets = [*hook_files(root), *script_files(root)]
     assets += [d for d in sorted((root / "skills").glob("*")) if d.is_dir()]
     out = []
     for path in assets:
-        name = path.name
-        if name in text or rel(path, root) in text:
+        if documented(region, path, root):
             continue
         out.append(
             Finding(
                 4,
                 rel(path, root),
-                "not named in README.md, so it can only be discovered by "
-                "reading the tree; add a Layout entry saying why it exists",
+                "not named in README.md's Layout section, so it can only be "
+                "discovered by reading the tree; add a Layout entry saying "
+                "why it exists",
             )
         )
     return out
