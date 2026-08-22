@@ -29,6 +29,9 @@ Reason from its output. Do not re-read every asset to form your own view
 of what it already told you -- principle 3 applies to the auditor, and
 the mechanical pass is the cheap half by construction.
 
+`pixi run audit --owed` lists the assets this branch actually changed,
+which is the scope the judgement below applies to.
+
 `--help` for the rest. `--sha <asset>` gives the hash a ledger entry
 needs, so writing one never requires opening the script.
 

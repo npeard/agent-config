@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import asdict, dataclass
@@ -263,7 +264,12 @@ def check_overlap(root: Path = REPO_ROOT) -> list[Finding]:
 def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     """P3: spend context wisely."""
     out = []
-    n = words((root / "CLAUDE.md").read_text())
+    # Guarded like prose_files and pixi_tasks. Unguarded, `pixi run audit` on a
+    # tree where CLAUDE.md was renamed tracebacks instead of reporting the P4
+    # dangling references that rename produces -- the audit failing exactly
+    # when it has something to say.
+    claude_md = root / "CLAUDE.md"
+    n = words(claude_md.read_text()) if claude_md.is_file() else 0
     if n > CLAUDE_MD_MAX_WORDS:
         out.append(
             Finding(
@@ -462,7 +468,19 @@ UNTRUSTED_SOURCES = {
         r"pixi\.toml|pyproject\.toml|package\.json|Cargo\.toml|Makefile"
     ),
     "shell-out": re.compile(r"osascript|shell=True|os\.system"),
+    "subprocess": re.compile(r"subprocess\.(?:run|check_output|Popen)"),
 }
+
+# Sources carrying content from outside this repo. Any emission of one is worth
+# enumerating.
+EXTERNAL_SOURCES = frozenset({"transcript", "network", "foreign-manifest", "shell-out"})
+# Subprocess output is usually this repo's own git talking, so emitting it to a
+# human terminal is materially weaker than the above. It counts only where an
+# instruction inside it could actually be obeyed -- otherwise every script that
+# shells out to git and prints a filename becomes a candidate, and a report
+# where almost every file is ledgered is one nobody reads. This is the
+# narrowing check_read_and_emit's docstring anticipated.
+HIGH_SINKS = frozenset({"agent-context", "shell-argument"})
 
 # `print(` of anything that is not a bare string literal. The negative
 # lookahead for `=` keeps a keyword argument (`print(file=...)`) from counting
@@ -497,7 +515,12 @@ def check_read_and_emit(root: Path = REPO_ROOT) -> list[Finding]:
         text = path.read_text()
         sources = sorted(k for k, r in UNTRUSTED_SOURCES.items() if r.search(text))
         sinks = sorted(k for k, r in EMIT_SINKS.items() if r.search(text))
-        if sources and sinks:
+        external = set(sources) & EXTERNAL_SOURCES
+        high = set(sinks) & HIGH_SINKS
+        # A source is still required: promotion-check.py emits into agent
+        # context but reads nothing outside the repo, and a rule keyed on the
+        # sink alone reported it.
+        if sources and sinks and (external or high):
             out.append(
                 Finding(
                     5,
@@ -626,6 +649,74 @@ def partition(
     return live, suppressed
 
 
+MARKER = ".audit-owed"
+
+
+def current_branch(root: Path) -> str:
+    """The checked-out branch, or "" when git cannot say.
+
+    The marker is scoped by branch because the obligation is: an audit is owed
+    for the assets *this* branch changed. Without scoping, switching branches
+    carries the warning across, and the obvious fix -- clearing it -- discards
+    an obligation the other branch genuinely had.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out.stdout.strip()
+
+
+def owed_assets(root: Path, branch: str) -> list[str]:
+    """Assets recorded against `branch`. Tolerates unscoped legacy lines."""
+    marker = root / MARKER
+    if not marker.is_file():
+        return []
+    out = set()
+    for line in marker.read_text().splitlines():
+        if not line.strip():
+            continue
+        recorded, _, asset = line.partition("\t")
+        if asset:
+            if recorded == branch:
+                out.add(asset)
+        else:
+            # Written before branch scoping existed. Counted for any branch,
+            # because the safe reading of an obligation with no recorded owner
+            # is that it is still owed. The hook does the same.
+            out.add(recorded)
+    return sorted(out)
+
+
+def clear_owed(root: Path) -> str:
+    """Drop this branch's entries, keeping any other branch's. Returns a report."""
+    marker = root / MARKER
+    if not marker.is_file():
+        return "no audit owed"
+    branch = current_branch(root)
+    # An unscoped line is dropped by whichever branch clears first. It has no
+    # tab, so its "branch" field is the asset path itself -- testing that
+    # against the current branch never matched and the line could never be
+    # cleared at all. owed_assets counts such a line as owed for every branch,
+    # so clearing it from any of them is the consistent reading.
+    kept = [
+        line
+        for line in marker.read_text().splitlines()
+        if line.strip() and "\t" in line and line.partition("\t")[0] != branch
+    ]
+    if kept:
+        marker.write_text("\n".join(kept) + "\n")
+        return f"cleared {branch or 'unscoped'}; {len(kept)} entry(s) left for other branches"
+    marker.unlink()
+    return f"cleared {marker.name}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit this repo's assets against the five agent-asset principles."
@@ -641,6 +732,11 @@ def main(argv: list[str] | None = None) -> int:
         help="report accepted exceptions as findings too",
     )
     parser.add_argument(
+        "--owed",
+        action="store_true",
+        help="list the assets this branch owes an audit for",
+    )
+    parser.add_argument(
         "--clear-owed",
         action="store_true",
         help="delete .audit-owed once the audit is done",
@@ -652,18 +748,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.owed:
+        # preflight asks through this rather than parsing the marker itself, so
+        # the branch-scoped format has exactly one owner.
+        assets = owed_assets(REPO_ROOT, current_branch(REPO_ROOT))
+        if args.json:
+            print(json.dumps({"owed": assets}, indent=2))
+        else:
+            print("\n".join(assets) if assets else "no audit owed")
+        return 0
+
     if args.clear_owed:
         # A warning nobody can clear is a warning everyone learns to ignore,
-        # which is the failure the house rule about flaky gates names. The
-        # hook that wrote the marker says to delete it in additionalContext --
-        # i.e. in exactly the context this design calls unreliable -- so
-        # clearing it has to be a command the skill can name.
-        marker = REPO_ROOT / ".audit-owed"
-        if marker.is_file():
-            marker.unlink()
-            print(f"cleared {marker.name}")
-        else:
-            print("no audit owed")
+        # which is the failure the house rule about flaky gates names. The hook
+        # that wrote the marker says to clear it in additionalContext -- i.e.
+        # in exactly the context this design calls unreliable -- so clearing it
+        # has to be a command the skill can name.
+        print(clear_owed(REPO_ROOT))
         return 0
 
     if args.sha:

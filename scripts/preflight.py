@@ -403,14 +403,23 @@ def check_friction(report: Report, root: Path) -> None:
 def check_audit_owed(report: Report, root: Path) -> None:
     """Report a config audit this branch owes but has not run.
 
-    Branch state, not repo state and not machine state: the marker is
-    gitignored, so no test can gate it and it does not travel. Reported here
-    because session start is when it matters -- the hook that wrote the marker
-    injected its reminder into a session that has since ended, and this is
-    what carries the obligation across that boundary.
+    Branch state. Each marker line is `<branch>\t<asset>`, because the
+    obligation is an audit for what *this* branch changed -- unscoped, the
+    warning follows you to an unrelated branch and clearing it there discards
+    the original branch's obligation. The marker is gitignored and untracked,
+    so no test can gate it and it does not travel between machines. Reported
+    here because session start is when it matters: the hook that wrote it
+    injected its reminder into a session that has since ended.
 
-    Silent when the marker is absent, and silent in projects that have no
-    audit script, since preflight is copied into repos with no such concept.
+    The two-field format is parsed here rather than fetched from
+    audit_assets.py. Shelling out put a subprocess in a startup check, and it
+    silently ignored `root` besides -- that script resolves its own repo from
+    __file__, so this reported the wrong tree whenever the two differed.
+    audit_assets.py owns writing and clearing; this only reads.
+
+    Silent when nothing is owed for the current branch, and silent in projects
+    with no audit script, since preflight is copied into repos that have no
+    such concept.
     """
     if not (Path(__file__).resolve().parent / "audit_assets.py").is_file():
         return
@@ -418,11 +427,19 @@ def check_audit_owed(report: Report, root: Path) -> None:
     if not marker.is_file():
         return
     try:
-        assets = [
-            line.strip() for line in marker.read_text().splitlines() if line.strip()
-        ]
+        lines = [ln for ln in marker.read_text().splitlines() if ln.strip()]
     except OSError:
         return
+    branch = git("rev-parse", "--abbrev-ref", "HEAD") or ""
+    assets = set()
+    for line in lines:
+        recorded, _, asset = line.partition("\t")
+        # An unscoped line predates branch scoping; the safe reading of an
+        # obligation with no recorded owner is that it is still owed.
+        if not asset:
+            assets.add(recorded)
+        elif recorded == branch:
+            assets.add(asset)
     if not assets:
         return
     report.add(

@@ -423,3 +423,39 @@ class TestAuditOwed:
     def test_a_directory_named_like_the_marker_is_silent(self, tmp_path):
         (tmp_path / ".audit-owed").mkdir()
         assert self.report_for(tmp_path) == []
+
+
+class TestAuditOwedBranchScoping:
+    """Each line is `<branch>\tasset`. Unscoped, the warning follows you to an
+    unrelated branch, and clearing it there discards the original obligation.
+    """
+
+    def report_for(self, root):
+        report = preflight.Report()
+        preflight.check_audit_owed(report, root)
+        return report.rows
+
+    def current(self):
+        return preflight.git("rev-parse", "--abbrev-ref", "HEAD") or ""
+
+    def test_this_branch_s_entries_are_counted(self, tmp_path):
+        (tmp_path / ".audit-owed").write_text(
+            f"{self.current()}\tscripts/x.py\n{self.current()}\tCLAUDE.md\n"
+        )
+        assert "2 config asset(s)" in self.report_for(tmp_path)[0][2]
+
+    def test_another_branch_s_entries_are_ignored(self, tmp_path):
+        (tmp_path / ".audit-owed").write_text("some-other-branch\tscripts/x.py\n")
+        assert self.report_for(tmp_path) == []
+
+    def test_a_mixed_marker_counts_only_this_branch(self, tmp_path):
+        (tmp_path / ".audit-owed").write_text(
+            f"other\tscripts/a.py\n{self.current()}\tscripts/b.py\n"
+        )
+        assert "1 config asset(s)" in self.report_for(tmp_path)[0][2]
+
+    def test_an_unscoped_line_still_counts(self, tmp_path):
+        """Written before scoping existed; the safe reading of an obligation
+        with no recorded owner is that it is still owed."""
+        (tmp_path / ".audit-owed").write_text("scripts/legacy.py\n")
+        assert "1 config asset(s)" in self.report_for(tmp_path)[0][2]

@@ -3,10 +3,11 @@
 Exercised as a subprocess through its real contract -- a payload on stdin, an
 optional payload on stdout -- like the other hook tests here.
 
-Unlike promotion-check.py this hook reads git state and writes a marker file,
-so the repo path and the marker are monkeypatched to a temporary tree. The
-hook derives MASTER_REPO from expanduser at import time, so the tests run it
-with a patched HOME rather than editing the source.
+Unlike promotion-check.py this hook reads git state and writes a marker file, so
+the tests give it a temporary tree. It resolves its root per call in
+master_repo(), and run_hook drives it through CLAUDE_CONFIG_REPO; one test
+deliberately unsets that to exercise the expanduser default, so the documented
+install path cannot rot.
 """
 
 from __future__ import annotations
@@ -184,10 +185,39 @@ class TestIdempotence:
         for relative in ("scripts/x.py", "hooks/y.py", "CLAUDE.md"):
             commit(fake_master, relative)
             run_hook(payload(fake_master), tmp_path)
-        lines = (fake_master / MARKER).read_text().split()
-        assert (
-            lines == sorted(set(lines)) == ["CLAUDE.md", "hooks/y.py", "scripts/x.py"]
-        )
+        lines = (fake_master / MARKER).read_text().splitlines()
+        assert lines == sorted(set(lines))
+        assert [line.split("\t")[1] for line in lines] == [
+            "CLAUDE.md",
+            "hooks/y.py",
+            "scripts/x.py",
+        ]
+        assert {line.split("\t")[0] for line in lines} == {"main"}
+
+
+class TestBranchScoping:
+    """The obligation is an audit for what *this* branch changed. Unscoped, the
+    warning follows you to an unrelated branch and clearing it there discards
+    the original branch's obligation."""
+
+    def test_another_branch_entry_is_not_reported_as_this_branch_s(
+        self, fake_master, tmp_path
+    ):
+        commit(fake_master, "scripts/x.py")
+        run_hook(payload(fake_master), tmp_path)
+        run_git(fake_master, "checkout", "-q", "-b", "other")
+        commit(fake_master, "hooks/y.py")
+        run_hook(payload(fake_master), tmp_path)
+        lines = (fake_master / MARKER).read_text().splitlines()
+        assert "main\tscripts/x.py" in lines
+        assert "other\thooks/y.py" in lines
+
+    def test_the_same_asset_on_a_second_branch_fires_again(self, fake_master, tmp_path):
+        commit(fake_master, "scripts/x.py")
+        assert fired(run_hook(payload(fake_master), tmp_path))
+        run_git(fake_master, "checkout", "-q", "-b", "other")
+        commit(fake_master, "scripts/x.py", body="changed\n")
+        assert fired(run_hook(payload(fake_master), tmp_path))
 
 
 class TestWiring:
@@ -219,33 +249,39 @@ class TestWiring:
 
 
 class TestCommitActuallyHappened:
-    """`git commit` in a command is not proof a commit succeeded, and this
-    repo runs ruff with --exit-non-zero-on-fix, so a rejected-then-retried
-    commit is routine rather than hypothetical."""
+    """`git commit` in a command is not proof a commit succeeded, and this repo
+    runs ruff with --exit-non-zero-on-fix, so a rejected-then-retried commit is
+    routine rather than hypothetical."""
 
-    @pytest.mark.parametrize(
-        "response",
-        [
-            {"is_error": True},
-            {"interrupted": True},
-            {"exit_code": 1},
-            {"returncode": 128},
-        ],
-    )
-    def test_a_failed_commit_records_nothing(self, fake_master, tmp_path, response):
+    def test_a_commit_that_left_staged_changes_records_nothing(
+        self, fake_master, tmp_path
+    ):
+        """The shape a pre-commit rejection leaves behind: the staged set is
+        restored, so the index is dirty and HEAD is the *previous* commit."""
+        commit(fake_master, "docs/seed.md")
+        target = fake_master / "scripts" / "x.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("x\n")
+        run_git(fake_master, "add", "scripts/x.py")
+        assert run_hook(payload(fake_master), tmp_path) == ""
+        assert not (fake_master / MARKER).exists()
+
+    def test_an_interrupted_response_records_nothing(self, fake_master, tmp_path):
+        """`interrupted` is the one failure the Bash payload actually reports;
+        it carries stdout/stderr and no exit status."""
         commit(fake_master, "scripts/x.py")
-        data = {**payload(fake_master), "tool_response": response}
+        data = {**payload(fake_master), "tool_response": {"interrupted": True}}
         assert run_hook(data, tmp_path) == ""
         assert not (fake_master / MARKER).exists()
 
     @pytest.mark.parametrize(
-        "response", [{"exit_code": 0}, {"stdout": "1 file changed"}, None, "text"]
+        "response", [{"stdout": "1 file changed"}, {}, None, "text"]
     )
     def test_anything_not_known_to_have_failed_still_fires(
         self, fake_master, tmp_path, response
     ):
-        """One-directional on purpose: an unrecognised payload degrades to the
-        old behaviour rather than silencing the hook."""
+        """One-directional on purpose: an unrecognised payload degrades to
+        recording rather than to silence."""
         commit(fake_master, "scripts/x.py")
         data = {**payload(fake_master), "tool_response": response}
         assert fired(run_hook(data, tmp_path))
@@ -274,3 +310,29 @@ class TestCommitShapes:
         run_git(repo, "add", "CLAUDE.md")
         run_git(repo, "commit", "-qm", "root")
         assert fired(run_hook(payload(repo), tmp_path))
+
+
+class TestLegacyMarker:
+    """A marker written before branch scoping existed holds unscoped lines."""
+
+    def test_an_asset_recorded_both_ways_is_listed_once(self, fake_master, tmp_path):
+        """Found in production: the hook reported the same path to itself
+        twice, once from the legacy line and once from the scoped one."""
+        (fake_master / MARKER).write_text("scripts/x.py\n")
+        commit(fake_master, "scripts/x.py")
+        out = run_hook(payload(fake_master), tmp_path)
+        assert fired(out)
+        context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        assert context.count("scripts/x.py") == 1
+        assert "1 claude-config asset(s)" in context
+
+    def test_an_unscoped_line_still_counts_as_owed(self, fake_master, tmp_path):
+        """The safe reading of an obligation with no recorded owner is that it
+        is still owed, so it is not silently dropped."""
+        (fake_master / MARKER).write_text("hooks/legacy.py\n")
+        commit(fake_master, "scripts/x.py")
+        out = run_hook(payload(fake_master), tmp_path)
+        assert (
+            "hooks/legacy.py"
+            in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        )

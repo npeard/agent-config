@@ -495,11 +495,15 @@ class TestRepoIsClean:
         it is worth reporting, because the usual cause is an asset edited
         without revisiting the exception granted to it. It also catches an
         asset that left the flagged set entirely, which nothing else would.
+
+        Goes through asset_sha, not sha: a pairwise key is not a path, so sha
+        returns None for one and this reported the first ledgered P1 overlap
+        exception -- the case PAIR_SEP exists for -- as permanently stale.
         """
         stale = [
             key
             for key, recorded in audit_assets.load_ledger().items()
-            if audit_assets.sha(REPO_ROOT / key.split("::")[0]) != recorded
+            if audit_assets.asset_sha(REPO_ROOT, key.split("::")[0]) != recorded
         ]
         assert not stale, f"ledger entries no longer match their asset: {stale}"
 
@@ -575,6 +579,24 @@ class TestClearOwed:
         assert audit_assets.main(["--clear-owed"]) == 0
         assert not marker.exists()
         assert "cleared" in capsys.readouterr().out
+
+    def test_clear_owed_drops_an_unscoped_legacy_line(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        """Its "branch" field is the asset path, so testing that against the
+        current branch never matched and the line could never be cleared."""
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)
+        marker = tmp_path / ".audit-owed"
+        marker.write_text("scripts/legacy.py\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert not marker.exists()
+
+    def test_clear_owed_keeps_another_branch_s_entries(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)
+        marker = tmp_path / ".audit-owed"
+        marker.write_text("other\tscripts/x.py\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert marker.read_text().strip() == "other\tscripts/x.py"
 
     def test_clear_owed_with_no_marker_says_so(self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)

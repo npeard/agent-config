@@ -62,15 +62,16 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "d46b51bfad3ec7a670193f5ed9ffad1c2cd2a06b414e93f88fa7bba3da4bfc0b"
+asset_sha = "0fc6442f840b43c20b8bcc484a42b734d0f671ea20ef0f80c2d88a9fcee49c64"
 note = """
 Reads manifests to decide booleans and emits check names and pass/fail
 statuses, not manifest content. The foreign-manifest source matches on the
 filenames it looks for rather than on anything it forwards.
 
-Re-granted 2026-08-21 after check_audit_owed was added: the hash expired
-exactly as designed and the finding returned. The new code reads a gitignored
-marker in this repo and emits a count, so the judgement above is unchanged.
+Re-granted twice on 2026-08-21, each time because the hash expired exactly as
+designed when check_audit_owed was added and then reworked. The new code reads
+a gitignored marker in this repo and emits a count, not content, so the
+judgement above is unchanged.
 """
 
 [[decision]]
@@ -114,4 +115,27 @@ asset_sha = "e17f10081fa5142c37060d100d2d6de4f9dc7f8bed245c8d061e734e9754032a"
 note = """
 Matches on manifest presence to decide whether to fire, then emits its own
 fixed message. Nothing it read reaches context.
+"""
+
+[[decision]]
+asset = "hooks/audit-owed.py"
+principle = 5
+date = "2026-08-21"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "885369c8dd874fa529e88fd7a8b7cc64a0682701601e57ff0aa3167febe90f4b"
+note = """
+Found by code review, not by the check: the P5 classifier had no source
+pattern for subprocess output, so this branch's own hook -- which puts `git
+diff-tree` paths into additionalContext -- was the read-and-emit shape the
+check exists to enumerate and self-exempted from it. The classifier now treats
+subprocess as a source, counting only against a high-severity sink (agent
+context or a shell argument), so a script that shells out and prints to a
+terminal does not become a candidate.
+
+Accepted rather than removed, because the mitigation is in place: each path is
+emitted as a JSON string literal, the same framing rule friction.py's excerpt
+uses, so a crafted filename cannot terminate its own quoting. The paths are
+also this repo's own git history rather than a foreign source, and are capped
+at four.
 """
