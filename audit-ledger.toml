@@ -57,39 +57,6 @@ is real -- text does reach a shell interpreter -- and it is already handled.
 """
 
 [[decision]]
-asset = "scripts/preflight.py"
-principle = 5
-date = "2026-08-21"
-cause = "working-as-designed"
-outcome = "tier-0"
-asset_sha = "7e5e48731eca27087742662bb44c4610b3899cdd42ddbb811209b774255cc1d7"
-note = """
-Reads manifests to decide booleans and emits check names and pass/fail
-statuses, not manifest content. The foreign-manifest source matches on the
-filenames it looks for rather than on anything it forwards.
-
-Re-granted three times on 2026-08-21 as check_audit_owed was added and then
-reworked twice. The hash expiring each time is the mechanism working, but the
-repetition is itself the lesson: the judgement here is about a property of the
-file -- it emits check names, statuses and counts, never content it read -- and
-that property is what a future re-grant should re-check, rather than re-reading
-the diff.
-"""
-
-[[decision]]
-asset = "scripts/toolgaps.py"
-principle = 5
-date = "2026-08-21"
-cause = "working-as-designed"
-outcome = "tier-0"
-asset_sha = "b70f0b26c0b4661f4114ca9bcbf54a3ece65e5055f7ecaabe52415112b9c2288"
-note = """
-Emits capability names and asset filenames from repos the user owns and
-cloned deliberately. No content from an untrusted source crosses into
-context; the match is on the manifest names it searches for.
-"""
-
-[[decision]]
 asset = "hooks/task-list.py"
 principle = 5
 date = "2026-08-21"

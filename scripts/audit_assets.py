@@ -475,15 +475,23 @@ UNTRUSTED_SOURCES = {
     "subprocess": re.compile(r"subprocess\.(?:run|check_output|Popen)"),
 }
 
-# Sources carrying content from outside this repo. Any emission of one is worth
-# enumerating.
-EXTERNAL_SOURCES = frozenset({"transcript", "network", "foreign-manifest", "shell-out"})
-# Subprocess output is usually this repo's own git talking, so emitting it to a
-# human terminal is materially weaker than the above. It counts only where an
-# instruction inside it could actually be obeyed -- otherwise every script that
-# shells out to git and prints a filename becomes a candidate, and a report
-# where almost every file is ledgered is one nobody reads. This is the
-# narrowing check_read_and_emit's docstring anticipated.
+# Split by how foreign the content is, not by how loud the sink is. Narrowing
+# to high-severity sinks alone was the obvious move and the wrong one: it would
+# have exempted friction.py, whose 400 characters of raw session transcript go
+# to plain stdout -- and a script's stdout is read by the agent that ran it, so
+# for genuinely foreign content stdout is not a weak sink at all.
+#
+# Content this repo did not author and cannot vouch for. Any emission counts.
+FOREIGN_SOURCES = frozenset({"transcript", "network"})
+
+# Content from a file the user cloned deliberately, or from this repo's own git.
+# Real surface, but weak enough that emitting it to a terminal is not worth a
+# standing ledger entry; it counts only where an instruction could be obeyed.
+# This is what keeps preflight.py and toolgaps.py -- which emit check names and
+# statuses rather than anything they read -- out of the report.
+WEAK_SOURCES = frozenset({"foreign-manifest", "subprocess", "shell-out"})
+
+# Where an instruction inside the content could actually be acted on.
 HIGH_SINKS = frozenset({"agent-context", "shell-argument"})
 
 # `print(` of anything that is not a bare string literal. The negative
@@ -519,21 +527,23 @@ def check_read_and_emit(root: Path = REPO_ROOT) -> list[Finding]:
         text = path.read_text()
         sources = sorted(k for k, r in UNTRUSTED_SOURCES.items() if r.search(text))
         sinks = sorted(k for k, r in EMIT_SINKS.items() if r.search(text))
-        external = set(sources) & EXTERNAL_SOURCES
+        # A source is always required. Keyed on the sink alone this reported
+        # promotion-check.py, which emits into agent context but reads nothing
+        # from outside the repo at all.
+        foreign = set(sources) & FOREIGN_SOURCES
+        weak = set(sources) & WEAK_SOURCES
         high = set(sinks) & HIGH_SINKS
-        # A source is still required: promotion-check.py emits into agent
-        # context but reads nothing outside the repo, and a rule keyed on the
-        # sink alone reported it.
-        if sources and sinks and (external or high):
-            out.append(
-                Finding(
-                    5,
-                    rel(path, root),
-                    f"reads {'/'.join(sources)} and emits via {'/'.join(sinks)}; "
-                    "state the trust boundary in a comment, or ledger why none "
-                    "is needed",
-                )
+        if not (sinks and (foreign or (weak and high))):
+            continue
+        out.append(
+            Finding(
+                5,
+                rel(path, root),
+                f"reads {'/'.join(sources)} and emits via {'/'.join(sinks)}; "
+                "state the trust boundary in a comment, or ledger why none "
+                "is needed",
             )
+        )
     return out
 
 

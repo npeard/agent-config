@@ -602,3 +602,72 @@ class TestClearOwed:
         monkeypatch.setattr(audit_assets, "REPO_ROOT", tmp_path)
         assert audit_assets.main(["--clear-owed"]) == 0
         assert "no audit owed" in capsys.readouterr().out
+
+
+class TestP5Severity:
+    """The rule splits on how foreign the content is, not on how loud the sink
+    is. Narrowing to high-severity sinks alone was the obvious move and would
+    have exempted friction.py -- the case that motivated the principle."""
+
+    def write(self, root, where, name, body):
+        (root / where).mkdir(parents=True, exist_ok=True)
+        (root / where / name).write_text(body)
+
+    def assets(self, root):
+        return {f.asset for f in audit_assets.check_read_and_emit(root)}
+
+    def test_foreign_content_to_plain_stdout_is_reported(self, fake_root):
+        """A script's stdout is read by the agent that ran it, so for content
+        this repo did not author stdout is not a weak sink."""
+        self.write(
+            fake_root,
+            "scripts",
+            "miner.py",
+            "from pathlib import Path\nt = Path('a.jsonl').read_text()\nprint(t)\n",
+        )
+        assert "scripts/miner.py" in self.assets(fake_root)
+
+    def test_weak_content_to_plain_stdout_is_not_reported(self, fake_root):
+        """preflight and toolgaps read manifests to decide booleans and print
+        check names. A standing ledger entry for that is noise."""
+        self.write(
+            fake_root,
+            "scripts",
+            "tools.py",
+            "from pathlib import Path\nok = Path('pixi.toml').exists()\nprint(ok)\n",
+        )
+        assert self.assets(fake_root) == set()
+
+    def test_weak_content_to_agent_context_is_reported(self, fake_root):
+        self.write(
+            fake_root,
+            "hooks",
+            "h.py",
+            "import json\nfrom pathlib import Path\n"
+            "t = Path('pixi.toml').read_text()\n"
+            'print(json.dumps({"additionalContext": t}))\n',
+        )
+        assert "hooks/h.py" in self.assets(fake_root)
+
+    def test_weak_content_to_a_shell_argument_is_reported(self, fake_root):
+        self.write(
+            fake_root,
+            "hooks",
+            "n.py",
+            "import subprocess\n"
+            "msg = subprocess.run(['git', 'log'], capture_output=True).stdout\n"
+            "subprocess.run(['osascript', '-e', msg])\n",
+        )
+        assert "hooks/n.py" in self.assets(fake_root)
+
+    def test_a_sink_with_no_source_is_not_reported(self, fake_root):
+        """promotion-check.py emits into agent context but reads nothing from
+        outside the repo; a rule keyed on the sink alone reported it."""
+        self.write(
+            fake_root,
+            "hooks",
+            "p.py",
+            'import json\nmsg = "fixed text"\n'
+            'print(json.dumps({"additionalContext": msg}))\n',
+        )
+        assert self.assets(fake_root) == set()
