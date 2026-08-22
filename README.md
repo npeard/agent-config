@@ -63,7 +63,8 @@ pixi run audit                      # agent-asset principle breaches
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
-                                    #   suppressions, audit, test
+                                    #   suppressions, thresholds,
+                                    #   audit, test
 ```
 
 ## Layout

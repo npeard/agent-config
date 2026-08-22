@@ -50,7 +50,15 @@ repos:
         name: Every linter suppression must say why
         entry: .pixi/envs/dev/bin/python scripts/suppressions.py
         language: system
-        types: [python]
+        types: [file]
+        # An explicit pattern rather than `types: [python]`. The checker also
+        # watches the linter's own config, which is the widest suppression
+        # channel there is -- a project-wide `ignore = [...]` silences a rule
+        # everywhere -- and with only Python passed in, that channel never ran
+        # at commit time, so an unreasoned blanket ignore committed cleanly.
+        # Spelled as a regex because `cfg` is not a pre-commit type tag and the
+        # set here must stay in step with CONFIG_FILENAMES in the script.
+        files: '(\.py|/pyproject\.toml|/ruff\.toml|/\.ruff\.toml|/setup\.cfg|/tox\.ini|/\.flake8|/mypy\.ini|/\.mypy\.ini)$|^(pyproject\.toml|ruff\.toml|\.ruff\.toml|setup\.cfg|tox\.ini|\.flake8|mypy\.ini|\.mypy\.ini)$'
     -   id: ascii-only
         name: ASCII-only source (no Unicode; use plain text or LaTeX)
         entry: .pixi/envs/dev/bin/python scripts/check_ascii.py

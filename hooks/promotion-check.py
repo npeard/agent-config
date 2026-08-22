@@ -38,7 +38,11 @@ REDIRECTS = frozenset({">", ">>", ">|", "&>", "&>>"})
 SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body and does not match, because `<` cannot start a delimiter.
-HEREDOC = re.compile(r"<<-?\s*([\"\']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+# The lookbehind is what stops `<<<` matching at its second angle bracket.
+# Without it a herestring like `wc -l <<<hello` was read as opening a
+# heredoc delimited by "hello", so every following command was discarded
+# as body -- and a `git commit` after one went unseen.
+HEREDOC = re.compile(r"(?<!<)<<-?\s*([\"\']?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # Every named argument is a destination.
 WRITES_ITS_ARGUMENTS = frozenset({"tee"})
 # The last named argument is the destination.
@@ -66,6 +70,24 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
+def tokenize(line: str) -> "list[str] | None":
+    """Tokens for one shell line, or None if it cannot be read at all.
+
+    No quote-recovery retry here, deliberately, and audit-owed.py does have
+    one. That hook asks a yes/no question about the command verb, where a
+    false positive costs one marker entry its idempotence check absorbs. This
+    one lifts *paths* out of the command, so stripping an unbalanced quote
+    could invent a destination that was never written and put a wrong advisory
+    into context. Declining is the cheaper error here.
+    """
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer)
+    except ValueError:
+        return None
+
+
 def shell_commands(command: str) -> list[list[str]]:
     """Token lists, one per command in the shell line. [] if unparsable.
 
@@ -74,12 +96,11 @@ def shell_commands(command: str) -> list[list[str]]:
     """
     out: list[list[str]] = []
     for line in without_heredocs(command).splitlines():
-        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        try:
-            tokens = list(lexer)
-        except ValueError:
-            return []
+        tokens = tokenize(line)
+        if tokens is None:
+            # Skip this line, not the whole command. Aborting everything meant
+            # one unparsable line silenced the hook for the entire invocation.
+            continue
         current: list[str] = []
         for token in tokens:
             if token in SEPARATORS:
@@ -149,10 +170,23 @@ def written_paths(command: str, cwd) -> list[str]:
     """
     base = cwd if isinstance(cwd, str) and cwd else "."
     return [
-        os.path.join(base, path) if not os.path.isabs(path) else path
+        resolve_destination(path, base)
         for tokens in shell_commands(command)
         for path in destinations(tokens)
     ]
+
+
+def resolve_destination(path: str, base: str) -> str:
+    """One destination, made absolute.
+
+    expanduser first, and that is the whole point: `>> ~/.claude/CLAUDE.md`
+    was being joined onto cwd as a literal "~" directory, so realpath could
+    not follow install.sh's symlink back into the master repo. The self-guard
+    missed and the hook advised promoting a file already being edited here --
+    exactly what canonical()'s docstring says the realpath exists to prevent.
+    """
+    expanded = os.path.expanduser(path)
+    return expanded if os.path.isabs(expanded) else os.path.join(base, expanded)
 
 
 MESSAGE = (

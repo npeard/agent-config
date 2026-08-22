@@ -67,7 +67,11 @@ GIT_OPTIONS_WITH_VALUE = frozenset(
 SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body, and does not match because `<` is not a valid delimiter start.
-HEREDOC = re.compile(r"<<-?\s*([\"\']?)([A-Za-z_][A-Za-z0-9_]*)\1")
+# The lookbehind is what stops `<<<` matching at its second angle bracket.
+# Without it a herestring like `wc -l <<<hello` was read as opening a
+# heredoc delimited by "hello", so every following command was discarded
+# as body -- and a `git commit` after one went unseen.
+HEREDOC = re.compile(r"(?<!<)<<-?\s*([\"\']?)([A-Za-z_][A-Za-z0-9_]*)\1")
 
 
 def is_config_asset(path: str) -> bool:
@@ -95,6 +99,26 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
+def tokenize(line: str) -> "list[str] | None":
+    """Tokens for one shell line, or None if it cannot be read at all.
+
+    The retry is the important part. `git commit -m "$(cat <<'EOF' ... EOF)"`
+    is the message form this project mandates, and stripping the heredoc body
+    leaves the opening line holding an unbalanced quote -- so shlex raised and
+    the commit went undetected. The command word is still at the start of the
+    line, so retrying without quote characters recovers it; the alternative was
+    a hook that ignored the dominant commit form.
+    """
+    for attempt in (line, line.replace('"', " ").replace("'", " ")):
+        lexer = shlex.shlex(attempt, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        try:
+            return list(lexer)
+        except ValueError:
+            continue
+    return None
+
+
 def shell_commands(command: str) -> list[list[str]]:
     """Token lists, one per command in the shell line. [] if unparsable.
 
@@ -103,12 +127,11 @@ def shell_commands(command: str) -> list[list[str]]:
     """
     out: list[list[str]] = []
     for line in without_heredocs(command).splitlines():
-        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        try:
-            tokens = list(lexer)
-        except ValueError:
-            return []
+        tokens = tokenize(line)
+        if tokens is None:
+            # Skip this line, not the whole command. Aborting everything meant
+            # one unparsable line silenced the hook for the entire invocation.
+            continue
         current: list[str] = []
         for token in tokens:
             if token in SEPARATORS:

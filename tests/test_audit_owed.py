@@ -426,12 +426,50 @@ class TestCommandGate:
         (fake_master / MARKER).unlink(missing_ok=True)
         assert fired(run_hook(payload(fake_master, command=command), tmp_path))
 
-    def test_an_unparsable_command_is_silent(self, fake_master, tmp_path):
-        """An unbalanced quote is not a commit, and a hook that raises on one
-        is worse than a hook that declines."""
+    def test_an_unbalanced_quote_no_longer_means_not_a_commit(
+        self, fake_master, tmp_path
+    ):
+        """This test used to assert the opposite, and the assumption was wrong.
+        `git commit -m "$(cat <<'EOF' ... EOF)"` is the message form CLAUDE.md
+        mandates, and stripping its heredoc body leaves the opening line with
+        an unbalanced quote -- so declining on one made the hook inert for the
+        dominant commit form. Reporting on a commit that actually failed costs
+        one marker entry, which the idempotence check below absorbs; missing
+        every real commit cost the whole mechanism.
+        """
         commit(fake_master, "scripts/x.py")
         out = run_hook(payload(fake_master, command="git commit -m 'oops"), tmp_path)
-        assert out == ""
+        assert fired(out)
+
+    def test_the_mandated_co_authored_message_form_is_detected(
+        self, fake_master, tmp_path
+    ):
+        commit(fake_master, "scripts/x.py")
+        command = (
+            "git commit -m \"$(cat <<'EOF'\n"
+            "feat: thing\n\n"
+            "Co-Authored-By: Claude <noreply@anthropic.com>\n"
+            'EOF\n)"'
+        )
+        assert fired(run_hook(payload(fake_master, command=command), tmp_path))
+
+    def test_a_herestring_does_not_swallow_the_command_after_it(
+        self, fake_master, tmp_path
+    ):
+        """`<<<` is a herestring with no body. The heredoc regex matched at its
+        second angle bracket, so everything after was discarded as body."""
+        commit(fake_master, "scripts/x.py")
+        command = "wc -l <<<hello\ngit commit -m x"
+        assert fired(run_hook(payload(fake_master, command=command), tmp_path))
+
+    def test_a_heredoc_body_mentioning_a_commit_is_still_silent(
+        self, fake_master, tmp_path
+    ):
+        """The guard the above must not break: a body is data being written."""
+        commit(fake_master, "scripts/x.py")
+        (fake_master / MARKER).unlink(missing_ok=True)
+        command = "cat > f.txt <<'EOF'\ngit commit -m x\nEOF"
+        assert run_hook(payload(fake_master, command=command), tmp_path) == ""
 
 
 class TestWorktrees:

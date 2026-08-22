@@ -217,6 +217,11 @@ def main():
         payload = json.load(sys.stdin)
     except ValueError:
         payload = {}
+    if not isinstance(payload, dict):
+        # json.load only raises for *malformed* JSON, so `5` or `null` decodes
+        # fine and then has no .get. promotion-check.py and prose-writing.py
+        # both cite this file as guarding "the identical call"; it did not.
+        payload = {}
     root = Path(payload.get("cwd") or Path.cwd())
 
     discovered = discover(root)

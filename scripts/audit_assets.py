@@ -1004,12 +1004,19 @@ def clear_owed(root: Path) -> str:
                 "branch-scoped entry(s) were left alone. Nothing cleared."
             )
     elif branch == default_branch(root):
-        # preflight reports every branch's entries once you are on the default
-        # branch, because merged work is now this branch's contents. Clearing
-        # had to follow: filtering to the current branch left a warning that
-        # no command could clear until the feature branch was deleted, which is
-        # the standing warning this whole mechanism exists to avoid.
-        kept = []
+        # On the default branch, merged work is now this branch's contents, so
+        # its obligation is this branch's to discharge. But a branch that is
+        # still alive and unmerged has not handed anything over -- dropping its
+        # line here destroyed an obligation nobody had discharged. Only lines
+        # whose branch is gone are cleared alongside this one's.
+        alive = live_branches(root)
+        kept = [
+            ln
+            for ln in lines
+            if "\t" in ln
+            and ln.partition("\t")[0] != branch
+            and ln.partition("\t")[0] in alive
+        ]
     else:
         alive = live_branches(root)
         kept = [
