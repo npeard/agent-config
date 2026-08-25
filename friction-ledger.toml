@@ -135,3 +135,37 @@ always-on cost against a failure that self-describes and costs one `git add`.
 Evidence the rule works when followed: the branch that produced this entry ran
 `pixi run format` before all eight commits and hit this zero times.
 """
+
+[[decision]]
+class = "user-rejected-tool"
+date = "2026-08-24"
+cause = "underspecified-task"
+outcome = "tier-0"
+count_at_decision = 4
+note = """
+Two of the four are one session's AskUserQuestion calls, both returned as
+"user wants to clarify" rather than answered. Reading them, the rejections
+were correct: each bundled several decisions at once and each rested on
+premises the user had no way to check from the question -- the first asked
+about scope, device, eval_rank and physics simultaneously while assuming a
+memory model I had not shown; the second re-asked after a measurement had
+already invalidated part of it.
+
+Not a tooling gap. No tool can tell that a question is unanswerable because
+its premises are unstated, and the fix is not another artifact -- it is to
+put the measurement in front of the user before the question that depends on
+it, and to ask one decision at a time when the decisions are not actually
+coupled. Both rejections were followed by exactly that and then answered
+without difficulty.
+
+Tier 1 was considered and rejected: a hook could count questions per call but
+not judge whether their premises were established, so it would fire on the
+legitimate multi-part cases too. Tier 4 rejected as well -- "ask good
+questions" is already the ambient expectation and prose restating it would
+cost every future session for no added enforcement.
+
+Evidence the corrected behaviour works: later in the same session, questions
+that were preceded by the measurement they depended on (the eval-only ceiling
+before the L target choice, the target_trajectory cost before the budget)
+were answered directly on the first ask.
+"""
