@@ -37,6 +37,7 @@ import json
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -45,9 +46,10 @@ DEFAULT_SETTINGS = Path.home() / ".claude" / "settings.json"
 # Hooks must run under the project's own interpreter, not whatever `python3`
 # the machine ships -- on macOS that is 3.9, below the declared floor.
 INTERPRETER = REPO / ".pixi" / "envs" / "dev" / "bin" / "python"
+HOOKS_DIR = REPO / "hooks"
 
 
-def declared_hooks(hooks_dir=REPO / "hooks"):
+def declared_hooks(hooks_dir=HOOKS_DIR):
     """[(filename, event, matcher_or_None)] for every marker in every hook.
 
     Every marker in the window is collected, not just the first, so one file
@@ -63,30 +65,111 @@ def declared_hooks(hooks_dir=REPO / "hooks"):
     return found
 
 
-def undeclared(hooks_dir=REPO / "hooks"):
+def undeclared(hooks_dir=HOOKS_DIR):
     declared = {name for name, _, _ in declared_hooks(hooks_dir)}
     return sorted(p.name for p in hooks_dir.glob("*.py") if p.name not in declared)
 
 
 def command_for(filename):
-    return f"{INTERPRETER} {REPO / 'hooks' / filename}"
+    return f"{INTERPRETER} {HOOKS_DIR / filename}"
+
+
+def repo_hook_in(command):
+    """The name of the hook in this repo that `command` runs, else None.
+
+    Deliberately narrower than `invokes`: this answers "is this registration
+    mine to delete", and only a path inside this repo's hooks directory is.
+    A command naming a hook by some other path may belong to another tool or
+    to a previous clone, and removing it would be destroying someone else's
+    configuration rather than tidying up after this one.
+    """
+    for token in str(command).split():
+        path = Path(token)
+        if path.parent == HOOKS_DIR:
+            return path.name
+    return None
+
+
+def invokes(command, filename):
+    """Whether a settings command runs exactly this hook file.
+
+    Compared basename by basename over the command's tokens, not with `in`:
+    substring matching let a new `list.py` claim `task-list.py`'s existing
+    registration and overwrite its command, silently unregistering a live
+    hook while reporting nothing. Tokens rather than the whole string so a
+    command that passes arguments after the script still matches, and so an
+    old absolute path from a previous clone location still matches -- that
+    is the case the interpreter rewrite exists for.
+    """
+    return any(Path(token).name == filename for token in str(command).split())
+
+
+def prune(settings, hooks):
+    """Drop registrations of repo hooks that are no longer declared.
+
+    Registration used to be add-only: nothing scanned the registry for
+    commands naming a hook that no longer exists, so a deleted hook stayed
+    registered forever and a renamed one registered twice, one of the two
+    pointing at a file that was gone. A missing declaration for an event the
+    hook once had is the same defect seen from the other side.
+    """
+    changes = []
+    registry = settings.get("hooks", {})
+    declared = {(name, event) for name, event, _ in hooks}
+    for event in list(registry):
+        surviving = []
+        for entry in registry[event]:
+            registered = entry.get("hooks", [])
+            keep = []
+            for hook in registered:
+                name = repo_hook_in(hook.get("command", ""))
+                if name is not None and (name, event) not in declared:
+                    changes.append(f"unregistered {event} -> {name}")
+                else:
+                    keep.append(hook)
+            if len(keep) != len(registered):
+                entry["hooks"] = keep
+            # An entry with nothing left to run is a husk whose matcher would
+            # stay registered; one that never listed a command is not ours.
+            if keep or not registered:
+                surviving.append(entry)
+        if surviving:
+            registry[event] = surviving
+        else:
+            del registry[event]
+    return changes
 
 
 def apply(settings, hooks):
-    """Merge hooks into a settings dict. Returns a list of change strings."""
+    """Converge a settings dict on `hooks`. Returns a list of change strings.
+
+    Additions and removals are one call because a caller who can forget the
+    second gets exactly the add-only behaviour that let dead registrations
+    accumulate; `--check` reports whatever this returns.
+    """
     changes = []
     registry = settings.setdefault("hooks", {})
     for filename, event, matcher in hooks:
         wanted = command_for(filename)
         entries = registry.setdefault(event, [])
-        existing = None
-        for entry in entries:
-            for hook in entry.get("hooks", []):
-                if filename in str(hook.get("command", "")):
-                    existing = (entry, hook)
-                    break
-            if existing:
-                break
+        # Every match, not just the first. Stopping at the first left an old
+        # clone's registration beside the rewritten one on a machine whose
+        # checkout had moved: two entries, identical commands, the hook
+        # firing twice per tool call, and every later run reporting "already
+        # registered". prune() cannot reach those -- the name is declared.
+        matches = [
+            (entry, hook)
+            for entry in entries
+            for hook in entry.get("hooks", [])
+            if invokes(hook.get("command", ""), filename)
+        ]
+        existing, duplicates = (matches[0], matches[1:]) if matches else (None, [])
+        for entry, hook in duplicates:
+            entry["hooks"].remove(hook)
+            changes.append(f"removed duplicate {event} -> {filename}")
+        # A hook is the only thing an entry exists to run, so one left empty
+        # would keep its matcher registered against nothing.
+        entries[:] = [entry for entry in entries if entry.get("hooks") != []]
         if existing is None:
             entry = {"hooks": [{"type": "command", "command": wanted, "timeout": 10}]}
             if matcher:
@@ -101,7 +184,26 @@ def apply(settings, hooks):
         if matcher and entry.get("matcher") != matcher:
             entry["matcher"] = matcher
             changes.append(f"updated {event} -> {filename} (matcher)")
-    return changes
+    return changes + prune(settings, hooks)
+
+
+def backup_path(settings):
+    """A dated, non-colliding name for the copy taken before a write.
+
+    The name was a fixed `.bak`, so a second run destroyed the only copy of
+    the state the first run replaced -- and three generations of real
+    settings backups had already been lost that way. The serial covers two
+    runs inside one second, which is exactly what a test does.
+    """
+    # Local time via `time`, matching install.sh's `date` -- these names are
+    # read by a person deciding which backup to restore.
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    candidate = settings.with_name(f"{settings.name}.{stamp}.bak")
+    serial = 0
+    while candidate.exists():
+        serial += 1
+        candidate = settings.with_name(f"{settings.name}.{stamp}-{serial}.bak")
+    return candidate
 
 
 def main(argv):
@@ -130,16 +232,20 @@ def main(argv):
         print("Run `pixi install -e dev` first, or use ./install.sh.")
         return 1
 
-    if not args.settings.is_file():
-        print(f"No settings file at {args.settings}; nothing to do.")
-        return 0
-
-    original = args.settings.read_text()
-    try:
-        settings = json.loads(original)
-    except ValueError:
-        print(f"{args.settings} is not valid JSON; refusing to touch it.")
-        return 1
+    existed = args.settings.is_file()
+    if existed:
+        try:
+            settings = json.loads(args.settings.read_text())
+        except ValueError:
+            print(f"{args.settings} is not valid JSON; refusing to touch it.")
+            return 1
+    else:
+        # A machine with no settings.json is a new machine, which is when
+        # registration matters most. Reporting "nothing to do" and exiting 0
+        # here brought one up with zero hooks and a success message -- the
+        # never-wired-up failure this script exists to prevent -- and made
+        # --check answer "registered" on the same machine.
+        settings = {}
 
     changes = apply(settings, hooks)
     if not changes:
@@ -152,13 +258,21 @@ def main(argv):
             print(f"  {change}")
         return 1
 
-    # Back up before the first write, matching install.sh's habit of
-    # preserving anything it would otherwise overwrite.
-    shutil.copyfile(args.settings, args.settings.with_suffix(".json.bak"))
+    if existed:
+        # Back up before the first write, matching install.sh's habit of
+        # preserving anything it would otherwise overwrite.
+        backup = backup_path(args.settings)
+        shutil.copyfile(args.settings, backup)
+    else:
+        backup = None
+        args.settings.parent.mkdir(parents=True, exist_ok=True)
     args.settings.write_text(json.dumps(settings, indent=2) + "\n")
     for change in changes:
         print(f"  {change}")
-    print(f"  backed up -> {args.settings.with_suffix('.json.bak').name}")
+    if backup is not None:
+        print(f"  backed up -> {backup.name}")
+    else:
+        print(f"  created {args.settings}")
 
     return 0
 

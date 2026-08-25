@@ -34,6 +34,7 @@ tests/test_check_ascii.py pins.
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -54,11 +55,36 @@ MARKER = re.compile(
 FENCE = re.compile(r"^\s*(?:```|~~~)")
 
 
-def tracked_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "ls-files", "*.py", "*.md"], capture_output=True, text=True, check=True
-    )
-    return out.stdout.split()
+def tracked_files() -> list[str] | None:
+    """Every tracked candidate file, or None if git could not be asked.
+
+    None rather than an empty list, and the same shape as
+    scripts/suppressions.py's copy. The two had drifted: this one let
+    `git ls-files` raise, so running the hook outside a repository produced a
+    CalledProcessError traceback instead of a diagnostic, while the other
+    returned [] and printed a clean pass for the zero files it had scanned.
+    An enumeration that failed is not an absence of violations.
+
+    Unfiltered, because `main` already filters by SCANNED_SUFFIXES. A
+    pathspec here was a second definition of the same set, free to drift
+    from it.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    # NUL-separated, because without -z git quotes any path holding a
+    # space or a non-ASCII byte, and the quoted form matches no file on
+    # disk -- so main's is_file() filter dropped it without a word.
+    return [f for f in out.stdout.split("\0") if f]
+
+
+NO_GIT = (
+    "Cannot list tracked files: not inside a git repository, or git is not "
+    "installed. Pass the files to check as arguments."
+)
 
 
 def has_reason(rest: str) -> bool:
@@ -144,8 +170,19 @@ def scan(path: Path) -> list[str]:
     ]
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="files to check; pre-commit passes the staged set, "
+        "and an empty list falls back to every tracked file",
+    )
+    argv = parser.parse_args(argv).paths
     files = argv or tracked_files()
+    if files is None:
+        print(NO_GIT, file=sys.stderr)
+        return 1
     violations: list[str] = []
     for f in files:
         path = Path(f)
@@ -161,4 +198,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

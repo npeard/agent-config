@@ -7,7 +7,9 @@ whose own test has to be exempted from the checker cannot prove much.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import check_ascii
 import pytest
@@ -187,3 +189,56 @@ class TestNonAsciiLineSeparators:
         """Guards against the fix over-firing on the terminators it now keeps."""
         body = "line a\nline b\r\nline c\n"
         assert check_ascii.main([str(write(tmp_path, "a.md", body))]) == 0
+
+
+class TestFileEnumerationFailure:
+    """`git ls-files` failing must report, not crash and not silently pass.
+
+    Run outside a git repository this script tracebacked out of pre-commit,
+    while its twin scripts/suppressions.py swallowed the identical failure
+    and printed a clean bill of health for the zero files it had scanned --
+    one unusable crash and one false green from the same cause.
+    """
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            subprocess.CalledProcessError(128, ["git"]),
+            FileNotFoundError(2, "No such file or directory", "git"),
+        ],
+    )
+    def test_git_failure_is_reported_not_raised(self, monkeypatch, capsys, error):
+        def fail(*args, **kwargs):
+            raise error
+
+        monkeypatch.setattr(check_ascii.subprocess, "run", fail)
+        assert check_ascii.main([]) == 1
+        assert "git" in capsys.readouterr().err
+
+    def test_explicit_paths_never_consult_git(self, monkeypatch, tmp_path: Path):
+        """pre-commit always passes paths, so the fallback must stay unused;
+        otherwise a hook run in a submodule or a fresh checkout could fail on
+        an enumeration it never needed."""
+
+        def fail(*args, **kwargs):
+            raise AssertionError("git was consulted although paths were given")
+
+        monkeypatch.setattr(check_ascii.subprocess, "run", fail)
+        assert check_ascii.main([str(write(tmp_path, "a.md", "plain\n"))]) == 0
+
+
+class TestPathsWithSpaces:
+    """Whitespace-splitting `git ls-files` output turned "release notes.md"
+    into two paths that do not exist, and main's is_file() filter then dropped
+    both without a word. -z also settles the other half of the problem: by
+    default git quotes a path containing a non-ASCII byte, which an ASCII
+    checker is the last tool that should skip.
+    """
+
+    def test_a_path_containing_a_space_survives_enumeration(self, monkeypatch):
+        monkeypatch.setattr(
+            check_ascii.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(stdout="release notes.md\0b.py\0"),
+        )
+        assert check_ascii.tracked_files() == ["release notes.md", "b.py"]

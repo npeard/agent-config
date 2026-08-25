@@ -22,8 +22,10 @@ registered hooks name `.pixi/envs/dev/bin/python` in their command, so
 registering before the environment exists writes hooks that cannot
 start. Requires `pixi` on PATH.
 
-Re-running `install.sh` is safe -- it replaces existing symlinks and
-backs up any real file it would otherwise overwrite (`<path>.bak`).
+Re-running `install.sh` is safe -- it replaces existing symlinks, prunes
+links to skills this repo no longer has, and backs up any real file it
+would otherwise overwrite (`<path>.<timestamp>.bak`, dated so that a
+second run cannot destroy the first run's backup).
 
 ## Development commands
 
@@ -32,7 +34,13 @@ project carries its own environment with a current interpreter -- never
 the system `python3`, which on macOS is still 3.9 and quietly pushes
 scripts and hooks into contortions for a version nobody chose.
 `pixi run preflight` fails rather than warns if it is running outside a
-project-local environment, or below the floor the project declares.
+project-local environment, or below the floor the project declares. A
+project with no `pixi.toml` gets a warning instead, since these scripts
+are copied into repos that manage their environments some other way. An
+env reached through a symlink counts as local, which is what a git
+worktree sharing the parent checkout's `.pixi` has. Only a too-old
+interpreter stops the remaining checks -- the alternative was a copy of
+preflight reporting one failure and inspecting nothing.
 
 Hooks in `~/.claude/settings.json` must therefore name this repo's
 environment python explicitly, not `python3`. `./install.sh` writes that
@@ -51,10 +59,12 @@ pixi run friction                   # recurring friction from transcripts
 pixi run toolgaps                   # missing tooling + reusable assets
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
+pixi run audit                      # agent-asset principle breaches
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
-                                    #   suppressions, test
+                                    #   suppressions, thresholds,
+                                    #   audit, test
 ```
 
 ## Layout
@@ -62,6 +72,11 @@ pixi run all                        # format, lint, ascii, spell,
 - `CLAUDE.md` -- symlinked to `~/.claude/CLAUDE.md`, loaded in every
   Claude Code session.
 - `skills/<name>/` -- each symlinked to `~/.claude/skills/<name>/`.
+  `preflight` reports a skill this repo carries that is not linked on
+  this machine, and a link left behind by one that was renamed or
+  deleted -- machine state, like hook registration, and the same manual
+  step nothing verified. `./install.sh` writes the missing links and
+  prunes the stale ones.
 - `skills/standards-and-spec-review/CODING_STANDARDS.md` -- the single
   definition of the house coding rules. The master `CLAUDE.md` names
   them as triggers and points here; nothing restates them.
@@ -79,9 +94,27 @@ pixi run all                        # format, lint, ascii, spell,
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
   what makes the improvement loop converge rather than nag.
+- `audit-ledger.toml` -- accepted exceptions to the five agent-asset
+  principles, keyed on asset *and* principle. Where `friction-ledger`
+  reopens a class when its count doubles, an entry here carries the
+  audited file's `asset_sha` and expires when that file changes: a
+  friction is an event stream, but an audit finding is a statement about
+  a file, so a decision about a file is only valid for the file it was
+  made about. `pixi run audit --sha <asset>` gives the value, so writing
+  an entry never means opening the script.
 - `skills/reflect/` -- diagnoses *why* a friction recurs before deciding
   what to change, and prefers a hook over a script over a skill over
   prose, because a hook does not gate on context.
+- `skills/config-audit/` -- audits the assembled config against five
+  agent-asset principles, which `AGENT_ASSET_PRINCIPLES.md` defines on
+  demand in the same arrangement as `CODING_STANDARDS.md`. The boundary
+  against `reflect` is one sentence: reflect asks why something went
+  wrong, this asks whether the system as assembled is still worth what
+  it costs, so it needs no incident to run. It consumes
+  `pixi run audit --json` rather than re-reading every asset, and it is
+  forbidden from proposing new skills -- `reflect` owns the tier ladder,
+  and without that boundary an auditing skill becomes the skill factory
+  reflect exists to prevent.
 - `skills/writing-orchestration/` -- the prose counterpart to
   `workflow-orchestration`. The split is one sentence:
   `workflow-orchestration` owns deliverables whose correctness a test
@@ -101,6 +134,37 @@ pixi run all                        # format, lint, ascii, spell,
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/promotion-check.py` -- fires when a `CLAUDE.md`, memory or
+  skill file is written *outside* this repo, asking whether the
+  preference is general enough to belong here instead. It resolves
+  symlinks before matching, because `install.sh` links this repo into
+  `~/.claude`, so editing the config through its installed path would
+  otherwise look like editing a foreign project and the hook would tell
+  you to promote a file you are already editing here.
+- `hooks/task-list.py` -- injects the project's actual short-form task
+  commands at session start. It replaced a rule that said "use the
+  project's task commands" with the information that rule was a proxy
+  for: the observed failure was not ignorance of the rule but not
+  knowing that `pixi run format` existed and covered the work. It parses
+  the manifest with a regex rather than `tomllib`, because the
+  interpreter that runs a hook is named in `~/.claude/settings.json` --
+  a file outside this repo's checks -- and a task list is worth having
+  approximately when that file is stale.
+- `skills/quantikz/` -- drawing and debugging quantum circuit diagrams
+  in LaTeX. The one domain skill here rather than a workflow one, and
+  the reason `.pre-commit-config.yaml` excludes its directory from
+  `mdformat`: the reference material is full of bare backslashes, and
+  the formatter turns `\gate` into `\\gate`.
+- `hooks/audit-owed.py` -- on a commit touching `skills/`, `scripts/`,
+  `hooks/` or `CLAUDE.md`, records the asset in a gitignored
+  `.audit-owed` and asks for *one* audit at branch end rather than one
+  per commit -- an audit that fired on all eight commits of a branch
+  would report the same findings eight times and get skimmed by the
+  fourth. A marker file rather than a message because context is lost to
+  compaction and session end, and `preflight` reads the marker, so a
+  fresh session picks up an audit an earlier one owed, and
+  `pixi run audit --clear-owed` is what ends it. `CLAUDE_CONFIG_REPO`
+  overrides the install path for a clone kept elsewhere.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn comes back to you: the turn ended (`Stop`), a tool wants
   permission or the prompt has gone idle (`Notification`), or Claude is
@@ -122,11 +186,16 @@ pixi run all                        # format, lint, ascii, spell,
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `toolgaps.py`, `suppressions.py`, `thresholds.py`)
   meant to be copied into new projects rather than rewritten from
-  scratch, plus `register_hooks.py`, which is specific to this repo's
-  install. `check_ascii.py` lets a single file opt out with a
-  reason-bearing `check-ascii: allow` marker in its first ten lines; a
-  marker with no reason fails rather than skipping, so the exemption is
-  documented rather than silent.
+  scratch, plus `register_hooks.py` and `audit_assets.py`, which are
+  specific to this repo -- the first to its install, the second because
+  it knows this layout rather than describing a capability every project
+  has. `audit_assets.py` also owns the always-loaded context ceilings,
+  which `tests/test_context_budget.py` imports rather than restating, so
+  the gate and the report share one definition of each number.
+  `check_ascii.py` lets a single file opt out with a reason-bearing
+  `check-ascii: allow` marker in its first ten lines; a marker with no
+  reason fails rather than skipping, so the exemption is documented
+  rather than silent.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

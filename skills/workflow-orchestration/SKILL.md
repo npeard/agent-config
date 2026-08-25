@@ -222,6 +222,10 @@ the corrections that happened are still recallable. It is bar-gated, so
 most passes end with nothing to change -- which is a successful pass,
 not a wasted one.
 
+**And `config-audit` if the branch touched claude-config's own assets**
+-- `.audit-owed` records that. A different question from `reflect`: not
+why something went wrong, but whether the system still earns its cost.
+
 ## Red flags
 
 | Thought                                                       | Reality                                                        |
