@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -614,3 +615,59 @@ class TestConcurrentWrites:
         lines = set((fake_master / MARKER).read_text().splitlines())
         expected = {f"{branch}\thooks/h{i}.py" for i, (branch, _) in enumerate(trees)}
         assert expected <= lines
+
+
+class TestTransientSpawnFailure:
+    """The empty return conflated "no config assets" with "could not spawn
+    git". The second silently forgets a real obligation, and it is what made
+    this module fail three times under concurrent agent load while passing in
+    isolation. Asserted structurally rather than by trying to reproduce the
+    load."""
+
+    def load_hook(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("audit_owed", HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_a_transient_spawn_failure_is_retried(self, monkeypatch, git_repo):
+        hook = self.load_hook()
+        real = hook.subprocess.run
+        calls = []
+
+        def flaky(argv, **kwargs):
+            calls.append(argv)
+            if len(calls) == 1:
+                raise OSError(35, "Resource temporarily unavailable")
+            return real(argv, **kwargs)
+
+        # Commit BEFORE patching: hook.subprocess is the shared module object,
+        # so the patch reaches conftest's run_git too and would break the setup.
+        commit(git_repo, "scripts/x.py")
+        monkeypatch.setattr(hook.subprocess, "run", flaky)
+        assert hook.committed_paths(str(git_repo)) == ["scripts/x.py"]
+        assert len(calls) == 2
+
+    def test_a_permanent_failure_still_declines(self, monkeypatch, git_repo):
+        hook = self.load_hook()
+        calls = []
+
+        def always(argv, **kwargs):
+            calls.append(argv)
+            raise OSError(35, "Resource temporarily unavailable")
+
+        monkeypatch.setattr(hook.subprocess, "run", always)
+        assert hook.committed_paths(str(git_repo)) == []
+        assert len(calls) == 2, "retried exactly once, not indefinitely"
+
+    def test_the_retry_budget_fits_the_registered_hook_timeout(self):
+        """register_hooks.py writes timeout: 10 for every hook. A killed hook
+        loses every graceful path in this file, so the worst case -- one
+        rev-parse plus two diff-tree attempts -- must stay under it."""
+        source = HOOK.read_text()
+        timeouts = [int(n) for n in re.findall(r"timeout=(\d+)", source)]
+        assert timeouts, "no subprocess timeouts found"
+        worst_case = timeouts[0] + 2 * timeouts[-1]
+        assert worst_case < 10, f"worst case {worst_case}s exceeds the 10s budget"

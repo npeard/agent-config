@@ -225,7 +225,9 @@ def checkout_and_branch(cwd: str) -> tuple[str, str]:
             capture_output=True,
             text=True,
             check=True,
-            timeout=4,
+            # Three seconds, so that committed_paths below can retry once and
+            # the pair still fits the ten-second hook timeout.
+            timeout=3,
         )
     except (OSError, subprocess.SubprocessError):
         return "", ""
@@ -250,35 +252,45 @@ def committed_paths(repo: str) -> list[str]:
     appearing in a command is not proof a commit succeeded either; `failed`
     above is what guards that, since HEAD would otherwise be the *previous*
     commit.
+
+    Tried twice, because the empty return conflates two very different things:
+    "this commit touched no config assets" and "the subprocess could not be
+    spawned at all". The second happens when the machine is briefly out of
+    process slots -- observed three times in this repo's own suite while
+    several agents ran concurrently, always on a case that should have fired --
+    and it silently forgets a real obligation. One retry is enough for a
+    transient failure and cheap for a permanent one.
+
+    Three seconds each, not four: with the rev-parse call above, a retry here
+    still fits inside the ten-second timeout register_hooks.py writes, and a
+    hook killed mid-run loses every graceful path below.
     """
-    try:
-        out = subprocess.run(
-            [
-                "git",
-                "-C",
-                repo,
-                "diff-tree",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                # --root: a parentless commit otherwise reports no paths at
-                # all. -m: nor does a merge commit, and a merge is how config
-                # assets usually arrive on the default branch.
-                "--root",
-                "-m",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-            # Under the 10s timeout register_hooks.py writes for every hook.
-            # At 20s Claude Code kills the hook first and the graceful
-            # `return []` below is unreachable.
-            timeout=4,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return []
-    return [line for line in out.stdout.splitlines() if line.strip()]
+    argv = [
+        "git",
+        "-C",
+        repo,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        # --root: a parentless commit otherwise reports no paths at all.
+        # -m: nor does a merge commit, and a merge is how config assets
+        # usually arrive on the default branch.
+        "--root",
+        "-m",
+        "HEAD",
+    ]
+    for attempt in (1, 2):
+        try:
+            out = subprocess.run(
+                argv, capture_output=True, text=True, check=True, timeout=3
+            )
+        except (OSError, subprocess.SubprocessError):
+            if attempt == 2:
+                return []
+            continue
+        return [line for line in out.stdout.splitlines() if line.strip()]
+    return []
 
 
 def main() -> None:

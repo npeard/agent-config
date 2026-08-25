@@ -169,7 +169,7 @@ principle = 5
 date = "2026-08-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "1e5f390da78019b512d9e618bff013895b7b624bb89ec020702c7411de32ec37"
+asset_sha = "c55f09442d4d5dc5683df48db70e8ee1475cc1e131e3c399a990fe1f9281ab8d"
 note = """
 Found by code review, not by the check: the P5 classifier had no source
 pattern for subprocess output, so this branch's own hook -- which puts `git
@@ -217,4 +217,12 @@ an unbalanced quote is recovered rather than treated as "not a commit" -- the
 form CLAUDE.md mandates for commit messages has one. None of that changes what
 is emitted or how it is framed: the paths still go out as JSON string literals,
 still capped at four.
+
+Re-granted after committed_paths gained one retry. The empty return conflated
+"no config assets" with "could not spawn git", so a transient failure silently
+forgot a real obligation -- observed three times in this repo's own suite while
+several agents ran concurrently. Timeouts dropped to three seconds each so the
+retry still fits the ten-second hook budget. Nothing about what is emitted or
+how it is framed changed: paths still go out as JSON string literals, capped
+at four.
 """
