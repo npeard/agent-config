@@ -166,12 +166,30 @@ pixi run all                        # format, lint, ascii, spell,
   `pixi run audit --clear-owed` is what ends it. `CLAUDE_CONFIG_REPO`
   overrides the install path for a clone kept elsewhere.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
-  turn comes back to you: the turn ended (`Stop`), a tool wants
-  permission or the prompt has gone idle (`Notification`), or Claude is
-  asking a question (`AskUserQuestion`). Sounds are a table at the top
-  of the file, so they are version-controlled and a new machine sounds
-  like this one; `CLAUDE_NOTIFY_OFF=1 claude` mutes a single session and
-  `CLAUDE_NOTIFY_SOUND_DONE=Tink` overrides one reason.
+  turn genuinely comes back to you: the work finished (`Stop`), a tool
+  wants permission or a background agent is blocked on an answer
+  (`Notification`), or Claude is asking a question (`AskUserQuestion`).
+  "Finished" is the load-bearing word. `Stop` also fires each time the
+  main loop yields to wait on a background subagent, which in an
+  orchestrated task is once per subagent round-trip; the hook tells the
+  two apart by the `background_tasks` the host puts in the payload for
+  exactly this purpose, and stays quiet while any are in flight. A
+  prompt merely sitting idle is not announced at all, since the turn
+  that left it open was announced when it ended. That gate is unbounded
+  -- a task that never finishes would hold the ping for as long as it
+  runs -- so a parked turn also spawns a detached watchdog that says
+  once, after ten minutes, that background work is still holding the
+  ping and may be stuck. A reactive check could not do that job: a
+  wedged task produces no events, so the hook is never invoked in the
+  one case worth catching. One nudge per continuous in-flight stretch --
+  the clock is a marker file, in a private per-user directory, armed on
+  the first parked turn and released only when the work drains, so a
+  later long stretch gets its own and the current one cannot nag twice.
+  Sounds are a table at the top of the file, so they are
+  version-controlled and a new machine sounds like this one;
+  `CLAUDE_NOTIFY_OFF=1 claude` mutes a single session,
+  `CLAUDE_NOTIFY_SOUND_DONE=Tink` overrides one reason and
+  `CLAUDE_NOTIFY_LONG_SECONDS=60` tightens the stalled-work nudge.
   Terminal-agnostic because the sound comes from the OS rather than a
   BEL written to a tty, so a bare terminal, the VSCode integrated
   terminal and tmux all behave alike. It replaces the

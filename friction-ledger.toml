@@ -153,3 +153,31 @@ always-on cost against a failure that self-describes and costs one `git add`.
 Evidence the rule works when followed: the branch that produced this entry ran
 `pixi run format` before all eight commits and hit this zero times.
 """
+
+[[decision]]
+class = "unrecognized-arg"
+date = "2026-08-26"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 3
+note = """
+Not friction, and the class name misdescribes it. Every occurrence is zsh's
+`nomatch` refusing a glob that matched no files -- `rm -f dir/payload-*.json`
+when no payload had been written yet -- not an unrecognized argument to
+anything. Recorded under the classifier's name rather than a truer one so the
+key still matches what `friction.py` emits; the label is the imprecision, the
+diagnosis is here.
+
+The refusal is worth more than what it costs. bash would pass the unmatched
+pattern through unchanged, so `for f in dir/payload-*.json` would iterate once
+over a filename that does not exist and the body would act on it -- which is
+the failure zsh converts into an immediate, located error. Cost is one round
+trip, and the guard is `2>/dev/null || true` or an existence test at the point
+of use.
+
+Tier 1 was considered and rejected: a PreToolUse hook would have to decide
+which globs in a command string are allowed to match nothing, which is not
+decidable from the string, so it would fire on correct commands. Tier 4 was
+rejected because a line spent in CLAUDE.md is read by every future session
+forever, and this buys back one round trip per three weeks.
+"""
