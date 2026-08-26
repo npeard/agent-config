@@ -37,16 +37,16 @@ Nothing downgrades mid-task.
 **Stop for the user at exactly two points:** the finished spec (step 2)
 and the final report (step 7).
 
-This deliberately **overrides** the gates written into the skills below
--- `brainstorming` asks for approval after each design section, and
-`executing-plans` adds per-phase checkpoints. Those exist for supervised
-use; this workflow is explicitly configured for autonomous use, and the
-user has approved the override. Consolidate them into the step 2 gate.
+This deliberately **overrides** `brainstorming`'s per-section approvals
+and `executing-plans`'s per-phase checkpoints, which exist for
+supervised use. Consolidate them into the step 2 gate.
 
 Break out early only for:
 
 - A **genuine design bifurcation** -- two defensible paths whose choice
   changes the deliverable, not merely a detail you could pick and note.
+  A question whose "ship as-is" option is viable is not one: take it,
+  note it, ask at step 7.
 - A spec proven **unmeetable**. Report what was attempted and why.
 - An **irreversible or outward-facing action**: pushing, opening a PR,
   posting anything, deleting data, touching a remote.
@@ -120,11 +120,9 @@ instruction to run the project's format/precommit itself before
 reporting. The orchestrator running the formatter is a smell -- it means
 a subagent stopped early.
 
-Name skills, never quote them. Reading a skill in order to brief someone
-else pays for it twice -- once in this context and again in theirs --
-and the orchestrator is the expensive place to pay. Dispatch the
-per-phase reviewer by naming `standards-and-spec-review` and the mode;
-let the reviewer load it.
+Name skills, never quote them -- reading one to brief someone else pays
+for it twice, and the orchestrator is the expensive place to pay. Name
+`standards-and-spec-review` and the mode; let the reviewer load it.
 
 **Review each phase before starting the next.** When a phase subagent
 reports, the orchestrator dispatches a *separate* cheap reviewer running
@@ -150,17 +148,10 @@ Two constraints that are the whole point of the split:
   out would nest subagent spawns and review cost would stop being linear
   in the number of phases.
 
-This is what keeps the expensive model out of line-level work. The
-orchestrator should arrive at step 6 having already had conformance
-checked per phase, free to spend its context on whether the pieces fit
-together.
-
-**Model tier:** use the cheapest model that will hold accuracy.
-Mechanical search, call-site updates, and file moves do not need a
-frontier model; design-sensitive implementation and review do. Getting
-this wrong upward wastes tokens; getting it wrong downward wastes a
-whole round trip, so prefer the cheaper tier only when the task is
-genuinely mechanical.
+**Model tier:** the cheapest model that holds accuracy. Mechanical
+search, call-site updates and file moves do not need a frontier model;
+design-sensitive implementation and review do. Wrong upward wastes
+tokens, wrong downward wastes a whole round trip.
 
 **Commit as you go**, one logical change per commit. Messages explain
 *why*; the diff already shows what and how. A large uncommitted pile at
@@ -196,6 +187,13 @@ Order matters here, and the obvious order is wrong:
    rewritten the tree, so the tree that was verified before this step is
    not the tree that exists now.
 7. If step 1 has new findings to report, loop.
+
+**A fix that adds a subsystem re-enters at step 4, not step 6.** Read
+*where* the findings are: spread across the branch, the review is
+working. Massed in the code written to answer the last round, the fix
+added machinery -- which owes tests and a phase review before another
+high-effort pass, and is evidence the approach costs more than the one
+it beat.
 
 **Loop exit conditions.** Leave the loop when review yields no surviving
 findings and verification passes. Escalate to the user instead when: the
@@ -240,4 +238,6 @@ why something went wrong, but whether the system still earns its cost.
 | "The reviewer said it, so I'll fix it"                        | Filter through `receiving-code-review` first.                  |
 | "I'll commit it all at the end"                               | Forecloses bisect and revert. Commit per logical change.       |
 | "Round four will converge it"                                 | Three rounds without convergence is a report, not a loop.      |
+| "This round's findings are all in last round's fix"           | Then it added a subsystem. Step 4, with tests.                 |
+| "I'll just check they still want the default"                 | If the status quo is viable, take it. Ask at step 7.           |
 | "I'm unsure, I should ask"                                    | Only if it blocks. Otherwise assume, state it, continue.       |

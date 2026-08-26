@@ -853,20 +853,85 @@ def load_ledger(path: Path = LEDGER) -> dict[str, str]:
     return out
 
 
-def partition(
-    findings: list[Finding], ledger: dict[str, str], root: Path = REPO_ROOT
-) -> tuple[list[Finding], list[Finding]]:
-    """(live, suppressed). An exception is granted to the asset as it stood."""
+def changed_assets(root: Path) -> set[str]:
+    """Paths this branch has changed relative to the default branch.
+
+    Empty on the default branch itself -- `main...main` is no diff -- which is
+    what makes the re-grant grace below expire automatically once the work
+    lands, with no branch name special-cased anywhere.
+    """
+    try:
+        base = subprocess.run(
+            ["git", "-C", str(root), "merge-base", default_branch(root), "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        ).stdout.strip()
+        # Diffed against the merge base rather than `base...HEAD`, so work that
+        # is edited but not yet committed counts. The audit runs inside
+        # `pixi run all`, which is what you run *before* committing, so a
+        # commit-only view would have left the build red for exactly the window
+        # the grace exists to cover.
+        out = subprocess.run(
+            ["git", "-C", str(root), "diff", "--name-only", base],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        # Cannot tell what the branch touched, so grant no grace. Failing
+        # closed keeps the gate honest when git is unavailable.
+        return set()
+    return {line.strip() for line in out.stdout.splitlines() if line.strip()}
+
+
+def touched(asset: str, changed: set[str]) -> bool:
+    """Whether `asset` -- a path, a directory, or a `+`-joined pair -- is in
+    the changed set. Either half of a pair counts, matching how asset_sha
+    expires a pairwise exception when either side moves."""
+    for part in asset.split(PAIR_SEP):
+        if any(c == part or c.startswith(f"{part}/") for c in changed):
+            return True
+    return False
+
+
+def triage(
+    findings: list[Finding],
+    ledger: dict[str, str],
+    root: Path = REPO_ROOT,
+) -> tuple[list[Finding], list[Finding], list[Finding]]:
+    """(live, awaiting re-grant, suppressed).
+
+    `awaiting` is the middle state this repo previously had no name for: an
+    exception that *was* granted, on an asset the current branch is editing.
+    The old two-way split made it live, so `pixi run audit` -- and through it
+    `pixi run all` -- went red the moment a ledgered asset was touched, and
+    stayed red until the note was rewritten. That is what turned one re-grant
+    per branch into one per commit, and the note into a running commentary on
+    its own drafts.
+
+    The grace is deliberately narrow. It needs a prior accepted exception for
+    that exact key, so a genuinely new violation still fails; and it needs the
+    asset to be changed relative to the default branch, so it evaporates when
+    the work merges. On the default branch `changed` is empty and this
+    collapses back to the old two-way split.
+    """
+    changed = changed_assets(root)
     live: list[Finding] = []
+    awaiting: list[Finding] = []
     suppressed: list[Finding] = []
     for f in findings:
         recorded = ledger.get(f.key)
         current = asset_sha(root, f.asset)
         if recorded and current and recorded == current:
             suppressed.append(f)
+        elif recorded and touched(f.asset, changed):
+            awaiting.append(f)
         else:
             live.append(f)
-    return live, suppressed
+    return live, awaiting, suppressed
 
 
 MARKER = ".audit-owed"
@@ -893,24 +958,74 @@ def current_branch(root: Path) -> str:
     return out.stdout.strip()
 
 
-def owed_assets(root: Path, branch: str) -> list[str]:
-    """Assets recorded against `branch`. Tolerates unscoped legacy lines."""
+def parse_marker(text: str) -> tuple[list[tuple[str, str]], dict[tuple[str, str], str]]:
+    """Split marker lines into obligations and discharges.
+
+    Three line shapes share the file, distinguished by field count:
+
+    - `asset` -- an obligation written before branch scoping existed.
+      Attributed to no branch, so it counts for every one: the safe reading
+      of an obligation with no recorded owner is that it is still owed.
+    - `branch<TAB>asset` -- an obligation, written by hooks/audit-owed.py.
+    - `branch<TAB>asset<TAB>sha` -- a discharge: an audit was run against the
+      asset while it hashed to `sha`.
+
+    Obligations carry an empty branch when unscoped, which callers compare
+    against their own branch permissively.
+    """
+    obligations: list[tuple[str, str]] = []
+    discharges: dict[tuple[str, str], str] = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split("\t")
+        if len(fields) == 1:
+            obligations.append(("", fields[0]))
+        elif len(fields) == 2:
+            obligations.append((fields[0], fields[1]))
+        else:
+            # Extra fields are ignored rather than rejected, so a future field
+            # cannot make an old reader treat a discharge as an obligation --
+            # which would warn about an audit that had in fact been run.
+            discharges[(fields[0], fields[1])] = fields[2]
+    return obligations, discharges
+
+
+def owed_assets(root: Path, branch: str, *, any_branch: bool) -> list[str]:
+    """Assets `branch` owes an audit for, discharges subtracted.
+
+    The obligation line survives `--clear-owed`; what the clear adds is a
+    discharge, and the discharge answers the obligation only while the asset
+    still hashes to what was audited. That is what makes clearing early
+    self-correcting -- the stamp stands until the asset changes and the
+    obligation surfaces again on its own, with no second write from the hook
+    and no memory of whether an audit ever happened being thrown away.
+
+    `any_branch` is how the default branch reports: merged work is now this
+    branch's contents, so an obligation recorded against feat/x is the default
+    branch's to discharge, and reporting only matching lines lost it silently.
+    """
     marker = root / MARKER
     if not marker.is_file():
         return []
+    obligations, discharges = parse_marker(marker.read_text())
     out = set()
-    for line in marker.read_text().splitlines():
-        if not line.strip():
+    for recorded, asset in obligations:
+        if recorded and not any_branch and recorded != branch:
             continue
-        recorded, _, asset = line.partition("\t")
-        if asset:
-            if recorded == branch:
-                out.add(asset)
-        else:
-            # Written before branch scoping existed. Counted for any branch,
-            # because the safe reading of an obligation with no recorded owner
-            # is that it is still owed. The hook does the same.
-            out.add(recorded)
+        current = asset_sha(root, asset)
+        # Any branch's discharge counts, because it is the hash that certifies
+        # the audit, not who ran it -- and a discharge from elsewhere can only
+        # match if that branch audited this exact content.
+        # A missing asset stays owed here rather than lapsing: no discharge can
+        # match a file that is gone, and deleting a skill is itself a config
+        # change worth looking at. `--clear-owed` is what retires it, because
+        # that is the step that cannot stamp a hash it has no file for.
+        if current is not None and any(
+            sha == current for (_, a), sha in discharges.items() if a == asset
+        ):
+            continue
+        out.add(asset)
     return sorted(out)
 
 
@@ -979,8 +1094,25 @@ def live_branches(root: Path) -> set[str]:
     return {line.strip() for line in out.stdout.splitlines() if line.strip()}
 
 
+def render_marker(
+    obligations: list[tuple[str, str]], discharges: dict[tuple[str, str], str]
+) -> list[str]:
+    """The inverse of parse_marker. The only place a marker line is written,
+    so the three shapes have one definition rather than one per caller."""
+    lines = [f"{b}\t{a}" if b else a for b, a in sorted(set(obligations))]
+    lines += [f"{b}\t{a}\t{sha}" for (b, a), sha in sorted(discharges.items())]
+    return lines
+
+
 def clear_owed(root: Path) -> str:
-    """Drop this branch's entries plus any dead branch's. Returns a report.
+    """Discharge this branch's obligations, stamping what was audited.
+
+    Clearing used to delete the lines, which threw away the only evidence an
+    audit had happened: afterwards nothing could tell a branch that had never
+    been audited from one audited and then edited again. The obligation now
+    survives and a `branch<TAB>asset<TAB>sha` discharge is recorded beside it,
+    so `owed_assets` can answer by hash -- the same expiry mechanism
+    `audit-ledger.toml` uses, for the same reason.
 
     Reports honestly when git cannot name the branch: an earlier version kept
     every scoped line in that case and still printed "cleared", so the audit
@@ -993,45 +1125,68 @@ def clear_owed(root: Path) -> str:
     marker = root / MARKER
     if not marker.is_file():
         return "no audit owed"
+    obligations, discharges = parse_marker(marker.read_text())
     branch = current_branch(root)
-    lines = [ln for ln in marker.read_text().splitlines() if ln.strip()]
+
     if not branch:
-        # Only unscoped lines can be attributed to "here" with confidence.
-        kept = [ln for ln in lines if "\t" in ln]
-        if len(kept) == len(lines):
+        # Only unscoped lines can be attributed to "here" with confidence, and
+        # they carry no branch to stamp a discharge against, so they are
+        # dropped rather than recorded.
+        scoped = [(b, a) for b, a in obligations if b]
+        dropped = len(obligations) - len(scoped)
+        if not dropped:
             return (
-                f"git could not name the current branch, so {len(kept)} "
+                f"git could not name the current branch, so {len(scoped)} "
                 "branch-scoped entry(s) were left alone. Nothing cleared."
             )
-    elif branch == default_branch(root):
-        # On the default branch, merged work is now this branch's contents, so
-        # its obligation is this branch's to discharge. But a branch that is
-        # still alive and unmerged has not handed anything over -- dropping its
-        # line here destroyed an obligation nobody had discharged. Only lines
-        # whose branch is gone are cleared alongside this one's.
-        alive = live_branches(root)
-        kept = [
-            ln
-            for ln in lines
-            if "\t" in ln
-            and ln.partition("\t")[0] != branch
-            and ln.partition("\t")[0] in alive
-        ]
-    else:
-        alive = live_branches(root)
-        kept = [
-            ln
-            for ln in lines
-            if "\t" in ln
-            and ln.partition("\t")[0] != branch
-            and ln.partition("\t")[0] in alive
-        ]
-    dropped = len(lines) - len(kept)
+        _write_marker(marker, render_marker(scoped, discharges))
+        return f"cleared {dropped} unscoped entry(s)"
+
+    # On the default branch, merged work is now this branch's contents, so its
+    # obligation is this branch's to discharge. But a branch that is still
+    # alive and unmerged has not handed anything over -- dropping its line here
+    # destroyed an obligation nobody had discharged. So the rule is the same on
+    # either side: keep other branches that still exist, prune the rest.
+    alive = live_branches(root)
+
+    def survives(b: str) -> bool:
+        # Unscoped entries have no branch to survive as, so they prune here.
+        return bool(b) and (b == branch or b in alive)
+
+    kept = [(b, a) for b, a in obligations if survives(b)]
+    keep_di = {(b, a): sha for (b, a), sha in discharges.items() if survives(b)}
+    pruned = (len(obligations) - len(kept)) + (len(discharges) - len(keep_di))
+
+    mine = [a for b, a in kept if b == branch]
+    for asset in mine:
+        digest = asset_sha(root, asset)
+        # An asset the branch deleted has nothing left to audit and no hash to
+        # stamp, so the obligation lapses rather than nagging forever.
+        if digest is None:
+            kept.remove((branch, asset))
+        else:
+            keep_di[(branch, asset)] = digest
+
+    # Counted from the obligations discharged, not from how many lines the file
+    # lost. Clearing no longer removes lines, so line arithmetic reported
+    # "cleared 0 entry(s)" for a branch whose single obligation had just been
+    # recorded against its hash.
+    others = sum(1 for b, _ in kept if b != branch)
+    parts = [f"cleared {len(mine)} obligation(s), recorded as audited"]
+    if pruned:
+        parts.append(f"pruned {pruned} stale entry(s)")
+    if others:
+        parts.append(f"{others} left for other branches")
+    _write_marker(marker, render_marker(kept, keep_di))
+    return "; ".join(parts)
+
+
+def _write_marker(marker: Path, kept: list[str]) -> None:
+    """Write the surviving lines back, or remove an emptied marker."""
     if kept:
         marker.write_text("\n".join(kept) + "\n")
-        return f"cleared {dropped} entry(s); {len(kept)} left for other branches"
-    marker.unlink()
-    return f"cleared {marker.name} ({dropped} entry(s))"
+    else:
+        marker.unlink()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1056,7 +1211,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--clear-owed",
         action="store_true",
-        help="delete .audit-owed once the audit is done",
+        help="record this branch's audit as done, stamping what was audited",
     )
     parser.add_argument(
         "--sha",
@@ -1068,7 +1223,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.owed:
         # preflight asks through this rather than parsing the marker itself, so
         # the branch-scoped format has exactly one owner.
-        assets = owed_assets(REPO_ROOT, current_branch(REPO_ROOT))
+        branch = current_branch(REPO_ROOT)
+        assets = owed_assets(
+            REPO_ROOT, branch, any_branch=branch == default_branch(REPO_ROOT)
+        )
         if args.json:
             print(json.dumps({"owed": assets}, indent=2))
         else:
@@ -1093,14 +1251,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     findings = audit()
-    live, suppressed = (
-        (findings, []) if args.no_ledger else partition(findings, load_ledger())
-    )
+    if args.no_ledger:
+        live, awaiting, suppressed = findings, [], []
+    else:
+        live, awaiting, suppressed = triage(findings, load_ledger())
     if args.json:
         print(
             json.dumps(
                 {
                     "findings": [asdict(f) for f in live],
+                    "awaiting_regrant": [asdict(f) for f in awaiting],
                     "suppressed": [asdict(f) for f in suppressed],
                 },
                 indent=2,
@@ -1108,6 +1268,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         render(live)
+        if awaiting:
+            print(
+                f"\n{len(awaiting)} ledgered exception(s) awaiting re-grant, on "
+                "assets this branch changed:"
+            )
+            for f in awaiting:
+                print(f"  P{f.principle}  {f.asset}")
+            print(
+                "Re-grant once, at branch end, against the asset's final state "
+                "-- `pixi run audit --sha <asset>`. This is a failure on the "
+                "default branch."
+            )
         if suppressed:
             print(f"\n{len(suppressed)} ledgered exception(s); --no-ledger to show.")
     return 1 if live else 0

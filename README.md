@@ -101,7 +101,13 @@ pixi run all                        # format, lint, ascii, spell,
   friction is an event stream, but an audit finding is a statement about
   a file, so a decision about a file is only valid for the file it was
   made about. `pixi run audit --sha <asset>` gives the value, so writing
-  an entry never means opening the script.
+  an entry never means opening the script. An exception whose asset the
+  current branch has edited reports as *awaiting re-grant* rather than
+  as a failure, so the re-grant is due once, at branch end, against the
+  asset's final state -- charging one per commit re-judged an asset
+  about to change again, and left the note narrating its own drafts. The
+  grace needs a prior accepted exception, so a new violation still
+  fails, and it evaporates on the default branch.
 - `skills/reflect/` -- diagnoses *why* a friction recurs before deciding
   what to change, and prefers a hook over a script over a skill over
   prose, because a hook does not gate on context.
@@ -163,8 +169,11 @@ pixi run all                        # format, lint, ascii, spell,
   fourth. A marker file rather than a message because context is lost to
   compaction and session end, and `preflight` reads the marker, so a
   fresh session picks up an audit an earlier one owed, and
-  `pixi run audit --clear-owed` is what ends it. `CLAUDE_CONFIG_REPO`
-  overrides the install path for a clone kept elsewhere.
+  `pixi run audit --clear-owed` is what ends it -- by stamping each
+  obligation with the hash it was discharged against rather than
+  deleting it, so an audit run too early re-opens by itself when the
+  asset next changes. `CLAUDE_CONFIG_REPO` overrides the install path
+  for a clone kept elsewhere.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn genuinely comes back to you: the work finished (`Stop`), a tool
   wants permission or a background agent is blocked on an answer

@@ -12,6 +12,7 @@ or ledgered" checkable rather than asserted.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import audit_assets
@@ -502,14 +503,14 @@ class TestLedger:
         target.write_text("x = 1\n")
         f = audit_assets.Finding(4, "scripts/mute.py", "detail")
         ledger = {f.key: audit_assets.sha(target)}
-        live, suppressed = audit_assets.partition([f], ledger, fake_root)
+        live, _, suppressed = audit_assets.triage([f], ledger, fake_root)
         assert live == [] and suppressed == [f]
 
     def test_stale_sha_lets_the_finding_return(self, fake_root):
         target = fake_root / "scripts" / "mute.py"
         target.write_text("x = 1\n")
         f = audit_assets.Finding(4, "scripts/mute.py", "detail")
-        live, suppressed = audit_assets.partition([f], {f.key: "stale"}, fake_root)
+        live, _, suppressed = audit_assets.triage([f], {f.key: "stale"}, fake_root)
         assert live == [f] and suppressed == []
 
     def test_a_ledger_entry_is_scoped_to_one_principle(self, fake_root):
@@ -517,7 +518,7 @@ class TestLedger:
         target.write_text("x = 1\n")
         ledger = {"scripts/mute.py::P4": audit_assets.sha(target)}
         other = audit_assets.Finding(5, "scripts/mute.py", "detail")
-        live, _ = audit_assets.partition([other], ledger, fake_root)
+        live, _, _ = audit_assets.triage([other], ledger, fake_root)
         assert live == [other]
 
     def test_missing_ledger_file_is_not_an_error(self, tmp_path):
@@ -570,7 +571,7 @@ class TestCli:
     def test_json_reports_live_and_suppressed_separately(self, capsys):
         audit_assets.main(["--json"])
         payload = json.loads(capsys.readouterr().out)
-        assert set(payload) == {"findings", "suppressed"}
+        assert set(payload) == {"findings", "awaiting_regrant", "suppressed"}
 
     def test_no_ledger_reports_accepted_exceptions_as_findings(self, capsys):
         audit_assets.main(["--json", "--no-ledger"])
@@ -588,7 +589,7 @@ class TestRepoIsClean:
     """
 
     def test_no_live_findings(self):
-        live, _ = audit_assets.partition(
+        live, _, _ = audit_assets.triage(
             audit_assets.audit(REPO_ROOT), audit_assets.load_ledger(), REPO_ROOT
         )
         assert live == [], "\n".join(
@@ -596,19 +597,28 @@ class TestRepoIsClean:
         )
 
     def test_every_ledger_entry_still_matches_its_asset(self):
-        """A stale entry is not an error -- the finding simply returns -- but
-        it is worth reporting, because the usual cause is an asset edited
-        without revisiting the exception granted to it. It also catches an
-        asset that left the flagged set entirely, which nothing else would.
+        """Catches an exception granted to content that has since moved, and
+        an asset that left the flagged set entirely -- which nothing else
+        would.
+
+        Scoped to assets this branch has *not* touched. An entry stale because
+        the branch is mid-edit is the expected state, not a defect: the note is
+        re-granted once, against the asset's final form. The docstring here
+        used to say a stale entry "is not an error" while the assertion made it
+        one, and that contradiction is what charged a re-grant per commit.
+        `changed_assets` is empty on the default branch, so nothing is excused
+        once the work lands.
 
         Goes through asset_sha, not sha: a pairwise key is not a path, so sha
         returns None for one and this reported the first ledgered P1 overlap
         exception -- the case PAIR_SEP exists for -- as permanently stale.
         """
+        changed = audit_assets.changed_assets(REPO_ROOT)
         stale = [
             key
             for key, recorded in audit_assets.load_ledger().items()
             if audit_assets.asset_sha(REPO_ROOT, key.split("::")[0]) != recorded
+            and not audit_assets.touched(key.split("::")[0], changed)
         ]
         assert not stale, f"ledger entries no longer match their asset: {stale}"
 
@@ -992,3 +1002,192 @@ class TestBinaryFilesInSkillDirs:
         write_skill(fake_root, "img", "Use when img")
         (fake_root / "skills" / "img" / "x.png").write_bytes(b"\x00\x01\x02")
         audit_assets.audit(fake_root)
+
+
+class TestDischargeIsRecorded:
+    """Clearing used to delete the marker, so nothing could tell "never
+    audited" from "audited, then changed again". The obligation is now stamped
+    with the hash it was discharged against, which is what lets a premature
+    clear correct itself instead of silently standing."""
+
+    def write_asset(self, root: Path, body: str = "x = 1\n") -> str:
+        (root / "scripts").mkdir(parents=True, exist_ok=True)
+        (root / "scripts" / "x.py").write_text(body)
+        return "scripts/x.py"
+
+    def test_clearing_stamps_the_hash_rather_than_forgetting(
+        self, monkeypatch, git_repo, capsys
+    ):
+        asset = self.write_asset(git_repo)
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", git_repo)
+        (git_repo / ".audit-owed").write_text(f"main\t{asset}\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert "cleared" in capsys.readouterr().out
+        recorded = (git_repo / ".audit-owed").read_text().splitlines()
+        digest = audit_assets.asset_sha(git_repo, asset)
+        # The obligation survives; the discharge is what answers it. Consuming
+        # the obligation instead left nothing for a later edit to re-open.
+        assert recorded == [f"main\t{asset}", f"main\t{asset}\t{digest}"]
+
+    def test_editing_an_audited_asset_re_opens_it_with_no_hook_write(
+        self, monkeypatch, git_repo, capsys
+    ):
+        """The self-correcting property. An earlier version consumed the
+        obligation on clear, so `owed_assets` had nothing to report against and
+        a branch audited too early stayed silent until the hook next fired."""
+        asset = self.write_asset(git_repo)
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", git_repo)
+        (git_repo / ".audit-owed").write_text(f"main\t{asset}\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        capsys.readouterr()
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == []
+        self.write_asset(git_repo, "x = 2\n")
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == [asset]
+
+    def test_the_default_branch_sees_every_branch_s_obligations(self, git_repo):
+        """Merged work is the default branch's contents, so an obligation
+        recorded against feat/x is now its to discharge."""
+        asset = self.write_asset(git_repo)
+        (git_repo / ".audit-owed").write_text(f"feat/x\t{asset}\n")
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == []
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=True) == [asset]
+
+    def test_the_count_reports_obligations_not_lines_lost(
+        self, monkeypatch, git_repo, capsys
+    ):
+        """Clearing converts rather than deletes, so counting the file's lost
+        lines reported "cleared 0 entry(s)" for a branch whose one obligation
+        had just been recorded."""
+        asset = self.write_asset(git_repo)
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", git_repo)
+        (git_repo / ".audit-owed").write_text(f"main\t{asset}\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert "cleared 1 obligation(s)" in capsys.readouterr().out
+
+    def test_an_asset_unchanged_since_its_audit_is_not_owed(self, git_repo):
+        asset = self.write_asset(git_repo)
+        digest = audit_assets.asset_sha(git_repo, asset)
+        (git_repo / ".audit-owed").write_text(
+            f"main\t{asset}\nmain\t{asset}\t{digest}\n"
+        )
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == []
+
+    def test_an_asset_changed_since_its_audit_is_owed_again(self, git_repo):
+        asset = self.write_asset(git_repo)
+        stale = audit_assets.asset_sha(git_repo, asset)
+        self.write_asset(git_repo, "x = 2\n")
+        (git_repo / ".audit-owed").write_text(
+            f"main\t{asset}\nmain\t{asset}\t{stale}\n"
+        )
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == [asset]
+
+    def test_a_discharge_alone_never_makes_an_asset_owed(self, git_repo):
+        """The stamp is a record that the audit happened, not a request for
+        one. Read as an obligation it would make every cleared branch dirty."""
+        asset = self.write_asset(git_repo)
+        (git_repo / ".audit-owed").write_text(f"main\t{asset}\tdeadbeef\n")
+        assert audit_assets.owed_assets(git_repo, "main", any_branch=False) == []
+
+    def test_a_vanished_asset_lapses_rather_than_being_stamped(
+        self, monkeypatch, git_repo
+    ):
+        """An obligation for a file the branch deleted has nothing left to
+        audit, and there is no hash to stamp it against."""
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", git_repo)
+        (git_repo / ".audit-owed").write_text("main\tscripts/gone.py\n")
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert not (git_repo / ".audit-owed").exists()
+
+    def test_another_branch_s_discharge_survives_this_branch_s_clear(
+        self, monkeypatch, git_repo
+    ):
+        asset = self.write_asset(git_repo)
+        monkeypatch.setattr(audit_assets, "REPO_ROOT", git_repo)
+        subprocess.run(
+            ["git", "branch", "other"], cwd=git_repo, check=True, capture_output=True
+        )
+        (git_repo / ".audit-owed").write_text(
+            f"other\tscripts/y.py\tcafe\nmain\t{asset}\n"
+        )
+        assert audit_assets.main(["--clear-owed"]) == 0
+        assert "other\tscripts/y.py\tcafe" in (git_repo / ".audit-owed").read_text()
+
+
+class TestRegrantGrace:
+    """`pixi run all` used to go red the moment a ledgered asset was edited and
+    stay red until the note was rewritten, which is what charged one re-grant
+    per commit instead of one per branch. The grace is narrow on purpose."""
+
+    def finding(self, root: Path, principle: int = 4) -> audit_assets.Finding:
+        (root / "scripts").mkdir(parents=True, exist_ok=True)
+        (root / "scripts" / "mute.py").write_text("x = 1\n")
+        return audit_assets.Finding(principle, "scripts/mute.py", "detail")
+
+    def test_a_granted_exception_on_a_touched_asset_awaits_rather_than_fails(
+        self, monkeypatch, fake_root
+    ):
+        f = self.finding(fake_root)
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: {f.asset})
+        live, awaiting, _ = audit_assets.triage([f], {f.key: "stale"}, fake_root)
+        assert live == [] and awaiting == [f]
+
+    def test_a_new_violation_on_a_touched_asset_still_fails(
+        self, monkeypatch, fake_root
+    ):
+        """The grace is for re-justifying an accepted exception, not for
+        waving through a violation nobody has ever judged."""
+        f = self.finding(fake_root)
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: {f.asset})
+        live, awaiting, _ = audit_assets.triage([f], {}, fake_root)
+        assert live == [f] and awaiting == []
+
+    def test_a_stale_exception_on_an_untouched_asset_still_fails(
+        self, monkeypatch, fake_root
+    ):
+        """Stale for some reason other than this branch's work -- the case the
+        gate exists for -- is unaffected."""
+        f = self.finding(fake_root)
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: set())
+        live, awaiting, _ = audit_assets.triage([f], {f.key: "stale"}, fake_root)
+        assert live == [f] and awaiting == []
+
+    def test_either_half_of_a_pair_counts_as_touched(self, monkeypatch, fake_root):
+        f = audit_assets.Finding(1, "skills/aaa+skills/bbb", "detail")
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: {"skills/bbb"})
+        live, awaiting, _ = audit_assets.triage([f], {f.key: "stale"}, fake_root)
+        assert live == [] and awaiting == [f]
+
+    def test_a_file_under_a_ledgered_directory_counts_as_touched(
+        self, monkeypatch, fake_root
+    ):
+        f = audit_assets.Finding(2, "skills/alpha", "detail")
+        monkeypatch.setattr(
+            audit_assets, "changed_assets", lambda _: {"skills/alpha/SKILL.md"}
+        )
+        live, awaiting, _ = audit_assets.triage([f], {f.key: "stale"}, fake_root)
+        assert live == [] and awaiting == [f]
+
+    def test_awaiting_does_not_fail_the_command(self, monkeypatch, capsys):
+        """Exit 0 is the whole point: the branch stays buildable while the
+        obligation stays visible."""
+        f = audit_assets.Finding(4, "scripts/mute.py", "detail")
+        monkeypatch.setattr(audit_assets, "audit", lambda *a: [f])
+        monkeypatch.setattr(audit_assets, "load_ledger", lambda *a: {f.key: "stale"})
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: {f.asset})
+        assert audit_assets.main([]) == 0
+        assert "awaiting re-grant" in capsys.readouterr().out
+
+    def test_the_same_finding_fails_once_the_branch_has_landed(
+        self, monkeypatch, capsys
+    ):
+        """On the default branch nothing is changed relative to itself, so the
+        grace evaporates with no branch name written down anywhere."""
+        f = audit_assets.Finding(4, "scripts/mute.py", "detail")
+        monkeypatch.setattr(audit_assets, "audit", lambda *a: [f])
+        monkeypatch.setattr(audit_assets, "load_ledger", lambda *a: {f.key: "stale"})
+        monkeypatch.setattr(audit_assets, "changed_assets", lambda _: set())
+        assert audit_assets.main([]) == 1
+
+    def test_git_failure_grants_no_grace(self, monkeypatch, tmp_path):
+        """Failing closed: if git cannot say what changed, the gate holds."""
+        assert audit_assets.changed_assets(tmp_path) == set()

@@ -457,19 +457,20 @@ def check_friction(report: Report, root: Path) -> None:
 def check_audit_owed(report: Report, root: Path) -> None:
     """Report a config audit this branch owes but has not run.
 
-    Branch state. Each marker line is `<branch>\t<asset>`, because the
-    obligation is an audit for what *this* branch changed -- unscoped, the
-    warning follows you to an unrelated branch and clearing it there discards
-    the original branch's obligation. The marker is gitignored and untracked,
-    so no test can gate it and it does not travel between machines. Reported
-    here because session start is when it matters: the hook that wrote it
-    injected its reminder into a session that has since ended.
+    Branch state. The obligation is an audit for what *this* branch changed --
+    unscoped, the warning follows you to an unrelated branch and clearing it
+    there discards the original branch's obligation. The marker is gitignored
+    and untracked, so no test can gate it and it does not travel between
+    machines. Reported here because session start is when it matters: the hook
+    that wrote it injected its reminder into a session that has since ended.
 
-    The two-field format is parsed here rather than fetched from
-    audit_assets.py. Shelling out put a subprocess in a startup check, and it
-    silently ignored `root` besides -- that script resolves its own repo from
-    __file__, so this reported the wrong tree whenever the two differed.
-    audit_assets.py owns writing and clearing; this only reads.
+    The marker is parsed by audit_assets.owed_assets rather than here. An
+    earlier version reimplemented the parse to keep preflight free of project
+    structure, but a discharge is only answered by re-hashing the asset, and
+    two readers deciding that separately meant one warning about an audit the
+    other considered done. Imported, not shelled out: a subprocess in a startup
+    check is the cost the earlier version was avoiding, and an import of a
+    sibling module in the same directory is not the coupling the rule is about.
 
     Silent when nothing is owed for the current branch, and silent in projects
     with no audit script, since preflight is copied into repos that have no
@@ -477,12 +478,11 @@ def check_audit_owed(report: Report, root: Path) -> None:
     """
     if not (Path(__file__).resolve().parent / "audit_assets.py").is_file():
         return
-    marker = root / ".audit-owed"
-    if not marker.is_file():
+    if not (root / ".audit-owed").is_file():
         return
     try:
-        lines = [ln for ln in marker.read_text().splitlines() if ln.strip()]
-    except OSError:
+        import audit_assets
+    except ImportError:
         return
     # -C root, like check_precommit_installed. Reading the branch from the
     # process cwd made this report on whichever repo preflight happened to be
@@ -490,20 +490,15 @@ def check_audit_owed(report: Report, root: Path) -> None:
     # was on -- two of them failed on `main`, which is precisely the state
     # step 0 requires to be green.
     branch = git("-C", str(root), "rev-parse", "--abbrev-ref", "HEAD") or ""
-    # On the default branch, report every branch's entries, not just this one's.
-    # An obligation recorded against feat/x whose work has been merged is now an
-    # obligation about the default branch's contents, and reporting only
-    # matching lines meant merging without auditing lost it silently.
+    # On the default branch, report every branch's entries, not just this
+    # one's. An obligation recorded against feat/x whose work has been merged
+    # is now an obligation about the default branch's contents, and reporting
+    # only matching lines meant merging without auditing lost it silently.
     on_default = bool(branch) and branch == default_branch(root)
-    assets = set()
-    for line in lines:
-        recorded, _, asset = line.partition("\t")
-        # An unscoped line predates branch scoping; the safe reading of an
-        # obligation with no recorded owner is that it is still owed.
-        if not asset:
-            assets.add(recorded)
-        elif on_default or recorded == branch:
-            assets.add(asset)
+    try:
+        assets = audit_assets.owed_assets(root, branch, any_branch=on_default)
+    except OSError:
+        return
     if not assets:
         return
     report.add(

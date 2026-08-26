@@ -393,11 +393,15 @@ def main() -> None:
     # A set, not a list: a marker written before branch scoping existed holds
     # unscoped lines, and an asset present both ways was listed twice. Found in
     # production, by this hook reporting the same path to itself twice.
+    # Three fields is a discharge record written by `--clear-owed`, not an
+    # obligation; counting it would report an audit that has already been run,
+    # and splitting on the first tab alone would print "asset<TAB>sha" as the
+    # asset's name.
     owed = sorted(
         {
-            line.partition("\t")[2] or line
-            for line in lines
-            if line.partition("\t")[0] == branch or "\t" not in line
+            fields[1] if len(fields) == 2 else fields[0]
+            for fields in (line.split("\t") for line in lines)
+            if len(fields) < 3 and (len(fields) == 1 or fields[0] == branch)
         }
     )
     # Count and list come from the same set. Pairing len(all) with a list of
