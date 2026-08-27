@@ -79,7 +79,19 @@ def tokenize(line: str) -> "list[str] | None":
     one lifts *paths* out of the command, so stripping an unbalanced quote
     could invent a destination that was never written and put a wrong advisory
     into context. Declining is the cheaper error here.
+
+    Backslashes are doubled first on Windows because shlex(posix=True) always
+    treats "\\" as a POSIX escape character, which eats the separators out of
+    a native path like "C:\\Users\\...\\CLAUDE.md" -- so it no longer matched
+    the directory it lives in, and this hook fired on the master repo's own
+    files, telling the agent to promote a file it was already editing in
+    place. Duplicated verbatim in prose-writing.py and audit-owed.py: a hook
+    runs standalone under whatever interpreter ~/.claude/settings.json names,
+    stdlib-only and with no sys.path manipulation, so a shared module is not
+    available here.
     """
+    if os.name == "nt":
+        line = line.replace("\\", "\\\\")
     lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:

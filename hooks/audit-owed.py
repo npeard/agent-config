@@ -43,7 +43,7 @@ def master_repo() -> str:
     home = os.environ.get("HOME")
     # "~" or "~/..." only -- not "~otheruser/...", which names someone else's
     # home and must still go through expanduser's own lookup.
-    if (path == "~" or path.startswith("~/") or path.startswith("~" + os.sep)) and home:
+    if (path == "~" or path.startswith(("~/", "~" + os.sep))) and home:
         # Substitute HOME ourselves before falling back to expanduser, which
         # prefers USERPROFILE to HOME on Windows: a test (or a sandboxed CI
         # run) that sets only HOME to point at a fake repo was silently
@@ -124,7 +124,17 @@ def tokenize(line: str) -> "list[str] | None":
     the commit went undetected. The command word is still at the start of the
     line, so retrying without quote characters recovers it; the alternative was
     a hook that ignored the dominant commit form.
+
+    Backslashes are doubled first on Windows, before either attempt, because
+    shlex(posix=True) always treats "\\" as a POSIX escape character, which
+    eats the separators out of a native path like "C:\\Users\\...\\CLAUDE.md"
+    passed to `git -C`. Duplicated verbatim in promotion-check.py and
+    prose-writing.py: a hook runs standalone under whatever interpreter
+    ~/.claude/settings.json names, stdlib-only and with no sys.path
+    manipulation, so a shared module is not available here.
     """
+    if os.name == "nt":
+        line = line.replace("\\", "\\\\")
     for attempt in (line, line.replace('"', " ").replace("'", " ")):
         lexer = shlex.shlex(attempt, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
