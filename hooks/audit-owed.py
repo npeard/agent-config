@@ -115,6 +115,30 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
+# A native Windows path: drive letter, colon, backslash, then everything up to
+# the next whitespace or shell metacharacter. Only backslashes inside a match
+# are doubled below.
+NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
+
+
+def with_doubled_separators(line: str) -> str:
+    """The line with the backslashes inside native Windows paths doubled.
+
+    shlex(posix=True) always treats "\\" as an escape character, which ate the
+    separators out of a native path like "C:\\Users\\...\\CLAUDE.md" passed to
+    `git -C`.
+
+    Keyed on the shape of the text rather than on os.name, because os.name is
+    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
+    legitimately contains POSIX escapes. Doubling every backslash on Windows
+    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
+    {} \\;` holding a stray "\\", corrupting commands that parsed correctly
+    everywhere else. A drive-letter prefix is what separates the one shape
+    shlex cannot read from the many it can.
+    """
+    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
+
+
 def tokenize(line: str) -> "list[str] | None":
     """Tokens for one shell line, or None if it cannot be read at all.
 
@@ -125,17 +149,13 @@ def tokenize(line: str) -> "list[str] | None":
     line, so retrying without quote characters recovers it; the alternative was
     a hook that ignored the dominant commit form.
 
-    Backslashes are doubled first on Windows, before either attempt, because
-    shlex(posix=True) always treats "\\" as a POSIX escape character, which
-    eats the separators out of a native path like "C:\\Users\\...\\CLAUDE.md"
-    passed to `git -C`. Duplicated verbatim in promotion-check.py and
-    prose-writing.py: a hook runs standalone under whatever interpreter
-    ~/.claude/settings.json names, stdlib-only and with no sys.path
-    manipulation, so a shared module is not available here.
+    Duplicated verbatim in promotion-check.py and prose-writing.py: a hook
+    runs standalone under whatever interpreter ~/.claude/settings.json names,
+    stdlib-only and with no sys.path manipulation, so a shared module is not
+    available here.
     """
-    if os.name == "nt":
-        line = line.replace("\\", "\\\\")
-    for attempt in (line, line.replace('"', " ").replace("'", " ")):
+    doubled = with_doubled_separators(line)
+    for attempt in (doubled, doubled.replace('"', " ").replace("'", " ")):
         lexer = shlex.shlex(attempt, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
         try:

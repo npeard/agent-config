@@ -11,10 +11,14 @@ them is implemented, only that they agree on the contract.
 shlex(posix=True) always treats "\\" as an escape character, which ate the
 separators out of a native Windows path like "C:\\Users\\...\\CLAUDE.md" and
 made it fail to match the directory it lives in -- the promotion-check
-self-guard's concrete symptom. Backslash-doubling on os.name == "nt" is the
-fix under test; audit-owed.py's tokenize additionally retries once with quote
-characters stripped (the `git commit -m "$(cat <<'EOF' ... EOF)"` recovery),
-which must survive alongside it. That retry also means audit-owed.py's
+self-guard's concrete symptom. Doubling the backslashes inside text shaped
+like a native Windows path is the fix under test, and the *shape* is the key,
+not the platform: the Bash tool on Windows runs Git Bash, so a POSIX escape
+in a command there is genuine and must survive untouched. Every case below
+therefore runs on every platform. audit-owed.py's tokenize additionally
+retries once with quote characters stripped (the
+`git commit -m "$(cat <<'EOF' ... EOF)"` recovery), which must survive
+alongside it. That retry also means audit-owed.py's
 tokenize has no input left that returns None -- stripping every quote
 character forecloses the only thing shlex raises on here -- so its None
 contract is not asserted below; only promotion-check.py's and
@@ -24,7 +28,6 @@ prose-writing.py's are, and audit-owed's retry is pinned directly instead.
 from __future__ import annotations
 
 import importlib.util
-import os
 from pathlib import Path
 
 import pytest
@@ -55,13 +58,6 @@ WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\claude-config\CLAUDE.md"
 POSIX_PATH = "/home/npeard/Documents/Projects/claude-config/CLAUDE.md"
 
 
-@pytest.mark.skipif(
-    os.name != "nt",
-    reason="tokenize() doubles backslashes only on Windows, because a backslash "
-    "in a POSIX shell command is a genuine escape and doubling it there would "
-    "corrupt the command. A macOS session never receives a native Windows path, "
-    "so there is nothing to preserve.",
-)
 def test_native_windows_path_survives_as_one_token(tokenize):
     """The regression this hook set exists to catch: a bare backslash-laden
     Windows path must come back as a single token with its separators intact,
@@ -110,15 +106,45 @@ def test_audit_owed_retry_recovers_the_mandated_commit_form_not_none():
     assert tokens[:3] == ["git", "commit", "-m"]
 
 
-@pytest.mark.skipif(
-    os.name != "nt",
-    reason="tokenize() doubles backslashes only on Windows, because a backslash "
-    "in a POSIX shell command is a genuine escape and doubling it there would "
-    "corrupt the command. A macOS session never receives a native Windows path, "
-    "so there is nothing to preserve.",
-)
 def test_windows_path_survives_even_with_balanced_quotes(tokenize):
     """A quoted Windows path -- the shape a session actually writes -- must
     also keep its separators, not just a bare one."""
     tokens = tokenize(f'cat "{WINDOWS_PATH}"')
     assert tokens == ["cat", WINDOWS_PATH]
+
+
+def test_a_quoted_windows_path_containing_a_space_stays_one_token(tokenize):
+    """The doubling is applied to runs that stop at whitespace, so a quoted
+    path with a space in it is two runs. The quotes must still rejoin them."""
+    spaced = r"C:\Users\npeard\My Documents\CLAUDE.md"
+    assert tokenize(f'cat "{spaced}"') == ["cat", spaced]
+
+
+class TestPosixEscapesSurvive:
+    """A POSIX command must parse identically on every platform.
+
+    The Bash tool on Windows runs Git Bash, so backslashes in a command there
+    are genuine POSIX escapes. Doubling them keyed on os.name corrupted these
+    two shapes, and both hooks that extract paths fed the wreckage straight
+    into path extraction -- inventing a destination that was never written,
+    which is exactly what promotion-check's tokenize() declines to risk.
+    """
+
+    def test_an_escaped_space_keeps_one_path_in_one_token(self, tokenize):
+        assert tokenize(r"cp /c/Users/me/a\ b.md /c/dest/") == [
+            "cp",
+            "/c/Users/me/a b.md",
+            "/c/dest/",
+        ]
+
+    def test_an_escaped_semicolon_does_not_become_a_stray_backslash(self, tokenize):
+        assert tokenize(r'find . -name "*.tmp" -exec rm {} \;') == [
+            "find",
+            ".",
+            "-name",
+            "*.tmp",
+            "-exec",
+            "rm",
+            "{}",
+            ";",
+        ]
