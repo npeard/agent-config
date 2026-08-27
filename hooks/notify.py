@@ -272,6 +272,17 @@ def banner_argv(title, message):
         # AppleScript string literals escape only backslash and quote.
         script = f'display notification "{applescript(message)}" with title "{applescript(title)}"'
         return ["osascript", "-e", script]
+    if os.name == "nt":
+        # A balloon through the shell's own notify area: it needs no
+        # third-party module, unlike the toast APIs.
+        script = (
+            "[reflection.assembly]::LoadWithPartialName('System.Windows.Forms')|Out-Null;"
+            "$n=New-Object System.Windows.Forms.NotifyIcon;"
+            "$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;"
+            f"$n.ShowBalloonTip(5000,{powershell_literal(title)},{powershell_literal(message)},'Info');"
+            "Start-Sleep -Seconds 5;$n.Dispose()"
+        )
+        return ["powershell", "-NoProfile", "-Command", script]
     notify_send = shutil.which("notify-send")
     if notify_send:
         return [notify_send, "--app-name=Claude Code", title, message]
@@ -280,6 +291,11 @@ def banner_argv(title, message):
 
 def applescript(text):
     return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def powershell_literal(text):
+    """A single-quoted PowerShell string. Only ' is special, doubled."""
+    return "'" + text.replace("'", "''") + "'"
 
 
 def project(data):
