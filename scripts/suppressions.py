@@ -143,7 +143,7 @@ def read_lines(path: Path) -> tuple[list[str], list[str]]:
     problem out of it -- an ASCII gate is what should complain about bytes.
     """
     try:
-        return path.read_text(errors="replace").splitlines(), []
+        return path.read_text(encoding="utf-8", errors="replace").splitlines(), []
     except OSError as exc:
         return [], [
             (

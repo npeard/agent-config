@@ -472,7 +472,7 @@ def watchdog(session, pid, title):
     time.sleep(long_task_seconds())
     marker = watch_path(session)
     try:
-        reported = marker.read_text().strip() == NUDGED
+        reported = marker.read_text(encoding="utf-8").strip() == NUDGED
     except OSError:
         # The work drained and some later turn disarmed us.
         return

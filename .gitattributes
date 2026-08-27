@@ -1,0 +1,3 @@
+# Hooks are executed by an interpreter that is strict about syntax, and a
+# CRLF that arrives through a Windows checkout is invisible in review.
+* text=auto eol=lf

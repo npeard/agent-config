@@ -151,7 +151,7 @@ def iter_errors(paths: list[Path], since: str = ""):
     """Yield (session_id, timestamp, text) for each failed tool result."""
     for path in paths:
         try:
-            lines = path.read_text(errors="replace").splitlines()
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
         for line in lines:
@@ -240,7 +240,7 @@ def read_ledger(path: Path | None = None) -> tuple[dict[str, dict], str | None]:
     if not path.is_file():
         return {}, None  # No ledger yet is a real state, not a failure.
     try:
-        data = tomllib.loads(path.read_text())
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, OSError) as exc:
         return {}, f"ledger unreadable ({type(exc).__name__}); decisions ignored"
     return {d["class"]: d for d in data.get("decision", []) if "class" in d}, None

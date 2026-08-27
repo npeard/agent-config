@@ -138,7 +138,7 @@ def evidence(root: Path) -> str:
         path = root / name
         if path.is_file():
             try:
-                parts.append(path.read_text(errors="replace"))
+                parts.append(path.read_text(encoding="utf-8", errors="replace"))
             except OSError:
                 continue
     return "\n".join(parts)

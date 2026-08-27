@@ -135,7 +135,7 @@ def declared_floor(root: Path) -> tuple[int, int] | None:
         path = root / name
         if not path.is_file():
             continue
-        text = path.read_text(errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
         # Anchored to a line start: unanchored, `python` matched the tail of
         # `ipython = ">=8.0"` and read as a floor of 8.0 -- and a failure here
         # short-circuits every later check.
@@ -237,7 +237,11 @@ def check_precommit_installed(report: Report, root: Path) -> None:
     # wherever this process happens to have been invoked from.
     hook_path = git("-C", str(root), "rev-parse", "--git-path", "hooks/pre-commit")
     hook = (root / hook_path) if hook_path else None
-    if hook and hook.is_file() and "pre-commit" in hook.read_text(errors="replace"):
+    if (
+        hook
+        and hook.is_file()
+        and "pre-commit" in hook.read_text(encoding="utf-8", errors="replace")
+    ):
         report.add(OK, "pre-commit hook installed")
     else:
         report.add(FAIL, "pre-commit hook installed", "run: pre-commit install")
@@ -256,7 +260,9 @@ def configured_revs(config: Path) -> list[tuple[str, str]]:
     to zero pairs, which the caller reports as "cannot check".
     """
     keys: list[tuple[int, str, str]] = []
-    for lineno, line in enumerate(config.read_text(errors="replace").splitlines()):
+    for lineno, line in enumerate(
+        config.read_text(encoding="utf-8", errors="replace").splitlines()
+    ):
         stripped = line.strip().lstrip("-").strip()
         for kind in ("repo", "rev"):
             prefix = f"{kind}:"
@@ -370,7 +376,7 @@ def _pixi_has_test_task(path: Path) -> bool:
     import tomllib
 
     try:
-        data = tomllib.loads(path.read_text())
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, OSError):
         return False
     tasks = dict(data.get("tasks", {}))
@@ -381,14 +387,14 @@ def _pixi_has_test_task(path: Path) -> bool:
 
 def _npm_has_test_script(path: Path) -> bool:
     try:
-        return "test" in json.loads(path.read_text()).get("scripts", {})
+        return "test" in json.loads(path.read_text(encoding="utf-8")).get("scripts", {})
     except (ValueError, OSError):
         return False
 
 
 def _mentions_test(path: Path) -> bool:
     """Crude fallback for formats with no cheap stdlib parser (YAML)."""
-    return "test" in path.read_text()
+    return "test" in path.read_text(encoding="utf-8")
 
 
 # Priority order: a project's own task runner knows more than a bare pytest

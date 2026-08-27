@@ -181,7 +181,7 @@ def discover(root):
         if not path.is_file():
             continue
         try:
-            tasks = parse(path.read_text(errors="replace"))
+            tasks = parse(path.read_text(encoding="utf-8", errors="replace"))
         except OSError:
             continue
         kept = {n: v for n, v in tasks.items() if usable(n)}

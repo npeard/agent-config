@@ -58,7 +58,9 @@ def declared_hooks(hooks_dir=HOOKS_DIR):
     """
     found = []
     for path in sorted(hooks_dir.glob("*.py")):
-        for line in path.read_text(errors="replace").splitlines()[:10]:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[
+            :10
+        ]:
             match = MARKER.match(line.strip())
             if match:
                 found.append((path.name, match.group("event"), match.group("matcher")))
@@ -235,7 +237,7 @@ def main(argv):
     existed = args.settings.is_file()
     if existed:
         try:
-            settings = json.loads(args.settings.read_text())
+            settings = json.loads(args.settings.read_text(encoding="utf-8"))
         except ValueError:
             print(f"{args.settings} is not valid JSON; refusing to touch it.")
             return 1
@@ -266,7 +268,7 @@ def main(argv):
     else:
         backup = None
         args.settings.parent.mkdir(parents=True, exist_ok=True)
-    args.settings.write_text(json.dumps(settings, indent=2) + "\n")
+    args.settings.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     for change in changes:
         print(f"  {change}")
     if backup is not None:
