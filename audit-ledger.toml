@@ -21,10 +21,10 @@
 [[decision]]
 asset = "scripts/friction.py"
 principle = 5
-date = "2026-08-21"
+date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "225ec73c963ce9f87af5d54f679f54ea56713057cc8dfc2b078858894c2dba3f"
+asset_sha = "4bf95baf323fcf7b0243b44a62a8c0e9d90842d22a39223d4dc7dfd3e367ce8d"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
@@ -43,15 +43,19 @@ are classified but not what is emitted or how it is framed.
 
 Not deleted, because printing an example is what makes a friction class
 actionable. The finding was about framing, not about the feature.
+
+Re-granted after adding encoding="utf-8" to two read_text calls
+(cross-platform default-encoding fix). Neither call is on the excerpt path;
+the framing this entry rests on is unchanged.
 """
 
 [[decision]]
 asset = "hooks/notify.py"
 principle = 5
-date = "2026-08-21"
+date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "2be8bc4082afff8c6ed3fb64c36b41d1fb7966d08534449d4d950ddb3fca0770"
+asset_sha = "0f148018a9a9a064afcc24e45113e0ea553f4b5f93962a5c3b496eca046fbd9e"
 note = """
 Two paths are in scope: text that reaches a shell interpreter, and
 `session_id` reaching a filename.
@@ -59,11 +63,23 @@ Two paths are in scope: text that reaches a shell interpreter, and
 Text to an interpreter. AppleScript string literals are escaped for
 backslash and quote before reaching osascript, and PowerShell single quotes
 are escaped by doubling. Host `message` and the project name -- the banner
-title -- both travel that same path, so the emit path for host-supplied text
-is the pre-existing one and no reason added since introduces another source
-or another interpreter. The watchdog is re-spawned with argv rather than a
-shell command line, so neither `session_id` nor the project name is
-interpreted on the way in.
+title -- both travel that same path. The watchdog is re-spawned with argv
+rather than a shell command line, so neither `session_id` nor the project
+name is interpreted on the way in.
+
+Re-granted after the Windows banner was added, which is a change to this
+paragraph's reasoning and not just a re-stamp: `banner_argv` previously
+reached PowerShell only through `sound_argv`'s bare-name lookup, which never
+carried `title` or `message`. It now also builds a `powershell -Command`
+balloon script that interpolates both through the same new `powershell_literal`
+helper -- single-quote doubling, the identical rule `sound_argv` already used.
+So this is host text reaching a second interpreter, not merely the
+pre-existing path exercised again; it is accepted because the escaping
+discipline is the correct one for that interpreter, verified by inspection of
+`powershell_literal` and consistent with the existing PowerShell rule below.
+The `TERMINAL_NOTIFIER` branch passes `title`/`message` as literal argv
+elements to a real executable, never through a shell, so it carries no
+interpreter risk at all.
 
 `session_id` to a filename. It is sanitized to alphanumerics plus `-_` and
 capped at 64 characters, which leaves no path separator and no `..`, so the
@@ -89,10 +105,10 @@ follow a planted link nor recreate a marker that a drain removed.
 [[decision]]
 asset = "hooks/task-list.py"
 principle = 5
-date = "2026-08-21"
+date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "17ebf4f7848306733cb2e17b3afa1bd76deff1d12fa1ee1c2abad3a087e64a06"
+asset_sha = "c3f76f48103582880b5bf49b8bbc525cb22422869da6906696fa883cc043374d"
 note = """
 Re-decided 2026-08-21 after the previous note turned out to be wrong, and the
 way it was wrong is the lesson. It read: "whose payload is capped at 60
@@ -146,15 +162,20 @@ fine and then had no .get, and the two sibling hooks' comments both cited this
 file as guarding "the identical call" when it did not. The name charset filter
 and collapsed definitions -- the actual mitigation this entry rests on -- are
 unchanged.
+
+Re-granted after adding encoding="utf-8" to the manifest read_text call
+(cross-platform default-encoding fix). That call already used
+errors="replace"; naming the encoding does not change what bytes are read or
+how a hostile manifest is handled, so the boundary above is unaffected.
 """
 
 [[decision]]
 asset = "hooks/prose-writing.py"
 principle = 5
-date = "2026-08-21"
+date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "df1ded0da0ab4da5ce3cbb8e81997aa24d9b2a6b744a8a6cc06b1c74b69b031f"
+asset_sha = "e0fbae6b8efef995032b897828b489ae2a5f064109d3c082ef6b1593fecf34bb"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -188,15 +209,23 @@ sed-and-heredoc session, and it expands `~` before resolving so a path like
 `~/Documents/paper/ch1.tex` is matched rather than joined onto cwd as a literal
 "~" directory. It still emits its own fixed message and quotes no part of the
 command, which is the boundary this entry was granted on.
+
+Re-granted after doubling backslashes before shlex on Windows, the same fix
+and the same reason as promotion-check.py and audit-owed.py: shlex(posix=True)
+treats "\\" as a POSIX escape, which was eating the separators out of native
+Windows paths and made the hook fire on the master repo's own files. This
+changes how tool_input.command is tokenized, not what the tokens are used for
+-- the Bash branch still names no file and quotes no part of the command, so
+the boundary above is unaffected.
 """
 
 [[decision]]
 asset = "hooks/audit-owed.py"
 principle = 5
-date = "2026-08-21"
+date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "dca16efd5de3db7081f1bef0ca694b1a730204ef57aa30d6d9985cf1f8dad361"
+asset_sha = "c2ef2d73dd79d4ff0c9429d56f414998c2d2bcea0ff64352b09dc6de9fb4bbc5"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -225,4 +254,36 @@ The cwd guard maps `git rev-parse --git-common-dir` to locate the marker, and
 neither that path nor the branch name is emitted. Marker writes are O_APPEND
 so concurrent hooks cannot interleave, and a marker holding undecodable bytes
 is read as empty rather than raising.
+
+Re-granted after two Windows fixes: `master_repo` now substitutes HOME itself
+before falling back to expanduser (which prefers USERPROFILE there), and
+`tokenize` doubles backslashes before shlex for the same native-path reason as
+promotion-check.py and prose-writing.py. Both change how the diff-tree paths
+and the master-repo location are resolved and parsed, not what is done with
+them once resolved -- the four-item cap, JSON-string-literal framing, and
+marker quoting this entry rests on are all unchanged.
+"""
+
+[[decision]]
+asset = "scripts/platform_paths.py"
+principle = 4
+date = "2026-08-27"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+asset_sha = "73d22b0475c97608df518854a4fcc38996c125358d40b88655ce19db606022f5"
+note = """
+check_script_help's own rationale is "a script an agent must read to use has
+failed principle 3 while pretending to serve it" -- but this file is never
+invoked. It is a library module imported by install.py, register_hooks.py,
+preflight.py and audit_assets.py to keep one set of platform decisions
+(interpreter layout, what counts as a link, junction vs symlink) from being
+duplicated and drifting across them; hooks deliberately do not import it,
+since they run standalone and stay stdlib-only.
+
+Bolting on an ArgumentParser that no one runs would satisfy the check without
+serving the principle behind it: there is no CLI interface for --help to
+document, and a decorative parser would be read as an entry point that does
+not exist. The check has no way to distinguish an importable module from an
+entry-point script, so this is the false positive rather than a gap to close
+by writing to the check.
 """
