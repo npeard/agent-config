@@ -21,9 +21,10 @@ parser would give three copies of that table to keep in agreement.
 
 Run by install.sh through the project's own interpreter, after the dev
 environment has been materialized. That ordering is not incidental: a
-registered hook names `.pixi/envs/dev/bin/python` in its command, so writing
-the registration before that binary exists produces hooks that cannot start
--- which is what an earlier version did, while reporting success.
+registered hook names the dev environment's interpreter for the current
+platform in its command, so writing the registration before that binary
+exists produces hooks that cannot start -- which is what an earlier version
+did, while reporting success.
 
 Usage:
     pixi run register-hooks [--check] [--settings PATH]
@@ -33,6 +34,7 @@ project interpreter. A bare `python3` would be whatever the machine ships.
 """
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -40,12 +42,29 @@ import sys
 import time
 from pathlib import Path
 
+
+def _load_platform_paths():
+    """Import the sibling module without a package, and without a
+    sys.path mutation `ruff --fix` would hoist above (E402) since this repo
+    ships zero suppressions. Mirrors the importlib pattern this repo's own
+    tests already use for hyphenated hook filenames.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+platform_paths = _load_platform_paths()
+
 REPO = Path(__file__).resolve().parent.parent
 MARKER = re.compile(r"^#\s*claude-hook:\s*(?P<event>\w+)(?:\s+(?P<matcher>\S+))?\s*$")
 DEFAULT_SETTINGS = Path.home() / ".claude" / "settings.json"
 # Hooks must run under the project's own interpreter, not whatever `python3`
 # the machine ships -- on macOS that is 3.9, below the declared floor.
-INTERPRETER = REPO / ".pixi" / "envs" / "dev" / "bin" / "python"
+INTERPRETER = platform_paths.interpreter(REPO)
 HOOKS_DIR = REPO / "hooks"
 
 

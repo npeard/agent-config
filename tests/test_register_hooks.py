@@ -9,6 +9,7 @@ so preflight reports it instead.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -124,8 +125,9 @@ class TestMerge:
         assert any("interpreter" in c for c in changes)
         assert len(settings["hooks"]["PostToolUse"]) == 1
         command = settings["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
-        assert command.endswith("hooks/promotion-check.py")
-        assert "/.pixi/envs/dev/bin/python " in command
+        assert command.endswith(str(Path("hooks") / "promotion-check.py"))
+        expected = "python.exe" if os.name == "nt" else "/.pixi/envs/dev/bin/python "
+        assert expected in command
 
     def test_corrects_a_wrong_matcher(self):
         settings = {
@@ -405,5 +407,6 @@ class TestInterpreterPrerequisite:
 
     def test_command_names_the_project_interpreter(self):
         command = register_hooks.command_for("task-list.py")
-        assert "/.pixi/envs/dev/bin/python " in command
-        assert command.endswith("hooks/task-list.py")
+        expected = "python.exe" if os.name == "nt" else "/.pixi/envs/dev/bin/python"
+        assert expected in command
+        assert command.endswith(str(Path("hooks") / "task-list.py"))
