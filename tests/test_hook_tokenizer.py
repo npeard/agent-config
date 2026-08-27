@@ -24,6 +24,7 @@ prose-writing.py's are, and audit-owed's retry is pinned directly instead.
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,13 @@ WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\claude-config\CLAUDE.md"
 POSIX_PATH = "/home/npeard/Documents/Projects/claude-config/CLAUDE.md"
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="tokenize() doubles backslashes only on Windows, because a backslash "
+    "in a POSIX shell command is a genuine escape and doubling it there would "
+    "corrupt the command. A macOS session never receives a native Windows path, "
+    "so there is nothing to preserve.",
+)
 def test_native_windows_path_survives_as_one_token(tokenize):
     """The regression this hook set exists to catch: a bare backslash-laden
     Windows path must come back as a single token with its separators intact,
@@ -102,6 +110,13 @@ def test_audit_owed_retry_recovers_the_mandated_commit_form_not_none():
     assert tokens[:3] == ["git", "commit", "-m"]
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="tokenize() doubles backslashes only on Windows, because a backslash "
+    "in a POSIX shell command is a genuine escape and doubling it there would "
+    "corrupt the command. A macOS session never receives a native Windows path, "
+    "so there is nothing to preserve.",
+)
 def test_windows_path_survives_even_with_balanced_quotes(tokenize):
     """A quoted Windows path -- the shape a session actually writes -- must
     also keep its separators, not just a bare one."""
