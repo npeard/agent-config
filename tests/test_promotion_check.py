@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import platform_paths_helper as pp
 import pytest
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "promotion-check.py"
@@ -28,19 +29,26 @@ MASTER = str(PROJECTS / "claude-config")
 OTHER = str(PROJECTS / "other-project")
 
 
-def run_hook(payload: dict) -> str:
+def run_hook(payload: dict, home: Path | None = None) -> str:
+    env = None
+    if home is not None:
+        # The hook derives MASTER_REPO from expanduser("~/..."), so pointing
+        # both names at a scratch home lets a test build the whole scenario
+        # instead of testing whatever this machine happens to have installed.
+        env = os.environ | {"HOME": str(home), "USERPROFILE": str(home)}
     result = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
         check=True,
+        env=env,
     )
     return result.stdout.strip()
 
 
-def fired(payload: dict) -> bool:
-    out = run_hook(payload)
+def fired(payload: dict, home: Path | None = None) -> bool:
+    out = run_hook(payload, home)
     if not out:
         return False
     # A fired hook must emit the shape Claude Code expects, not just text.
@@ -133,17 +141,37 @@ class TestPayloadHandling:
 
 
 class TestInstalledSymlinkPaths:
-    """install.sh symlinks ~/.claude/CLAUDE.md and ~/.claude/skills/<name>
-    into the master repo, so editing the config through its installed path
-    must still be recognised as editing the master repo."""
+    """The installer links ~/.claude/skills/<name> into the master repo, so
+    editing the config through its installed path must still be recognised as
+    editing the master repo."""
 
-    def test_silent_through_the_installed_claude_md_symlink(self):
-        installed = Path.home() / ".claude" / "CLAUDE.md"
-        if not installed.is_symlink():
-            pytest.skip("config not installed on this machine")
-        if not str(Path(os.path.realpath(installed))).startswith(MASTER):
-            pytest.skip("installed config does not point at this checkout")
-        assert not fired(write(str(installed)))
+    def test_silent_through_a_link_into_the_master_repo(self, tmp_path: Path):
+        """Constructed in a scratch home rather than read off the real one.
+        Keying on whether this machine happens to have the config installed
+        meant the assertion skipped on every CI runner, so the case the
+        hook's realpath exists for went unexercised exactly where nobody
+        would notice. link_dir is the installer's own primitive -- a junction
+        on Windows, a symlink elsewhere -- and needs elevation on neither.
+        """
+        master = tmp_path / "Documents" / "Projects" / "claude-config"
+        (master / "skills" / "quantikz").mkdir(parents=True)
+        (master / "skills" / "quantikz" / "SKILL.md").write_text("x", encoding="utf-8")
+        installed = tmp_path / ".claude" / "skills"
+        installed.mkdir(parents=True)
+        pp.link_dir(master / "skills" / "quantikz", installed / "quantikz")
+        assert not fired(write(str(installed / "quantikz" / "SKILL.md")), home=tmp_path)
+
+    def test_still_fires_for_a_link_outside_the_master_repo(self, tmp_path: Path):
+        """The other half of the same contract: resolving links must not turn
+        into resolving them away, or the hook goes silent for everything."""
+        master = tmp_path / "Documents" / "Projects" / "claude-config"
+        master.mkdir(parents=True)
+        elsewhere = tmp_path / "other-project" / "skills" / "quantikz"
+        elsewhere.mkdir(parents=True)
+        (elsewhere / "SKILL.md").write_text("x", encoding="utf-8")
+        link = tmp_path / "linked-skill"
+        pp.link_dir(elsewhere, link)
+        assert fired(write(str(link / "SKILL.md")), home=tmp_path)
 
     @pytest.mark.skipif(
         os.name == "nt",

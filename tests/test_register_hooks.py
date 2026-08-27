@@ -433,6 +433,81 @@ class TestMainContract:
         assert not settings.exists()
 
 
+class TestSpacedRepoPath:
+    """A repo path containing a space -- "/Users/me/My Projects/..." -- is
+    ordinary on macOS and Windows alike. Legacy joined commands were parsed
+    with str.split(), which shredded such a path into fragments that named no
+    file, so repo_hook_in returned None and prune could never unregister a
+    stale hook on those machines. The command+args write path was already
+    fixed for this; this is the same hazard on the read path.
+    """
+
+    SPACED = Path("/Users/me/My Projects/claude-config")
+
+    @pytest.fixture(autouse=True)
+    def _spaced_repo(self, monkeypatch: pytest.MonkeyPatch):
+        hooks_dir = self.SPACED / "hooks"
+        monkeypatch.setattr(register_hooks, "HOOKS_DIR", hooks_dir)
+        monkeypatch.setattr(
+            register_hooks,
+            "INTERPRETER",
+            self.SPACED / ".pixi" / "envs" / "dev" / "bin" / "python",
+        )
+        return hooks_dir
+
+    def legacy(self, filename):
+        return {
+            "type": "command",
+            "command": (
+                f"{register_hooks.INTERPRETER} {register_hooks.HOOKS_DIR / filename}"
+            ),
+            "timeout": 10,
+        }
+
+    def test_repo_hook_in_finds_the_hook_despite_the_space(self):
+        assert register_hooks.repo_hook_in(self.legacy("notify.py")) == "notify.py"
+
+    def test_a_stale_legacy_registration_is_pruned(self):
+        settings = {"hooks": {"SessionStart": [{"hooks": [self.legacy("gone.py")]}]}}
+        changes = register_hooks.apply(settings, [])
+        assert changes == ["unregistered SessionStart -> gone.py"]
+        assert settings["hooks"] == {}
+
+    def test_a_legacy_registration_migrates_in_place_exactly_once(self):
+        settings = {
+            "hooks": {
+                "SessionStart": [{"hooks": [self.legacy("task-list.py")]}],
+            }
+        }
+        hooks = [("task-list.py", "SessionStart", None)]
+        register_hooks.apply(settings, hooks)
+        entries = settings["hooks"]["SessionStart"]
+        assert len(entries) == 1 and len(entries[0]["hooks"]) == 1
+        command, args = register_hooks.command_for("task-list.py")
+        assert entries[0]["hooks"][0]["command"] == command
+        assert entries[0]["hooks"][0]["args"] == args
+        assert register_hooks.apply(settings, hooks) == []
+
+    def test_a_foreign_command_with_a_space_is_still_left_alone(self):
+        """Widening the parse must not widen ownership: only a path whose
+        parent is exactly this repo's hooks dir is ours to remove."""
+        settings = {
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python /Other Tool/hooks/gone.py",
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        assert register_hooks.apply(settings, []) == []
+
+
 class TestInterpreterPrerequisite:
     """A registered hook names the project interpreter in its command, so that
     binary is a prerequisite for the hook to run at all. An earlier version

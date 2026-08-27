@@ -105,6 +105,42 @@ def command_for(filename):
     return str(INTERPRETER), [str(HOOKS_DIR / filename)]
 
 
+def _command_paths(command):
+    """Every substring of a legacy joined command that could be a script path.
+
+    Not `.split()`: a joined command is one shell string, so a path inside it
+    may contain spaces -- "/Users/me/My Projects/claude-config/hooks/
+    notify.py" splits into three fragments, none of them a path, and the hook
+    then reads as unregistered. That is the same space hazard the
+    command+args form was introduced to end, seen from the read side, and it
+    left `prune` unable to ever unregister a stale hook on such a machine.
+
+    Where a shell would need quoting rules to know where the path begins,
+    both callers only need the real path to appear somewhere in what is
+    offered: `repo_hook_in` requires the parent to be exactly HOOKS_DIR and
+    `invokes` compares basenames, so a candidate that starts too early or too
+    late simply fails to match. Offering every whitespace-anchored start for
+    each ".py" ending therefore finds the true path without guessing.
+    """
+    words = command.split()
+    starts = []
+    cursor = 0
+    for word in words:
+        cursor = command.index(word, cursor)
+        starts.append(cursor)
+        cursor += len(word)
+    candidates = []
+    for end, word in enumerate(words):
+        # A settings.json written by hand may quote the path it spells out.
+        if not word.rstrip("\"'").endswith(".py"):
+            continue
+        stop = starts[end] + len(word.rstrip("\"'"))
+        candidates.extend(
+            command[start:stop].lstrip("\"'") for start in starts[: end + 1]
+        )
+    return candidates
+
+
 def _tokens(hook):
     """Every token of a hook's command, old and new form alike.
 
@@ -113,7 +149,9 @@ def _tokens(hook):
     on disk. Both must be recognised so an upgrading user's existing
     registrations are updated in place rather than duplicated.
     """
-    tokens = str(hook.get("command", "")).split()
+    command = str(hook.get("command", ""))
+    tokens = command.split()
+    tokens.extend(_command_paths(command))
     tokens.extend(str(a) for a in hook.get("args", []))
     return tokens
 

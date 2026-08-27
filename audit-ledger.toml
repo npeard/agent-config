@@ -225,7 +225,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "c2ef2d73dd79d4ff0c9429d56f414998c2d2bcea0ff64352b09dc6de9fb4bbc5"
+asset_sha = "a6cf57b488b174f652d7733666cd1e20bd2ba935a9d987ddb32b82c64c404da4"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching

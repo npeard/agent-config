@@ -376,7 +376,7 @@ def main() -> None:
     # and cannot depend on this repo's layout.
     marker = os.path.join(repo, MARKER)
     try:
-        with open(marker) as fh:
+        with open(marker, encoding="utf-8") as fh:
             lines = {line.rstrip("\n") for line in fh if line.strip()}
     except OSError:
         lines = set()
