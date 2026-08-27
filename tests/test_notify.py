@@ -65,6 +65,19 @@ def feed(notify, monkeypatch, payload):
     notify.main()
 
 
+def mac_sounds_present(monkeypatch):
+    """Make every bare macOS sound name resolve, without a real Mac.
+
+    The darwin branch of sound_argv() checks Path.is_file() against
+    MAC_SOUND_DIR, a fixed macOS path (/System/Library/Sounds) that exists
+    only on an actual Mac -- there is no Windows equivalent to point it at,
+    the same gap TestStalledWatchdog's POSIX-only cases hit for mode bits and
+    symlinks. Faking the check, rather than a real file, keeps every other
+    assertion -- including the exact resolved path string -- intact.
+    """
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+
+
 class TestReason:
     @pytest.mark.parametrize(
         "payload",
@@ -178,9 +191,15 @@ class TestReason:
 class TestSoundResolution:
     def test_a_bare_name_resolves_against_the_system_sounds(self, notify, monkeypatch):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         argv = notify.sound_argv("Hero")
         assert argv[0] == "afplay"
-        assert argv[-1] == "/System/Library/Sounds/Hero.aiff"
+        # str(Path(...)) rather than a hardcoded "/System/..." string: on a
+        # PosixPath (the real target, macOS) the separator is "/" either way,
+        # but a dev box running this test under WindowsPath renders "\", and
+        # the resolution logic under test is platform-agnostic, not the
+        # separator convention pathlib happens to print.
+        assert argv[-1] == str(notify.MAC_SOUND_DIR / "Hero.aiff")
 
     def test_a_path_is_used_as_given(self, notify, monkeypatch):
         monkeypatch.setattr(sys, "platform", "darwin")
@@ -196,12 +215,21 @@ class TestSoundResolution:
         assert notify.sound_argv("") is None
 
     def test_a_bare_name_off_macos_plays_nothing(self, notify, monkeypatch):
-        """No other platform has a named system sound set to resolve against."""
+        """No other platform has a named system sound set to resolve against.
+
+        os.name is mocked alongside sys.platform: Windows resolves a bare
+        name through WINDOWS_SOUNDS regardless of what sys.platform claims,
+        since that table exists for a real Windows interpreter, not a
+        platform label -- so simulating "neither macOS nor Windows" has to
+        clear both.
+        """
         monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setattr(os, "name", "posix")
         assert notify.sound_argv("Hero") is None
 
     def test_the_volume_is_passed_to_the_player(self, notify, monkeypatch):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setattr(notify, "VOLUME", 0.25)
         assert "0.25" in notify.sound_argv("Hero")
 
@@ -224,6 +252,7 @@ class TestEndToEnd:
         self, notify, monkeypatch, spawned
     ):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         feed(notify, monkeypatch, {"hook_event_name": "Stop", "cwd": "/w/thesis"})
         assert any("Hero.aiff" in arg for argv in spawned for arg in argv)
         assert any("thesis" in arg for argv in spawned for arg in argv)
@@ -285,6 +314,7 @@ class TestEndToEnd:
         """The promotion is the point: this reason exists to be heard, so a
         sound that resolves is part of its contract."""
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         feed(
             notify,
             monkeypatch,
@@ -300,12 +330,14 @@ class TestEndToEnd:
 
     def test_banner_off_leaves_only_the_sound(self, notify, monkeypatch, spawned):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setattr(notify, "BANNER", False)
         feed(notify, monkeypatch, {"hook_event_name": "Stop"})
         assert [argv[0] for argv in spawned] == ["afplay"]
 
     def test_an_environment_override_wins(self, notify, monkeypatch, spawned):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setenv("CLAUDE_NOTIFY_SOUND_DONE", "Tink")
         feed(notify, monkeypatch, {"hook_event_name": "Stop"})
         assert any("Tink.aiff" in arg for argv in spawned for arg in argv)
@@ -494,6 +526,7 @@ class TestStalledWatchdog:
         self, notify, monkeypatch, spawned, tmp_marker
     ):
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         self.prearm(notify)
         notify.watchdog("s-1", str(os.getpid()), "thesis")
@@ -508,6 +541,7 @@ class TestStalledWatchdog:
         would let the next parked turn re-arm, turning a one-shot nudge into
         a ten-minute alarm for as long as the task lives."""
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         feed(notify, monkeypatch, self.parked())
         notify.watchdog("s-1", str(os.getpid()), "thesis")
@@ -523,6 +557,7 @@ class TestStalledWatchdog:
         """The other half of "per stretch": once the work drains, a later
         long park is a new stretch and deserves to be reported."""
         monkeypatch.setattr(sys, "platform", "darwin")
+        mac_sounds_present(monkeypatch)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         feed(notify, monkeypatch, self.parked())
         notify.watchdog("s-1", str(os.getpid()), "thesis")
@@ -588,6 +623,11 @@ class TestStalledWatchdog:
         assert not notify.watch_path("s-1").exists(), "resurrected"
         assert [a for a in spawned if "afplay" in a[0]] == [], "announced a drain"
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="POSIX mode bits and uid checks have no Windows equivalent; "
+        "%TEMP% is already per-user, and notify.py skips the check there",
+    )
     def test_a_lax_marker_directory_is_refused(
         self, notify, monkeypatch, spawned, tmp_marker
     ):
@@ -599,6 +639,11 @@ class TestStalledWatchdog:
         feed(notify, monkeypatch, self.parked())
         assert [a for a in spawned if "--watch" in a] == []
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="POSIX mode bits and uid checks have no Windows equivalent; "
+        "%TEMP% is already per-user, and notify.py skips the check there",
+    )
     def test_a_symlinked_marker_directory_is_refused(
         self, notify, monkeypatch, spawned, tmp_marker, tmp_path
     ):
@@ -622,6 +667,11 @@ class TestStalledWatchdog:
         assert tmp_marker in path.parents
         assert path.name.startswith("claude-notify-")
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="POSIX mode bits and uid checks have no Windows equivalent; "
+        "%TEMP% is already per-user, and notify.py skips the check there",
+    )
     def test_markers_live_in_a_private_directory(
         self, notify, monkeypatch, spawned, tmp_marker
     ):
@@ -635,6 +685,11 @@ class TestStalledWatchdog:
         assert d.is_dir()
         assert stat.S_IMODE(d.stat().st_mode) == 0o700
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="POSIX mode bits and uid checks have no Windows equivalent; "
+        "%TEMP% is already per-user, and notify.py skips the check there",
+    )
     def test_arming_refuses_to_follow_a_planted_symlink(
         self, notify, monkeypatch, spawned, tmp_marker, tmp_path
     ):

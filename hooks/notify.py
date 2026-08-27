@@ -145,6 +145,21 @@ PARKED = "parked"
 # nudge would become a ten-minute alarm for as long as the task lives.
 NUDGED = "nudged"
 
+# Bare names resolve against the platform's own sound set. macOS has one at
+# a known path; Windows does not, so each SOUNDS entry's macOS name is mapped
+# to a file that ships in C:\Windows\Media rather than left unresolvable --
+# which is why every ping was silent there. Keyed by SOUNDS' *values*, not
+# its roles: sound_argv() below only ever sees the resolved name ("Hero"),
+# never which role ("done") asked for it -- the same string an environment
+# override like CLAUDE_NOTIFY_SOUND_DONE could substitute.
+WINDOWS_SOUNDS = {
+    SOUNDS["done"]: r"C:\Windows\Media\tada.wav",
+    SOUNDS["permission"]: r"C:\Windows\Media\Windows Notify.wav",
+    SOUNDS["question"]: r"C:\Windows\Media\Windows Ding.wav",
+    SOUNDS["agent"]: r"C:\Windows\Media\Windows Notify Messaging.wav",
+    SOUNDS["stalled"]: r"C:\Windows\Media\Windows Exclamation.wav",
+}
+
 MAC_SOUND_DIR = Path("/System/Library/Sounds")
 # Absolute paths rather than a PATH lookup, because a hook inherits whatever
 # environment the host had and Homebrew's bin is often not on it.
@@ -216,9 +231,17 @@ def sound_argv(name):
                 return None
             path = str(candidate)
         return ["afplay", "-v", str(VOLUME), path]
+    if path is None and os.name == "nt":
+        # Windows has no named system sound set either, but the handful of
+        # macOS names SOUNDS actually uses are known ahead of time, so they
+        # resolve through this table instead of a filesystem lookup like
+        # macOS's.
+        path = WINDOWS_SOUNDS.get(name)
     if path is None:
-        # Only macOS has a named system sound set. Elsewhere a bare name has
-        # nothing to resolve against, so point SOUNDS at real files.
+        # Nothing left to resolve against: a name absent from both tables
+        # plays nothing rather than handing the player a path that does not
+        # exist, which fails invisibly -- the same reasoning as the darwin
+        # branch above.
         return None
     if os.name == "nt":
         # PowerShell single-quoted strings escape ' by doubling it; nothing
