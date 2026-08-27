@@ -38,11 +38,29 @@ abort a session over a warning.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+
+def _load_platform_paths():
+    """Import the sibling module without a package, and without a
+    sys.path mutation `ruff --fix` would hoist above (E402) since this repo
+    ships zero suppressions. Mirrors the importlib pattern this repo's own
+    tests already use for hyphenated hook filenames.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+platform_paths = _load_platform_paths()
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -553,17 +571,32 @@ def check_hooks(report: Report, root: Path) -> None:
     report.add(
         WARN,
         "hooks registered",
-        f"{len(drift)} out of date: {'; '.join(drift[:2])} (./install.sh)",
+        f"{len(drift)} out of date: {'; '.join(drift[:2])} ({_install_hint()})",
     )
+
+
+def _install_hint() -> str:
+    """The installer command for this platform, for use in remediation hints.
+
+    Git Bash's `ln -s` silently deep-copies instead of failing on a Windows
+    machine without Developer Mode, so the two platforms need different
+    installers -- telling a Windows user to run install.sh names the wrong
+    command entirely, not just a cosmetic mismatch.
+    """
+    return "./install.ps1" if platform_paths.WINDOWS else "./install.sh"
 
 
 def check_skills(report: Report, root: Path, installed: Path) -> None:
     """Report skills the repo carries that this machine cannot see.
 
     Machine state, like hook registration: skills reach a session only through
-    the symlinks install.sh writes, so a skill added without re-running it is
+    the links install.py writes, so a skill added without re-running it is
     invisible to every session while the whole suite stays green -- the same
-    "manual step nothing verifies" class as the hook that shipped inert.
+    "manual step nothing verifies" class as the hook that shipped inert. A
+    copy is reported separately from a missing link: it looks installed
+    because `.exists()` cannot tell it apart from a real link, but it tracks
+    nothing, and Git Bash's `ln -s` produces exactly this on Windows without
+    Developer Mode instead of failing outright.
 
     Matched by name rather than by link target, because a git worktree's
     skills are legitimately linked from the parent checkout and comparing
@@ -571,26 +604,36 @@ def check_skills(report: Report, root: Path, installed: Path) -> None:
     no installer, since preflight is copied into repos that install nothing.
     """
     source = root / "skills"
-    if not source.is_dir() or not (root / "install.sh").is_file():
+    if not source.is_dir() or not (root / "install.py").is_file():
         return
     carried = {p.name for p in source.iterdir() if p.is_dir()}
     # exists() follows the link, so a dangling one reads as absent -- which is
     # what it is, from a session's point of view.
     unlinked = sorted(name for name in carried if not (installed / name).exists())
+    # A copy exists but does not track the repo, so it is reported apart from
+    # a missing link: the fix is the same, the symptom is not.
+    copies = sorted(
+        name
+        for name in carried
+        if (installed / name).exists()
+        and not platform_paths.verify_link(installed / name, root)
+    )
     dangling = sorted(
         p.name
         for p in (installed.iterdir() if installed.is_dir() else [])
-        if p.is_symlink() and not p.exists() and p.name not in carried
+        if platform_paths.is_link(p) and not p.exists() and p.name not in carried
     )
-    if not unlinked and not dangling:
+    if not unlinked and not copies and not dangling:
         report.add(OK, "skills linked", f"{len(carried)} linked")
         return
     parts = []
     if unlinked:
         parts.append(f"not linked: {', '.join(unlinked)}")
+    if copies:
+        parts.append(f"copy, not a link: {', '.join(copies)}")
     if dangling:
         parts.append(f"stale link: {', '.join(dangling)}")
-    report.add(WARN, "skills linked", "; ".join(parts) + " (./install.sh)")
+    report.add(WARN, "skills linked", "; ".join(parts) + f" ({_install_hint()})")
 
 
 def detect_test_command(root: Path) -> str | None:
