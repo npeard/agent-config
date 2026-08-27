@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location(
@@ -68,6 +71,25 @@ class TestLinkDir:
         plain.mkdir()
         assert not platform_paths.is_link(plain)
         assert platform_paths.link_target(plain) is None
+
+    @pytest.mark.skipif(os.name != "nt", reason="exercises the mklink guard")
+    def test_a_reported_success_that_is_not_a_link_still_raises(
+        self, tmp_path, monkeypatch
+    ):
+        # mklink returning 0 is not proof of a link: this is the scenario
+        # verify_link() exists to catch after the fact, and link_dir() must
+        # refuse to report success for it in the first place.
+        src = tmp_path / "src"
+        src.mkdir()
+        dest = tmp_path / "dest"
+
+        def fake_run(*args, **kwargs):
+            dest.mkdir()  # a plain directory, not a junction
+            return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(platform_paths.subprocess, "run", fake_run)
+        with pytest.raises(OSError):
+            platform_paths.link_dir(src, dest)
 
 
 class TestVerifyLink:

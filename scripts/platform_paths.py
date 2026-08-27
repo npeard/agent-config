@@ -49,9 +49,12 @@ def link_dir(src: Path, dest: Path) -> None:
             text=True,
             check=False,
         )
-        if result.returncode != 0 or not dest.exists():
+        if result.returncode != 0:
+            raise OSError(f"mklink failed for {dest} -> {src}: {result.stderr.strip()}")
+        if not is_link(dest):
             raise OSError(
-                f"could not junction {dest} -> {src}: {result.stderr.strip()}"
+                f"mklink reported success but {dest} is not a junction "
+                f"(produced a non-link, e.g. a plain directory, for {dest} -> {src})"
             )
         return
     dest.symlink_to(src, target_is_directory=True)
