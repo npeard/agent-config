@@ -10,6 +10,15 @@ evict, or to relocate the content to a tier that loads on demand. Raising a
 ceiling is a real option but deserves the same deliberation as any other
 change to what every session must read -- and changing a number in a test
 should feel heavier than adding a sentence, which is the whole point.
+
+The ceilings and the frontmatter parser now live in scripts/audit_assets.py
+and are imported here. This file remains the gate -- it is what fails the
+build -- while the script is the report the config-audit skill reads. The
+measurements are not reimplemented here, because a test asserting that two
+copies of an implementation agree is a test that a refactor happened.
+
+The ceiling *values* are a different thing, and are pinned below as literals
+on purpose: see test_ceilings_have_not_been_loosened.
 """
 
 from __future__ import annotations
@@ -18,69 +27,25 @@ import re
 from pathlib import Path
 
 import pytest
+from audit_assets import (
+    CLAUDE_MD_MAX_WORDS,
+    REFERENCE_MAX_WORDS,
+    SKILL_BODY_MAX_WORDS,
+    SKILL_DESCRIPTION_MAX_WORDS,
+    SKILL_EFFECTIVE_MAX_WORDS,
+    description,
+    effective_words,
+    reference_files,
+    skill_files,
+    words,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-# Measured at the time of writing plus deliberately tight headroom.
-CLAUDE_MD_MAX_WORDS = 1250
-
-# A skill body is paid only by sessions that invoke the skill, so this is
-# looser than CLAUDE.md -- but a skill nobody can finish reading is not
-# cheaper than prose, it is just less likely to be followed.
-SKILL_BODY_MAX_WORDS = 2000
-
-# Descriptions are the one part of a skill that IS always loaded: they are
-# listed in every session so the model can decide what to invoke. A verbose
-# description is therefore a permanent tax, and the tightest budget here.
-SKILL_DESCRIPTION_MAX_WORDS = 60
 
 REMEDY = (
     "Evict content or move it to a lower tier (reference file, script, hook) "
     "rather than raising this ceiling; see the reflect skill."
 )
-
-
-def words(text: str) -> int:
-    return len(text.split())
-
-
-def frontmatter(text: str) -> str | None:
-    """The YAML block between the leading `---` fences, if any."""
-    if not text.startswith("---\n"):
-        return None
-    end = text.find("\n---", 4)
-    return text[4:end] if end != -1 else None
-
-
-def description(text: str) -> str | None:
-    """The description value, including folded continuation lines.
-
-    A regex capturing to end-of-line reads `description: >` as the single
-    word ">" and lets an arbitrarily long description through the budget.
-    Searching the whole file rather than the frontmatter would also measure
-    a body line that merely starts with "description:".
-    """
-    block = frontmatter(text)
-    if block is None:
-        return None
-    lines = block.splitlines()
-    for i, line in enumerate(lines):
-        if not line.startswith("description:"):
-            continue
-        value = line.split(":", 1)[1].strip()
-        # A folded or literal scalar puts the text on the indented lines
-        # that follow; a plain scalar may also wrap onto them.
-        parts = [] if value in (">", "|", ">-", "|-") else [value]
-        for cont in lines[i + 1 :]:
-            if not cont[:1].isspace() or not cont.strip():
-                break
-            parts.append(cont.strip())
-        return " ".join(parts)
-    return None
-
-
-def skill_files() -> list[Path]:
-    return sorted((REPO_ROOT / "skills").glob("*/SKILL.md"))
 
 
 def test_skills_exist():
@@ -117,6 +82,71 @@ def test_skill_description_within_budget(path: Path):
         "every session, so this is always-loaded cost. Trim it to the trigger "
         "condition; the body carries the detail."
     )
+
+
+ALL_REFERENCES = [ref for path in skill_files() for ref in reference_files(path.parent)]
+
+
+def test_reference_files_exist():
+    """Guards the parametrized test below from passing over an empty list."""
+    assert ALL_REFERENCES
+
+
+@pytest.mark.parametrize(
+    "path", ALL_REFERENCES, ids=lambda p: f"{p.parent.name}/{p.name}"
+)
+def test_reference_file_within_budget(path: Path):
+    """An on-demand file is the cheap tier, not a free one.
+
+    Nothing measured these, so moving prose out of SKILL.md converted a
+    measured cost into an invisible one -- and that was the sanctioned way to
+    get under the body ceiling.
+    """
+    n = words(path.read_text())
+    assert n <= REFERENCE_MAX_WORDS, (
+        f"{path.parent.name}/{path.name} is {n} words, over the "
+        f"{REFERENCE_MAX_WORDS} ceiling. {REMEDY}"
+    )
+
+
+@pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
+def test_skill_invocation_within_budget(path: Path):
+    """SKILL.md plus every reference an imperative step tells the reader to
+    read -- what one invocation of the skill actually costs.
+
+    humanizer measured 4878 words this way against a 1261-word body, because
+    step 1 is literally "Read `patterns.md`".
+    """
+    n = effective_words(path, path.read_text())
+    assert n <= SKILL_EFFECTIVE_MAX_WORDS, (
+        f"{path.parent.name} costs {n} words per invocation, over the "
+        f"{SKILL_EFFECTIVE_MAX_WORDS} ceiling. Make a reference conditional "
+        f"or split it. {REMEDY}"
+    )
+
+
+def test_ceilings_have_not_been_loosened():
+    """A one-way ratchet. The literals are here on purpose.
+
+    When the ceilings moved out of this file into scripts/audit_assets.py,
+    this file's own promise -- that changing a number should feel heavier
+    than adding a sentence -- went with them: raising CLAUDE_MD_MAX_WORDS
+    from 1250 to 1400 turns every gate above green with no record of the old
+    value, and scripts/thresholds.py could not see it either, because
+    pairing required the substring "assert" (it now reads named limits too,
+    so this is belt and braces, and the braces are the cheap half).
+
+    This is *not* a test that asserts a refactor happened. That rule is
+    about asserting two implementations agree; here the literal is the
+    policy, and the duplication is the mechanism: tightening a ceiling
+    passes this untouched, loosening one cannot happen without editing a
+    test. Do not "simplify" it by comparing against the imported names.
+    """
+    assert CLAUDE_MD_MAX_WORDS <= 1250
+    assert SKILL_BODY_MAX_WORDS <= 2000
+    assert SKILL_DESCRIPTION_MAX_WORDS <= 60
+    assert REFERENCE_MAX_WORDS <= 2000
+    assert SKILL_EFFECTIVE_MAX_WORDS <= 4000
 
 
 class TestHumanizerPatternCount:
@@ -156,6 +186,28 @@ class TestHumanizerPatternCount:
         wrong = [s for s in stated if s != str(n)]
         assert not wrong, (
             f"{relative} says {wrong} patterns but patterns.md defines {n}"
+        )
+
+    def headings(self, path: Path) -> dict[str, str]:
+        return dict(re.findall(r"^### (\d+)\. (.+)$", path.read_text(), re.MULTILINE))
+
+    def test_every_worked_example_matches_its_catalog_entry(self):
+        """examples.md promises "numbered as in patterns.md", and the numbers
+        are the only way to get from one file to the other. Renumbering or
+        retitling a pattern on one side silently sends the reader to the
+        wrong rewrite -- the drift this split introduced, and the reason it
+        is gated rather than trusted.
+        """
+        catalog = self.headings(self.catalog())
+        examples = self.headings(REPO_ROOT / "skills" / "humanizer" / "examples.md")
+        assert examples, "examples.md no longer has numbered entries"
+        mismatched = {
+            n: (title, catalog.get(n))
+            for n, title in examples.items()
+            if catalog.get(n) != title
+        }
+        assert not mismatched, (
+            f"examples.md entries disagree with patterns.md: {mismatched}"
         )
 
 

@@ -354,6 +354,85 @@ class TestRegistration:
         assert declared == emitted, f"registered as {declared}, emits {emitted}"
 
     def test_the_matcher_covers_the_tools_that_write_files(self):
-        head = HOOK.read_text().splitlines()[:10]
-        marker = next(line for line in head if "claude-hook:" in line)
-        assert marker.split()[-1] == "Write|Edit"
+        """Bash included, because a session told to edit with sed or a heredoc
+        routes none of its writes through Write or Edit, and a hook that only
+        matches those is dead there. One marker with an alternation rather
+        than two markers: register_hooks.apply finds an existing entry by
+        filename alone, so two markers for one file under one event fight over
+        a single entry and `--check` never comes back clean."""
+        import register_hooks
+
+        matchers = [
+            m for name, _, m in register_hooks.declared_hooks() if name == HOOK.name
+        ]
+        assert len(matchers) == 1, matchers
+        assert set(matchers[0].split("|")) == {"Write", "Edit", "Bash"}
+
+
+def bash(command: str, cwd: str = THESIS, session: str = "s1") -> dict:
+    return {
+        "session_id": session,
+        "tool_input": {"command": command},
+        "cwd": cwd,
+    }
+
+
+class TestBashWrites:
+    """A hook matching only Write|Edit never fires in a session told to edit
+    with sed and heredocs, which is most of them. The advisory is worth most
+    before the draft exists, so this stays PreToolUse for Bash too."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            f"cat > {THESIS}/ch3.tex <<EOF\nbody\nEOF",
+            f"sed -i '' 's/a/b/' {THESIS}/main.tex",
+            f"echo x >> {THESIS}/biblio.bib",
+            f"tee {PAPER}/main.tex < draft",
+            f"cp draft.tex {THESIS}/ch1.tex",
+        ],
+    )
+    def test_a_write_shaped_command_fires(self, command: str, tmp_path: Path):
+        assert fired(bash(command), tmp_path), command
+
+    def test_a_relative_path_resolves_against_the_payload_cwd(self, tmp_path: Path):
+        assert fired(bash("echo x > ch4.tex", cwd=THESIS), tmp_path)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            f"grep -rn TODO {THESIS}/main.tex",
+            f"cat {THESIS}/main.tex",
+            f"wc -w {THESIS}/*.tex",
+            f"grep TODO {THESIS}/main.tex > /dev/null",
+            f"echo x > {THESIS}/README.md",
+            f"echo x > {MASTER}/notes.md",
+            f"echo x > {THESIS}/src/main.py",
+            "pixi run format",
+        ],
+    )
+    def test_a_read_only_or_uninteresting_command_is_silent(
+        self, command: str, tmp_path: Path
+    ):
+        assert not fired(bash(command), tmp_path), command
+
+    def test_an_unparsable_command_is_silent(self, tmp_path: Path):
+        assert not fired(bash(f"echo 'oops > {THESIS}/x.tex"), tmp_path)
+
+    def test_no_part_of_the_command_reaches_the_output(self, tmp_path: Path):
+        """The Write branch names the file it was handed, which the session
+        itself authored. A path this parser lifts out of a shell command is a
+        different thing: it can be any string, spaces and newlines included,
+        so naming it would put text the session did not author into context.
+        """
+        marker = "ZZUNIQUEZZ"
+        out = run_hook(bash(f"echo x > {THESIS}/{marker}/ch9.tex"), tmp_path)
+        assert out
+        assert marker not in out
+        assert THESIS not in out
+
+    def test_the_advisory_is_still_once_per_session_per_project(self, tmp_path: Path):
+        """A Write and a Bash write in one project are one project, so the
+        second must be silent whichever tool got there first."""
+        assert fired(write(f"{THESIS}/main.tex"), tmp_path)
+        assert not fired(bash(f"echo x >> {THESIS}/ch2.tex"), tmp_path)

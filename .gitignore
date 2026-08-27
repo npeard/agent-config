@@ -1,3 +1,5 @@
 docs/superpowers/
 __pycache__/
 .pytest_cache/
+.audit-owed
+.pixi

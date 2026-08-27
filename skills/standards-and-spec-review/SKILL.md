@@ -62,6 +62,12 @@ inside a subagent, and review cost would stop being linear in phases.
 Apply `CODING_STANDARDS.md`. Cite the rule by name and quote the hunk.
 Distinguish a hard violation from a judgement call, and say which.
 
+Run `pixi run thresholds` before reading for rule 6. It reports
+assertion bounds the diff loosened, which is the mechanical half of that
+rule; a reviewer eyeballing diffs for widened thresholds is doing by
+hand what a script already does, and the script was reachable from
+nothing until this line existed.
+
 Do not restate the rules here or in the report -- name them. A reviewer
 that pastes the rulebook back at the reader buries its own findings.
 

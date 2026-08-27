@@ -24,8 +24,9 @@ preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"
 toolgaps = "python scripts/toolgaps.py"
 suppressions = "python scripts/suppressions.py"
-thresholds = "python scripts/thresholds.py"
+thresholds = "python scripts/thresholds.py --strict"
 register-hooks = "python scripts/register_hooks.py"
+audit = "python scripts/audit_assets.py"
 
 [feature.dev.tasks]
 format = "ruff format . && ruff check --fix . && mdformat $(git ls-files --cached --others --exclude-standard '*.md' ':!:skills/quantikz/*')"
@@ -33,4 +34,4 @@ lint = "ruff check ."
 spell = "codespell ."
 precommit = "pre-commit run --all-files"
 test = "pytest -q"
-all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "test"] }
+all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "thresholds", "audit", "test"] }

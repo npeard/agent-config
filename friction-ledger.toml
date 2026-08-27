@@ -33,16 +33,34 @@ convenience.
 
 [[decision]]
 class = "sleep-blocked"
-date = "2026-08-19"
+date = "2026-08-21"
 cause = "harness-constraint"
 outcome = "tier-0"
-count_at_decision = 4
+count_at_decision = 8
 note = """
-The Bash tool already documents that foreground sleep is blocked and that
-Monitor is the intended mechanism. The rule exists and was ignored, so the
-fix is enforcement or recall, not another rule -- restating it in
-always-loaded context would make every future session pay for a lapse that
-a tool message already reports at the moment it matters.
+Re-decided after the count doubled from 4 to 8 (7 sessions). Same cause, and
+the doubling did not change it: the harness refuses at the point of use and
+names both alternatives in the refusal, so the rule is already as enforced as
+a rule can be and the cost is one round trip.
+
+What the doubling did buy is a sharper diagnosis. The recurring shape is not
+"reached for sleep" but "polled for work the harness already reports". In the
+occurrence that produced this entry the blocked `sleep` was waiting on a
+background task, and the replacement -- a pgrep loop -- was worse: it could not
+observe an in-process subagent and exited immediately, which reads as "done".
+Both times the correct move was to yield the turn, because harness-tracked work
+re-invokes you when it finishes.
+
+Tier 1 was considered and rejected. A PreToolUse hook could only refuse what
+the harness already refuses, with a worse message, which the redundancy check
+calls duplication rather than defence in depth. Tier 4 was rejected too: the
+guidance exists in the Bash and ScheduleWakeup tool descriptions, CLAUDE.md has
+36 words of headroom, and restating a rule that is already mechanically
+enforced is the thing the reflect skill's own red-flag table forbids.
+
+If this reaches 16, the thing to examine is not sleep but whether polling is
+being chosen over yielding, and whether anything can make yielding the obvious
+move rather than the remembered one.
 """
 
 [[decision]]
@@ -168,4 +186,32 @@ Evidence the corrected behaviour works: later in the same session, questions
 that were preceded by the measurement they depended on (the eval-only ceiling
 before the L target choice, the target_trajectory cost before the budget)
 were answered directly on the first ask.
+"""
+
+[[decision]]
+class = "unrecognized-arg"
+date = "2026-08-26"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 3
+note = """
+Not friction, and the class name misdescribes it. Every occurrence is zsh's
+`nomatch` refusing a glob that matched no files -- `rm -f dir/payload-*.json`
+when no payload had been written yet -- not an unrecognized argument to
+anything. Recorded under the classifier's name rather than a truer one so the
+key still matches what `friction.py` emits; the label is the imprecision, the
+diagnosis is here.
+
+The refusal is worth more than what it costs. bash would pass the unmatched
+pattern through unchanged, so `for f in dir/payload-*.json` would iterate once
+over a filename that does not exist and the body would act on it -- which is
+the failure zsh converts into an immediate, located error. Cost is one round
+trip, and the guard is `2>/dev/null || true` or an existence test at the point
+of use.
+
+Tier 1 was considered and rejected: a PreToolUse hook would have to decide
+which globs in a command string are allowed to match nothing, which is not
+decidable from the string, so it would fire on correct commands. Tier 4 was
+rejected because a line spent in CLAUDE.md is read by every future session
+forever, and this buys back one round trip per three weeks.
 """

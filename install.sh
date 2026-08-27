@@ -10,19 +10,52 @@ link() {
   if [ -L "$dest" ]; then
     rm "$dest"
   elif [ -e "$dest" ]; then
-    echo "Backing up existing $dest to $dest.bak"
-    mv "$dest" "$dest.bak"
+    # Dated, not a fixed `.bak`: with one name a second run destroyed the only
+    # copy of what the first run replaced, and ~/.claude had already lost
+    # three generations of settings backups that way. The serial covers two
+    # runs inside one second, which is what a test does.
+    local stamp backup serial=0
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    backup="$dest.$stamp.bak"
+    while [ -e "$backup" ]; do
+      serial=$((serial + 1))
+      backup="$dest.$stamp-$serial.bak"
+    done
+    echo "Backing up existing $dest to $backup"
+    mv "$dest" "$backup"
   fi
   ln -s "$src" "$dest"
   echo "Linked $dest -> $src"
 }
 
+# Created before the first link, not between the links: on a genuinely new
+# machine neither directory exists, and under `set -e` the first `ln` died
+# there -- so the one documented install path aborted before it materialized
+# the environment or registered a single hook.
+mkdir -p "$CLAUDE_DIR/skills"
+
 link "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 
-mkdir -p "$CLAUDE_DIR/skills"
 for skill_dir in "$REPO_DIR"/skills/*/; do
   name="$(basename "$skill_dir")"
   link "${skill_dir%/}" "$CLAUDE_DIR/skills/$name"
+done
+
+# A renamed or deleted skill leaves its symlink behind, and a stale link in
+# ~/.claude/skills is offered to every session as a real skill. Only links
+# into this repo's skills/ are pruned: another tool's links, and a link from
+# a clone kept elsewhere, are not ours to remove.
+for installed in "$CLAUDE_DIR"/skills/*; do
+  [ -L "$installed" ] || continue
+  target="$(readlink "$installed")"
+  case "$target" in
+    "$REPO_DIR"/skills/*)
+      if [ ! -e "$target" ]; then
+        rm "$installed"
+        echo "Pruned $installed -> $target (skill no longer exists)"
+      fi
+      ;;
+  esac
 done
 
 # The dev environment is materialized before hooks are registered, not after.

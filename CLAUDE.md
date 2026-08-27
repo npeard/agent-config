@@ -73,7 +73,9 @@ invoke a skill by the pattern you are fixing, not by the file extension.
    them, then fix. Then `standards-and-spec-review` in `branch` mode for
    cross-phase house rules and spec fulfillment, then `simplify` -- it
    rewrites the tree itself -- then re-verify, since the tree you
-   verified at step 5 no longer exists. Loop while findings remain.
+   verified at step 5 no longer exists. Loop while findings remain --
+   but findings massed in the last round's fix mean it added a
+   subsystem, which re-enters at step 4.
 7. **Integrate.** `superpowers:finishing-a-development-branch`. Ask
    whether to open a PR or merge locally; if a PR is opened, run
    `/code-review` on it as an independent second pass.
@@ -84,7 +86,9 @@ per-section gates in `brainstorming` and the checkpoints in
 `executing-plans`. Break out early only for a genuine design
 bifurcation, a spec proven unmeetable, or an irreversible or
 outward-facing action. "I am uncertain" is not one of those: do the
-parts that do not depend on it, state the assumption, continue.
+parts that do not depend on it, state the assumption, continue. Nor is a
+question whose "ship as-is" answer is viable: take it, raise it at step
+7\.
 
 ## Agent evolution
 
@@ -99,6 +103,10 @@ parts that do not depend on it, state the assumption, continue.
   so the default outcome is no new artifact -- usually because a rule
   already exists and was ignored, or a tool is working as designed. The
   ladder and the reasoning live in that skill.
+- **Audit the config as a system, not only the diff.** When a branch
+  touches `skills/`, `scripts/`, `hooks/` or this file, `pixi run audit`
+  reports mechanical breaches of the five agent-asset principles and the
+  `config-audit` skill judges the rest.
 - **Promote general taste to this repo.** If a preference, skill, script
   or hook would hold across projects rather than being tied to one
   project's domain or tooling, it belongs in
