@@ -102,7 +102,7 @@ def test_reference_file_within_budget(path: Path):
     measured cost into an invisible one -- and that was the sanctioned way to
     get under the body ceiling.
     """
-    n = words(path.read_text())
+    n = words(path.read_text(encoding="utf-8"))
     assert n <= REFERENCE_MAX_WORDS, (
         f"{path.parent.name}/{path.name} is {n} words, over the "
         f"{REFERENCE_MAX_WORDS} ceiling. {REMEDY}"
@@ -162,12 +162,14 @@ class TestHumanizerPatternCount:
 
     def actual(self) -> int:
         headings = re.findall(
-            r"^### (\d+)\. ", self.catalog().read_text(), re.MULTILINE
+            r"^### (\d+)\. ", self.catalog().read_text(encoding="utf-8"), re.MULTILINE
         )
         return len(headings)
 
     def test_patterns_are_numbered_consecutively_from_one(self):
-        numbers = re.findall(r"^### (\d+)\. ", self.catalog().read_text(), re.MULTILINE)
+        numbers = re.findall(
+            r"^### (\d+)\. ", self.catalog().read_text(encoding="utf-8"), re.MULTILINE
+        )
         assert numbers == [str(i) for i in range(1, len(numbers) + 1)]
 
     @pytest.mark.parametrize(
@@ -180,7 +182,7 @@ class TestHumanizerPatternCount:
     )
     def test_every_file_that_states_the_count_states_the_right_one(self, relative: str):
         n = self.actual()
-        text = (REPO_ROOT / relative).read_text()
+        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
         stated = re.findall(r"(\d+)[ -]patterns?\b", text)
         assert stated, f"{relative} no longer states the pattern count"
         wrong = [s for s in stated if s != str(n)]
@@ -189,7 +191,11 @@ class TestHumanizerPatternCount:
         )
 
     def headings(self, path: Path) -> dict[str, str]:
-        return dict(re.findall(r"^### (\d+)\. (.+)$", path.read_text(), re.MULTILINE))
+        return dict(
+            re.findall(
+                r"^### (\d+)\. (.+)$", path.read_text(encoding="utf-8"), re.MULTILINE
+            )
+        )
 
     def test_every_worked_example_matches_its_catalog_entry(self):
         """examples.md promises "numbered as in patterns.md", and the numbers
