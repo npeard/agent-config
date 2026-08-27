@@ -145,6 +145,15 @@ class TestInstalledSymlinkPaths:
             pytest.skip("installed config does not point at this checkout")
         assert not fired(write(str(installed)))
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason=(
+            "creating a file symlink on Windows needs elevation or Developer "
+            "Mode; junctions are directory-only so they cannot substitute. "
+            "The hook's path-canonicalisation is still covered by the other "
+            "tests in this file."
+        ),
+    )
     def test_still_fires_for_a_symlink_outside_the_master_repo(self, tmp_path: Path):
         target = tmp_path / "CLAUDE.md"
         target.write_text("x")

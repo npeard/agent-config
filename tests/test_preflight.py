@@ -217,10 +217,24 @@ class TestHookInstalled:
 
 
 class TestTests:
-    def test_absent_runner_reports_instead_of_raising(self, git_repo: Path):
+    def test_absent_runner_reports_instead_of_raising(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         """A runner not on PATH used to raise FileNotFoundError out of the
-        report entirely."""
+        report entirely.
+
+        Asserting that a bare command name (e.g. "task") is absent from PATH
+        would be environment-dependent by construction -- this machine, for
+        instance, has an unrelated `task` executable installed -- so the
+        FileNotFoundError branch is exercised directly by stubbing
+        subprocess.run rather than relying on real PATH contents.
+        """
         (git_repo / "Taskfile.yml").write_text("tasks:\n  test:\n    cmds: [true]\n")
+
+        def fake_run(*a, **kw):
+            raise FileNotFoundError("task")
+
+        monkeypatch.setattr(preflight.subprocess, "run", fake_run)
         report = preflight.Report()
         preflight.check_tests(report, git_repo, run=True)
         assert statuses(report, "tests") == [FAIL]
