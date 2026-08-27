@@ -32,15 +32,31 @@ def master_repo() -> str:
     install instructions use, but hardcoding only that makes the hook dead
     for anyone who cloned elsewhere -- and makes a test's HOME patch the only
     way to point it somewhere else, which is an unreliable thing to depend on.
+
+    An explicit HOME comes before os.path.expanduser's own lookup because
+    expanduser prefers USERPROFILE to HOME on Windows: a test (or a sandboxed
+    CI run) that sets only HOME to point at a fake repo was silently ignored
+    there, and the hook resolved against the real machine's home directory
+    instead of the one the test set up.
     """
-    override = os.environ.get("CLAUDE_CONFIG_REPO")
+    path = os.environ.get("CLAUDE_CONFIG_REPO") or "~/Documents/Projects/claude-config"
+    home = os.environ.get("HOME")
+    # "~" or "~/..." only -- not "~otheruser/...", which names someone else's
+    # home and must still go through expanduser's own lookup.
+    if (path == "~" or path.startswith("~/") or path.startswith("~" + os.sep)) and home:
+        # Substitute HOME ourselves before falling back to expanduser, which
+        # prefers USERPROFILE to HOME on Windows: a test (or a sandboxed CI
+        # run) that sets only HOME to point at a fake repo was silently
+        # ignored there, and the hook resolved against the real machine's
+        # home directory instead of the one the test set up. Still applies to
+        # an overridden CLAUDE_CONFIG_REPO, not just the default, for the same
+        # reason expanduser below is applied to both.
+        path = home + path[1:]
     # expanduser wraps the whole expression: applied only to the default, a
-    # CLAUDE_CONFIG_REPO of "~/Documents/Projects/claude-config" -- the form the
-    # README's own install path invites -- resolves to a literal "~" directory
-    # and the hook silently never fires.
-    return os.path.realpath(
-        os.path.expanduser(override or "~/Documents/Projects/claude-config")
-    )
+    # CLAUDE_CONFIG_REPO of "~/Documents/Projects/claude-config" -- the form
+    # the README's own install path invites -- resolves to a literal "~"
+    # directory and the hook silently never fires.
+    return os.path.realpath(os.path.expanduser(path))
 
 
 MARKER = ".audit-owed"
