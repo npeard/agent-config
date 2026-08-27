@@ -63,17 +63,22 @@ def back_up(dest: Path) -> None:
 
 
 def clear(dest: Path) -> None:
-    """Remove dest whatever it is: link, copy, or regular file."""
+    """Make dest free without ever destroying anything irreplaceable.
+
+    A link is ours to remove outright: it holds no content of its own and
+    what it points at is untouched. Anything else that exists is somebody's
+    real data. install.sh tested `-e` and moved it aside; narrowing that to
+    files only meant a directory sitting at ~/.claude/CLAUDE.md or at a
+    skill path was recursively deleted with no backup at all.
+    """
     if platform_paths.is_link(dest):
         # A junction is removed as a directory, a symlink as a file.
         if dest.is_dir() and not dest.is_symlink():
             dest.rmdir()
         else:
             dest.unlink()
-    elif dest.is_dir():
-        shutil.rmtree(dest)
     elif dest.exists():
-        dest.unlink()
+        back_up(dest)
 
 
 def install_stub(claude_dir: Path) -> None:
@@ -83,13 +88,14 @@ def install_stub(claude_dir: Path) -> None:
     identically on both, so there is no second code path to keep in step.
     """
     dest = claude_dir / "CLAUDE.md"
-    if dest.is_file() and not platform_paths.is_link(dest):
-        if dest.read_text(encoding="utf-8") == STUB:
-            print(f"{dest} already imports this repo")
-            return
-        back_up(dest)
-    else:
-        clear(dest)
+    if (
+        dest.is_file()
+        and not platform_paths.is_link(dest)
+        and dest.read_text(encoding="utf-8") == STUB
+    ):
+        print(f"{dest} already imports this repo")
+        return
+    clear(dest)
     dest.write_text(STUB, encoding="utf-8")
     print(f"Wrote {dest} -> {STUB.strip()}")
 

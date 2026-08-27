@@ -42,9 +42,10 @@ cannot span to a file. Both are handled by `scripts/platform_paths.py`,
 the one place each platform difference this repo cares about is decided.
 
 Re-running the installer is safe -- it replaces existing links, prunes
-links to skills this repo no longer has, and backs up any real file it
-would otherwise overwrite (`<path>.<timestamp>.bak`, dated so that a
-second run cannot destroy the first run's backup).
+links to skills this repo no longer has, and backs up anything real it
+would otherwise overwrite, file or directory alike
+(`<path>.<timestamp>.bak`, dated so that a second run cannot destroy the
+first run's backup).
 
 ## Development commands
 

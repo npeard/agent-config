@@ -68,6 +68,37 @@ class TestBackups:
         assert len(backups) == 1
         assert backups[0].read_text(encoding="utf-8") == "first"
 
+    def test_a_directory_at_the_claude_md_path_is_backed_up(self, tmp_path):
+        # install.sh tested `-e`, which matches a directory; the port tested
+        # is_file() and rmtree'd anything else, destroying it unrecoverably.
+        claude = tmp_path / ".claude"
+        claude.mkdir()
+        (claude / "CLAUDE.md").mkdir()
+        (claude / "CLAUDE.md" / "important.txt").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        assert len(backups) == 1
+        assert (backups[0] / "important.txt").read_text(encoding="utf-8") == "mine"
+        assert (claude / "CLAUDE.md").is_file()
+
+    def test_a_real_directory_at_a_skill_path_is_backed_up(self, tmp_path):
+        skills = tmp_path / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
+        (skills / name).mkdir()
+        (skills / name / "MY_WORK.md").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(skills.glob(f"{name}.*.bak"))
+        assert len(backups) == 1
+        assert (backups[0] / "MY_WORK.md").read_text(encoding="utf-8") == "mine"
+        assert pp.verify_link(skills / name, REPO)
+
+    def test_a_correct_install_rerun_writes_no_skill_backup(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        assert not list(skills.glob("*.bak"))
+
 
 class TestSkillLinks:
     def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path):
