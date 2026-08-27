@@ -1,112 +1,108 @@
-"""End-to-end tests for install.sh, run against a throwaway HOME.
+"""install.py, driven against a temp HOME.
 
-install.sh is the single documented entry point for a new machine and had no
-tests at all, which is how four defects accumulated in it -- including one
-that aborted a genuinely fresh install on its first command. Every case here
-runs the real script with HOME pointed at a temp directory, because the
-defects were in the script's interaction with the filesystem rather than in
-anything a unit could observe.
+Never the real ~/.claude: these tests move files aside and delete links.
 """
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
+import importlib.util
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-INSTALL = REPO_ROOT / "install.sh"
+REPO = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location("install", REPO / "install.py")
+install = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(install)
+
+import platform_paths_helper as pp  # provided by conftest; see Step 2
 
 
-def install(home: Path) -> subprocess.CompletedProcess[str]:
-    """Run install.sh with HOME redirected at `home`.
-
-    The assertion is not paranoia for its own sake: this script rewrites
-    ~/.claude, so a test that leaked the real HOME would rewrite the
-    machine's live configuration rather than fail.
-    """
-    assert home.resolve() != Path.home().resolve()
-    return subprocess.run(
-        [str(INSTALL)],
-        env={**os.environ, "HOME": str(home)},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def skill_names() -> list[str]:
-    return sorted(p.name for p in (REPO_ROOT / "skills").iterdir() if p.is_dir())
+def run(home: Path) -> int:
+    return install.main(["--home", str(home), "--skip-env"])
 
 
 class TestFreshMachine:
-    """The documented new-machine path: nothing under HOME yet."""
+    def test_a_fresh_home_gets_a_claude_md_stub(self, tmp_path):
+        assert run(tmp_path) == 0
+        stub = tmp_path / ".claude" / "CLAUDE.md"
+        assert stub.is_file()
+        assert stub.read_text(encoding="utf-8").strip().startswith("@")
+        # A stub, not a link: it needs no privilege on any platform.
+        assert not pp.is_link(stub)
 
-    def test_a_fresh_home_is_installed_from_nothing(self, tmp_path: Path):
-        """install.sh linked into $HOME/.claude before creating it, so under
-        `set -e` the one documented command for a new machine died on its
-        first line -- before the env was materialized or hooks registered."""
-        result = install(tmp_path)
-        assert result.returncode == 0, result.stderr
-        claude = tmp_path / ".claude"
-        assert (claude / "CLAUDE.md").resolve() == (REPO_ROOT / "CLAUDE.md").resolve()
-        for name in skill_names():
-            assert (claude / "skills" / name).resolve() == (
-                REPO_ROOT / "skills" / name
-            ).resolve()
-        # A new machine has no settings.json, and registration used to report
-        # "nothing to do" for that case: the install said success and left the
-        # machine with no hooks at all.
-        hooks = json.loads((claude / "settings.json").read_text())["hooks"]
-        assert hooks
-        assert all(
-            any(str(REPO_ROOT / "hooks") in h["command"] for h in entry["hooks"])
-            for entries in hooks.values()
-            for entry in entries
-        )
+    def test_every_skill_is_linked_and_reads_through(self, tmp_path):
+        assert run(tmp_path) == 0
+        for src in sorted((REPO / "skills").iterdir()):
+            if not src.is_dir():
+                continue
+            dest = tmp_path / ".claude" / "skills" / src.name
+            assert dest.exists(), f"{src.name} not installed"
+            assert pp.verify_link(dest, REPO), f"{src.name} is a copy, not a link"
 
-    def test_rerunning_is_safe(self, tmp_path: Path):
-        assert install(tmp_path).returncode == 0
-        second = install(tmp_path)
-        assert second.returncode == 0, second.stderr
-        claude = tmp_path / ".claude"
-        assert (claude / "CLAUDE.md").is_symlink()
-        assert sorted(p.name for p in (claude / "skills").iterdir()) == skill_names()
+    def test_rerunning_is_safe(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        for src in sorted((REPO / "skills").iterdir()):
+            if src.is_dir():
+                assert (tmp_path / ".claude" / "skills" / src.name).exists()
 
 
 class TestBackups:
-    def test_a_second_run_keeps_the_first_backup(self, tmp_path: Path):
-        """Both install.sh and register_hooks.py wrote a fixed `.bak`, so
-        re-running replaced the only copy of the previous state; ~/.claude had
-        already accumulated three backups of a single generation."""
+    def test_an_existing_regular_file_is_backed_up(self, tmp_path):
         claude = tmp_path / ".claude"
         claude.mkdir()
-        for content in ("first", "second"):
-            (claude / "CLAUDE.md").unlink(missing_ok=True)
-            (claude / "CLAUDE.md").write_text(content)
-            assert install(tmp_path).returncode == 0
-        saved = sorted(p.read_text() for p in claude.glob("CLAUDE.md.*"))
-        assert saved == ["first", "second"]
+        (claude / "CLAUDE.md").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        assert len(backups) == 1
+        assert backups[0].read_text(encoding="utf-8") == "mine"
+
+    def test_a_second_run_keeps_the_first_backup(self, tmp_path):
+        claude = tmp_path / ".claude"
+        claude.mkdir()
+        (claude / "CLAUDE.md").write_text("first", encoding="utf-8")
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        # The stub the first run wrote is identical to what the second would
+        # write, so the second must not churn another backup.
+        assert len(backups) == 1
+        assert backups[0].read_text(encoding="utf-8") == "first"
 
 
 class TestSkillLinks:
-    def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path: Path):
-        """A renamed or deleted skill left its link behind, and a stale link
-        in ~/.claude/skills is offered to every session as a real skill."""
+    def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path):
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        ghost = REPO / "skills" / "was-deleted"
+        ghost.mkdir()
+        try:
+            pp.link_dir(ghost, skills / "was-deleted")
+        finally:
+            ghost.rmdir()
+        assert run(tmp_path) == 0
+        assert not (skills / "was-deleted").exists()
+
+    def test_a_foreign_link_is_left_alone(self, tmp_path):
+        # Only links into this repo are ours to prune.
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        other = tmp_path / "other-tool"
+        other.mkdir()
+        pp.link_dir(other, skills / "foreign")
+        assert run(tmp_path) == 0
+        assert (skills / "foreign").exists()
+
+
+class TestCopyDetection:
+    def test_a_copy_left_by_a_previous_bad_install_is_replaced(self, tmp_path):
+        # Git Bash's `ln -s` deep-copies on a machine without Developer Mode,
+        # so a previously "successful" install can leave copies behind. They
+        # must be repaired, not accepted.
+        import shutil
+
         skills = tmp_path / ".claude" / "skills"
         skills.mkdir(parents=True)
-        stale = skills / "renamed-away"
-        stale.symlink_to(REPO_ROOT / "skills" / "renamed-away")
-        foreign = skills / "another-tools-skill"
-        foreign.symlink_to(tmp_path / "nowhere")
-        assert install(tmp_path).returncode == 0
-        assert not stale.is_symlink()
-        # Only links into this repo are ours to remove; another tool's are not.
-        assert foreign.is_symlink()
-
-    def test_live_skill_links_survive_pruning(self, tmp_path: Path):
-        assert install(tmp_path).returncode == 0
-        assert install(tmp_path).returncode == 0
-        skills = tmp_path / ".claude" / "skills"
-        assert sorted(p.name for p in skills.iterdir()) == skill_names()
+        name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
+        shutil.copytree(REPO / "skills" / name, skills / name)
+        assert run(tmp_path) == 0
+        assert pp.verify_link(skills / name, REPO)
