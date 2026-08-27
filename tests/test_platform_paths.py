@@ -66,6 +66,31 @@ class TestLinkDir:
         assert platform_paths.is_link(dest)
         assert platform_paths.link_target(dest) == src.resolve()
 
+    def test_a_relative_target_resolves_against_the_link_not_the_cwd(
+        self, tmp_path, monkeypatch
+    ):
+        """Latent today -- link_dir() writes absolute targets -- but a link
+        made by hand or by another tool can be relative, and the OS follows
+        one relative to the link's own directory. Anchoring it to the process
+        cwd instead made the same link read differently depending on where
+        preflight was invoked from, so a good link could be called a copy.
+        """
+        src = tmp_path / "src"
+        src.mkdir()
+        dest = tmp_path / "dest"
+        try:
+            dest.symlink_to(Path("src"), target_is_directory=True)
+        except OSError:
+            # Windows without Developer Mode: os.symlink raises WinError 1314,
+            # and a junction cannot hold a relative target at all.
+            pytest.skip("this platform cannot create a relative symlink")
+        # Somewhere with no "src" of its own, so a cwd-anchored resolve
+        # produces a path that does not exist rather than a different one.
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        assert platform_paths.link_target(dest) == src.resolve()
+
     def test_a_plain_directory_is_not_a_link(self, tmp_path):
         plain = tmp_path / "plain"
         plain.mkdir()

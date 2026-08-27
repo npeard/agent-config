@@ -1,11 +1,16 @@
 """install.py, driven against a temp HOME.
 
 Never the real ~/.claude: these tests move files aside and delete links.
+Most pass --skip-env, which stops before the pixi step; the one case that
+does not stubs that step rather than materializing an environment, and
+redirects hook registration at a settings file under the temp home.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -44,6 +49,104 @@ class TestFreshMachine:
         for src in sorted((REPO / "skills").iterdir()):
             if src.is_dir():
                 assert (tmp_path / ".claude" / "skills" / src.name).exists()
+
+
+class TestEnvironmentAndHookRegistration:
+    """The half of main() that --skip-env returns before reaching.
+
+    install.py's docstring calls its ordering load-bearing: the pixi
+    environment must exist before hooks are registered, because a registered
+    hook names that environment's interpreter in its command. Every other test
+    here passes --skip-env and so asserts nothing about it. The step that is
+    genuinely expensive is `pixi install`, so that one is stubbed and the
+    registration it gates is run for real -- against a settings file under the
+    temp home, never ~/.claude/settings.json.
+    """
+
+    def run_with_stubbed_env(self, home: Path, monkeypatch) -> tuple[int, list[str]]:
+        """(exit code, order the two steps ran in) for a full install."""
+        order: list[str] = []
+        settings = home / ".claude" / "settings.json"
+
+        def fake_materialize() -> int:
+            order.append("env")
+            return 0
+
+        real_run = subprocess.run
+
+        def run(argv, **kwargs):
+            # install.subprocess and platform_paths.subprocess are the same
+            # module object, so this also sees link_dir's mklink calls on
+            # Windows. Only the registration is redirected; everything else
+            # is passed straight through.
+            if str(REPO / "scripts" / "register_hooks.py") not in argv:
+                return real_run(argv, **kwargs)
+            # Given --settings so it writes under the temp home; without it
+            # the default is the real ~/.claude/settings.json.
+            order.append("register")
+            return real_run([*argv, "--settings", str(settings)], **kwargs)
+
+        monkeypatch.setattr(install, "materialize_env", fake_materialize)
+        monkeypatch.setattr(install.subprocess, "run", run)
+        # The interpreter guard between the two steps is a real existence
+        # check against this repo's own dev environment, which is what is
+        # running these tests, so it needs no stub.
+        return install.main(["--home", str(home)]), order
+
+    def test_the_env_is_materialized_before_hooks_are_registered(
+        self, tmp_path, monkeypatch
+    ):
+        """A registered hook names the dev interpreter in its command, so
+        registering first writes hooks that cannot start -- while reporting
+        success, which is what an earlier version did."""
+        code, order = self.run_with_stubbed_env(tmp_path, monkeypatch)
+        assert code == 0
+        assert order == ["env", "register"]
+
+    def test_a_fresh_home_ends_up_with_hooks_pointing_into_this_repo(
+        self, tmp_path, monkeypatch
+    ):
+        """A new machine has no settings.json, and registration used to report
+        "nothing to do" for that case: the install said success and left the
+        machine with no hooks at all."""
+        code, _ = self.run_with_stubbed_env(tmp_path, monkeypatch)
+        assert code == 0
+        hooks = json.loads(
+            (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )["hooks"]
+        assert hooks
+        entries = [
+            h for group in hooks.values() for entry in group for h in entry["hooks"]
+        ]
+        assert entries
+        for h in entries:
+            # The interpreter is the command and the hook file is its
+            # argument, which is the ordering install.py exists to guarantee:
+            # a hook naming an interpreter that does not exist is silently
+            # dead, so both halves are asserted, not just that a row is there.
+            assert h["command"] == str(install.platform_paths.interpreter(REPO))
+            assert any(str(REPO / "hooks") in arg for arg in h["args"])
+
+    def test_a_failed_env_stops_before_registering_anything(
+        self, tmp_path, monkeypatch
+    ):
+        """The ordering only buys anything if the failure stops the sequence;
+        registering after a failed `pixi install` is the exact case that
+        writes hooks naming an interpreter that is not there."""
+        ran: list[str] = []
+        real_run = subprocess.run
+
+        def run(argv, **kwargs):
+            if str(REPO / "scripts" / "register_hooks.py") in argv:
+                ran.append("register")
+                raise AssertionError("registered after a failed environment step")
+            return real_run(argv, **kwargs)
+
+        monkeypatch.setattr(install, "materialize_env", lambda: 1)
+        monkeypatch.setattr(install.subprocess, "run", run)
+        assert install.main(["--home", str(tmp_path)]) == 1
+        assert ran == []
+        assert not (tmp_path / ".claude" / "settings.json").exists()
 
 
 class TestBackups:

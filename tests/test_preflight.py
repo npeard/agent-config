@@ -601,6 +601,29 @@ class TestSkillsLinked:
         preflight.check_skills(report, tmp_path, tmp_path / "installed")
         assert report.rows == []
 
+    def test_a_worktree_link_into_the_parent_checkout_is_not_a_copy(
+        self, tmp_path: Path
+    ):
+        """The case this check's docstring says it matches by name to avoid.
+
+        main() passes `root` as `git rev-parse --show-toplevel`, which inside
+        a worktree is the worktree -- while the installed links still point at
+        the parent checkout they were written from. Comparing targets against
+        `root` reported every skill as "copy, not a link" and told the user to
+        re-run the installer, which would relink them away from the parent.
+        This repo's CLAUDE.md mandates worktrees for parallel phases.
+        """
+        parent = tmp_path / "parent"
+        (parent / "skills" / "alpha").mkdir(parents=True)
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        installed = self.project(worktree, "alpha")
+        # Linked from the parent checkout, as a real install would have been.
+        self.link(installed, "alpha", parent / "skills" / "alpha")
+        report = preflight.Report()
+        preflight.check_skills(report, worktree, installed)
+        assert statuses(report, "skills linked") == [OK]
+
     def test_a_copy_is_reported_rather_than_counted_as_linked(self, tmp_path: Path):
         # The failure mode this check exists for: Git Bash's `ln -s` deep-copies
         # instead of failing on a Windows machine without Developer Mode, so a

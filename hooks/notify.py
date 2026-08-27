@@ -236,7 +236,15 @@ def sound_argv(name):
         # macOS names SOUNDS actually uses are known ahead of time, so they
         # resolve through this table instead of a filesystem lookup like
         # macOS's.
-        path = WINDOWS_SOUNDS.get(name)
+        candidate = WINDOWS_SOUNDS.get(name)
+        # Checked for the same reason the darwin branch checks: C:\Windows\
+        # Media is not identical across SKUs and locales -- Server, N and
+        # LTSC ship subsets -- and SoundPlayer.PlaySync() on a missing file
+        # throws into stderr this hook discards, which is indistinguishable
+        # from the sound being off.
+        path = (
+            candidate if candidate is not None and Path(candidate).is_file() else None
+        )
     if path is None:
         # Nothing left to resolve against: a name absent from both tables
         # plays nothing rather than handing the player a path that does not

@@ -65,17 +65,31 @@ def feed(notify, monkeypatch, payload):
     notify.main()
 
 
-def mac_sounds_present(monkeypatch):
+# The bare names sound_argv() is asked to resolve across this file: every
+# SOUNDS value, plus the one an override test substitutes.
+MAC_SOUND_NAMES = ("Hero", "Glass", "Funk", "Submarine", "Sosumi", "Tink")
+
+
+def mac_sounds_present(notify, monkeypatch, tmp_path):
     """Make every bare macOS sound name resolve, without a real Mac.
 
     The darwin branch of sound_argv() checks Path.is_file() against
     MAC_SOUND_DIR, a fixed macOS path (/System/Library/Sounds) that exists
-    only on an actual Mac -- there is no Windows equivalent to point it at,
-    the same gap TestStalledWatchdog's POSIX-only cases hit for mode bits and
-    symlinks. Faking the check, rather than a real file, keeps every other
-    assertion -- including the exact resolved path string -- intact.
+    only on an actual Mac.
+
+    Real files under a redirected MAC_SOUND_DIR, not a patched Path.is_file:
+    patching the method made *every* is_file() in the process return True, so
+    the watchdog and end-to-end cases below -- which check real files on disk
+    -- were unconditionally satisfied and a regression in them could not fail.
+    Every assertion here reads the resolved path back off notify.MAC_SOUND_DIR
+    or matches the bare filename, so redirecting the constant leaves them
+    intact.
     """
-    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    sounds = tmp_path / "Sounds"
+    sounds.mkdir(exist_ok=True)
+    for name in MAC_SOUND_NAMES:
+        (sounds / f"{name}.aiff").write_bytes(b"")
+    monkeypatch.setattr(notify, "MAC_SOUND_DIR", sounds)
 
 
 class TestReason:
@@ -189,9 +203,11 @@ class TestReason:
 
 
 class TestSoundResolution:
-    def test_a_bare_name_resolves_against_the_system_sounds(self, notify, monkeypatch):
+    def test_a_bare_name_resolves_against_the_system_sounds(
+        self, notify, monkeypatch, tmp_path
+    ):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         argv = notify.sound_argv("Hero")
         assert argv[0] == "afplay"
         # str(Path(...)) rather than a hardcoded "/System/..." string: on a
@@ -227,9 +243,40 @@ class TestSoundResolution:
         monkeypatch.setattr(os, "name", "posix")
         assert notify.sound_argv("Hero") is None
 
-    def test_the_volume_is_passed_to_the_player(self, notify, monkeypatch):
+    def test_a_windows_sound_that_is_not_on_this_machine_plays_nothing(
+        self, notify, monkeypatch
+    ):
+        """The same guard the darwin branch has, for the same reason.
+
+        C:\\Windows\\Media is not identical across SKUs and locales -- Server,
+        N and LTSC ship subsets, and "Windows Notify Messaging.wav" is one of
+        the files that can be absent. SoundPlayer.PlaySync() on a missing file
+        throws into stderr this hook discards, which is indistinguishable from
+        the sound being off.
+        """
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setitem(
+            notify.WINDOWS_SOUNDS, "Submarine", r"C:\Windows\Media\NoSuchSound.wav"
+        )
+        assert notify.sound_argv("Submarine") is None
+
+    def test_a_windows_sound_that_is_present_still_plays(
+        self, notify, monkeypatch, tmp_path
+    ):
+        """The other half: the check must not mute a name that does resolve."""
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(os, "name", "nt")
+        real = tmp_path / "tada.wav"
+        real.write_bytes(b"")
+        monkeypatch.setitem(notify.WINDOWS_SOUNDS, "Hero", str(real))
+        argv = notify.sound_argv("Hero")
+        assert argv is not None
+        assert str(real) in argv[-1]
+
+    def test_the_volume_is_passed_to_the_player(self, notify, monkeypatch, tmp_path):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setattr(notify, "VOLUME", 0.25)
         assert "0.25" in notify.sound_argv("Hero")
 
@@ -249,10 +296,14 @@ class TestBanner:
 
 class TestEndToEnd:
     def test_stop_plays_the_done_sound_and_names_the_project(
-        self, notify, monkeypatch, spawned
+        self,
+        notify,
+        monkeypatch,
+        spawned,
+        tmp_path,
     ):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         feed(notify, monkeypatch, {"hook_event_name": "Stop", "cwd": "/w/thesis"})
         assert any("Hero.aiff" in arg for argv in spawned for arg in argv)
         assert any("thesis" in arg for argv in spawned for arg in argv)
@@ -310,11 +361,13 @@ class TestEndToEnd:
         assert [argv for argv in spawned if "osascript" in argv[0]] == []
         assert [argv for argv in spawned if "--watch" in argv]
 
-    def test_an_agent_needing_input_is_audible(self, notify, monkeypatch, spawned):
+    def test_an_agent_needing_input_is_audible(
+        self, notify, monkeypatch, spawned, tmp_path
+    ):
         """The promotion is the point: this reason exists to be heard, so a
         sound that resolves is part of its contract."""
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         feed(
             notify,
             monkeypatch,
@@ -328,16 +381,18 @@ class TestEndToEnd:
         assert any("afplay" in argv[0] for argv in spawned)
         assert any("waiting on your answer" in arg for argv in spawned for arg in argv)
 
-    def test_banner_off_leaves_only_the_sound(self, notify, monkeypatch, spawned):
+    def test_banner_off_leaves_only_the_sound(
+        self, notify, monkeypatch, spawned, tmp_path
+    ):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setattr(notify, "BANNER", False)
         feed(notify, monkeypatch, {"hook_event_name": "Stop"})
         assert [argv[0] for argv in spawned] == ["afplay"]
 
-    def test_an_environment_override_wins(self, notify, monkeypatch, spawned):
+    def test_an_environment_override_wins(self, notify, monkeypatch, spawned, tmp_path):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setenv("CLAUDE_NOTIFY_SOUND_DONE", "Tink")
         feed(notify, monkeypatch, {"hook_event_name": "Stop"})
         assert any("Tink.aiff" in arg for argv in spawned for arg in argv)
@@ -523,10 +578,15 @@ class TestStalledWatchdog:
         assert not notify.watch_path("s-1").exists()
 
     def test_the_watchdog_nudges_while_the_park_is_still_live(
-        self, notify, monkeypatch, spawned, tmp_marker
+        self,
+        notify,
+        monkeypatch,
+        spawned,
+        tmp_marker,
+        tmp_path,
     ):
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         self.prearm(notify)
         notify.watchdog("s-1", str(os.getpid()), "thesis")
@@ -534,14 +594,19 @@ class TestStalledWatchdog:
         assert any("thesis" in arg for argv in spawned for arg in argv)
 
     def test_a_fired_nudge_does_not_come_round_again(
-        self, notify, monkeypatch, spawned, tmp_marker
+        self,
+        notify,
+        monkeypatch,
+        spawned,
+        tmp_marker,
+        tmp_path,
     ):
         """Once per stretch, and a long-lived background task is one stretch
         however many turns happen during it. Deleting the marker on firing
         would let the next parked turn re-arm, turning a one-shot nudge into
         a ten-minute alarm for as long as the task lives."""
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         feed(notify, monkeypatch, self.parked())
         notify.watchdog("s-1", str(os.getpid()), "thesis")
@@ -552,12 +617,17 @@ class TestStalledWatchdog:
         assert len([a for a in spawned if "afplay" in a[0]]) == 1, "nudged twice"
 
     def test_the_next_stretch_gets_its_own_nudge(
-        self, notify, monkeypatch, spawned, tmp_marker
+        self,
+        notify,
+        monkeypatch,
+        spawned,
+        tmp_marker,
+        tmp_path,
     ):
         """The other half of "per stretch": once the work drains, a later
         long park is a new stretch and deserves to be reported."""
         monkeypatch.setattr(sys, "platform", "darwin")
-        mac_sounds_present(monkeypatch)
+        mac_sounds_present(notify, monkeypatch, tmp_path)
         monkeypatch.setattr(notify.time, "sleep", lambda _: None)
         feed(notify, monkeypatch, self.parked())
         notify.watchdog("s-1", str(os.getpid()), "thesis")

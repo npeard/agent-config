@@ -611,12 +611,16 @@ def check_skills(report: Report, root: Path, installed: Path) -> None:
     # what it is, from a session's point of view.
     unlinked = sorted(name for name in carried if not (installed / name).exists())
     # A copy exists but does not track the repo, so it is reported apart from
-    # a missing link: the fix is the same, the symptom is not.
+    # a missing link: the fix is the same, the symptom is not. Link-ness is
+    # the whole test -- verify_link() additionally requires the target to sit
+    # under `root`, which in a git worktree is the worktree while the link
+    # points at the parent checkout, so every legitimately linked skill was
+    # reported as a copy and the user told to re-run the installer, which
+    # would relink them away from the parent.
     copies = sorted(
         name
         for name in carried
-        if (installed / name).exists()
-        and not platform_paths.verify_link(installed / name, root)
+        if (installed / name).exists() and not platform_paths.is_link(installed / name)
     )
     dangling = sorted(
         p.name

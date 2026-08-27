@@ -30,32 +30,22 @@ def master_repo() -> str:
 
     CLAUDE_CONFIG_REPO wins when set. The default is the path the README's
     install instructions use, but hardcoding only that makes the hook dead
-    for anyone who cloned elsewhere -- and makes a test's HOME patch the only
-    way to point it somewhere else, which is an unreliable thing to depend on.
+    for anyone who cloned elsewhere -- and CLAUDE_CONFIG_REPO is also how the
+    tests point it at a fixture, which is why it is the only override.
 
-    An explicit HOME comes before os.path.expanduser's own lookup because
-    expanduser prefers USERPROFILE to HOME on Windows: a test (or a sandboxed
-    CI run) that sets only HOME to point at a fake repo was silently ignored
-    there, and the hook resolved against the real machine's home directory
-    instead of the one the test set up.
+    "~" is left to os.path.expanduser, which prefers USERPROFILE on Windows.
+    Substituting HOME ahead of it was tried and reverted: Git Bash and MSYS2
+    routinely export HOME, sometimes in POSIX form ("/c/Users/npeard") or on
+    a domain-mapped drive that differs from USERPROFILE, and either makes
+    master_repo() name a directory that does not exist -- so the hook
+    silently never fires, the exact failure it is supposed to avoid.
+
+    expanduser wraps the whole expression rather than only the default: a
+    CLAUDE_CONFIG_REPO of "~/Documents/Projects/claude-config" -- the form
+    the README's own install path invites -- would otherwise resolve to a
+    literal "~" directory and the hook would silently never fire.
     """
     path = os.environ.get("CLAUDE_CONFIG_REPO") or "~/Documents/Projects/claude-config"
-    home = os.environ.get("HOME")
-    # "~" or "~/..." only -- not "~otheruser/...", which names someone else's
-    # home and must still go through expanduser's own lookup.
-    if (path == "~" or path.startswith(("~/", "~" + os.sep))) and home:
-        # Substitute HOME ourselves before falling back to expanduser, which
-        # prefers USERPROFILE to HOME on Windows: a test (or a sandboxed CI
-        # run) that sets only HOME to point at a fake repo was silently
-        # ignored there, and the hook resolved against the real machine's
-        # home directory instead of the one the test set up. Still applies to
-        # an overridden CLAUDE_CONFIG_REPO, not just the default, for the same
-        # reason expanduser below is applied to both.
-        path = home + path[1:]
-    # expanduser wraps the whole expression: applied only to the default, a
-    # CLAUDE_CONFIG_REPO of "~/Documents/Projects/claude-config" -- the form
-    # the README's own install path invites -- resolves to a literal "~"
-    # directory and the hook silently never fires.
     return os.path.realpath(os.path.expanduser(path))
 
 

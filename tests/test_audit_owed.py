@@ -25,6 +25,11 @@ from conftest import run_git
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK = REPO_ROOT / "hooks" / "audit-owed.py"
 MARKER = ".audit-owed"
+# What os.path.expanduser reads for "~" on this platform. Only the one test
+# that exercises the un-overridden default needs it; everywhere else
+# CLAUDE_CONFIG_REPO names the fixture outright, which is why the hook has no
+# second override to keep in step.
+HOME_VAR = "USERPROFILE" if os.name == "nt" else "HOME"
 
 
 @pytest.fixture
@@ -68,7 +73,11 @@ def commit(repo: Path, relative: str, body: str = "x\n") -> None:
 
 
 def run_hook(payload, home: Path, repo: Path | None = None) -> str:
-    env = {**os.environ, "HOME": str(home)}
+    # CLAUDE_CONFIG_REPO names the fixture outright rather than steering the
+    # hook through a patched home. The hook resolves "~" with expanduser,
+    # whose variable differs by platform, so a home patch would be one more
+    # thing to keep in step for no gain.
+    env = {**os.environ}
     env["CLAUDE_CONFIG_REPO"] = str(
         repo if repo else home / "Documents/Projects/claude-config"
     )
@@ -264,9 +273,44 @@ class TestWiring:
         self, fake_master, tmp_path
     ):
         """The override exists for portability and for these tests; the
-        documented install path must keep working without it."""
+        documented install path must keep working without it.
+
+        The home variable is set the way expanduser reads it on this platform
+        -- USERPROFILE on Windows, HOME elsewhere. master_repo() deliberately
+        does not substitute HOME itself: Git Bash exports it, sometimes in
+        POSIX form or on a mapped drive, and preferring it there made the
+        hook resolve to a directory that does not exist and never fire.
+        """
         commit(fake_master, "scripts/x.py")
-        env = {**os.environ, "HOME": str(tmp_path)}
+        env = {**os.environ, HOME_VAR: str(tmp_path)}
+        env.pop("CLAUDE_CONFIG_REPO", None)
+        result = subprocess.run(
+            [sys.executable, str(HOOK)],
+            input=json.dumps(payload(fake_master)),
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+        )
+        assert fired(result.stdout.strip())
+
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="HOME is expanduser's own variable off Windows, so there is no "
+        "second variable that could disagree with it.",
+    )
+    def test_a_git_bash_style_home_does_not_disable_the_hook(
+        self, fake_master, tmp_path
+    ):
+        """Git Bash and MSYS2 export HOME, often in a form no Windows API can
+        open ("/c/Users/npeard") or on a domain-mapped drive that differs from
+        USERPROFILE. Preferring it over expanduser's own lookup made
+        master_repo() name a nonexistent directory, and the hook silently
+        never fired -- the exact failure its comment warns about. Whatever
+        HOME says, USERPROFILE must decide.
+        """
+        commit(fake_master, "scripts/x.py")
+        env = {**os.environ, HOME_VAR: str(tmp_path), "HOME": "/c/nonexistent"}
         env.pop("CLAUDE_CONFIG_REPO", None)
         result = subprocess.run(
             [sys.executable, str(HOOK)],
@@ -578,11 +622,7 @@ class TestConcurrentWrites:
             "".join(f"old/{n}\tskills/s{n}/SKILL.md\n" for n in range(50_000))
         )
 
-        env = {
-            **os.environ,
-            "HOME": str(tmp_path),
-            "CLAUDE_CONFIG_REPO": str(fake_master),
-        }
+        env = {**os.environ, "CLAUDE_CONFIG_REPO": str(fake_master)}
         # Started before any stdin is written, so all eight are already past
         # interpreter startup and blocked on the read when the payloads land.
         # Handing each its payload at spawn time would stagger them by the

@@ -90,10 +90,11 @@ pixi run all                        # format, lint, ascii, spell,
 ## Layout
 
 - `CLAUDE.md` -- imported by `~/.claude/CLAUDE.md`, loaded in every
-  Claude Code session. Linked with a real symlink on macOS/Linux; on
-  Windows `~/.claude/CLAUDE.md` is instead written as a one-line
-  `@~/Documents/Projects/claude-config/CLAUDE.md` stub, since a
-  directory junction cannot span to a file.
+  Claude Code session. Not linked on any platform: `~/.claude/CLAUDE.md`
+  is written as a one-line
+  `@~/Documents/Projects/claude-config/CLAUDE.md` stub, which needs no
+  privilege anywhere and behaves identically everywhere, so there is no
+  second code path to keep in step.
 - `skills/<name>/` -- each linked to `~/.claude/skills/<name>/`: a
   symlink on macOS/Linux, a directory junction (no elevation, no
   Developer Mode) on Windows. `preflight` reports a skill this repo

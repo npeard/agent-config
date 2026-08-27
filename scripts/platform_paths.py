@@ -74,6 +74,12 @@ def link_target(p: Path) -> Path | None:
     this -- it is preserved through resolve(), producing a path that
     compares unequal to the plain form link_dir() was given -- so the
     prefix is stripped here before resolving.
+
+    A relative target is anchored to the link's own directory, which is what
+    the OS does when it follows one. resolve() alone anchors it to the
+    process's cwd instead, so the same link read from two directories gave
+    two different answers -- and preflight, which runs from wherever the user
+    invoked it, would have called a good link a copy.
     """
     p = Path(p)
     if not is_link(p):
@@ -82,7 +88,8 @@ def link_target(p: Path) -> Path | None:
         raw = os.readlink(p)
     except OSError:
         return None
-    return Path(raw.removeprefix("\\\\?\\")).resolve()
+    target = Path(raw.removeprefix("\\\\?\\"))
+    return (target if target.is_absolute() else p.parent / target).resolve()
 
 
 def verify_link(p: Path, repo: Path) -> bool:
