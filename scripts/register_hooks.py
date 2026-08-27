@@ -92,11 +92,34 @@ def undeclared(hooks_dir=HOOKS_DIR):
 
 
 def command_for(filename):
-    return f"{INTERPRETER} {HOOKS_DIR / filename}"
+    """The (command, args) pair a hook entry should run this file with.
+
+    Per Claude Code's hooks reference, an entry with an `args` array is
+    spawned directly with no shell -- each element is one literal argument,
+    with no tokenization or quoting. A single joined string is instead
+    handed to a shell to tokenize (Git Bash or PowerShell on Windows, `sh -c`
+    elsewhere), which mangles any path containing a space and is ambiguous
+    on Windows where paths use backslashes. Splitting command/args sidesteps
+    the shell entirely, so this one path is correct on every platform.
+    """
+    return str(INTERPRETER), [str(HOOKS_DIR / filename)]
 
 
-def repo_hook_in(command):
-    """The name of the hook in this repo that `command` runs, else None.
+def _tokens(hook):
+    """Every token of a hook's command, old and new form alike.
+
+    A hook dict may hold the current `command` + `args` form, or the legacy
+    single joined `command` string a pre-migration settings.json still has
+    on disk. Both must be recognised so an upgrading user's existing
+    registrations are updated in place rather than duplicated.
+    """
+    tokens = str(hook.get("command", "")).split()
+    tokens.extend(str(a) for a in hook.get("args", []))
+    return tokens
+
+
+def repo_hook_in(hook):
+    """The name of the hook in this repo that `hook` runs, else None.
 
     Deliberately narrower than `invokes`: this answers "is this registration
     mine to delete", and only a path inside this repo's hooks directory is.
@@ -104,17 +127,17 @@ def repo_hook_in(command):
     to a previous clone, and removing it would be destroying someone else's
     configuration rather than tidying up after this one.
     """
-    for token in str(command).split():
+    for token in _tokens(hook):
         path = Path(token)
         if path.parent == HOOKS_DIR:
             return path.name
     return None
 
 
-def invokes(command, filename):
-    """Whether a settings command runs exactly this hook file.
+def invokes(hook, filename):
+    """Whether a settings hook entry runs exactly this hook file.
 
-    Compared basename by basename over the command's tokens, not with `in`:
+    Compared basename by basename over the hook's tokens, not with `in`:
     substring matching let a new `list.py` claim `task-list.py`'s existing
     registration and overwrite its command, silently unregistering a live
     hook while reporting nothing. Tokens rather than the whole string so a
@@ -122,7 +145,7 @@ def invokes(command, filename):
     old absolute path from a previous clone location still matches -- that
     is the case the interpreter rewrite exists for.
     """
-    return any(Path(token).name == filename for token in str(command).split())
+    return any(Path(token).name == filename for token in _tokens(hook))
 
 
 def prune(settings, hooks):
@@ -143,7 +166,7 @@ def prune(settings, hooks):
             registered = entry.get("hooks", [])
             keep = []
             for hook in registered:
-                name = repo_hook_in(hook.get("command", ""))
+                name = repo_hook_in(hook)
                 if name is not None and (name, event) not in declared:
                     changes.append(f"unregistered {event} -> {name}")
                 else:
@@ -171,7 +194,7 @@ def apply(settings, hooks):
     changes = []
     registry = settings.setdefault("hooks", {})
     for filename, event, matcher in hooks:
-        wanted = command_for(filename)
+        command, script_args = command_for(filename)
         entries = registry.setdefault(event, [])
         # Every match, not just the first. Stopping at the first left an old
         # clone's registration beside the rewritten one on a machine whose
@@ -182,7 +205,7 @@ def apply(settings, hooks):
             (entry, hook)
             for entry in entries
             for hook in entry.get("hooks", [])
-            if invokes(hook.get("command", ""), filename)
+            if invokes(hook, filename)
         ]
         existing, duplicates = (matches[0], matches[1:]) if matches else (None, [])
         for entry, hook in duplicates:
@@ -192,15 +215,25 @@ def apply(settings, hooks):
         # would keep its matcher registered against nothing.
         entries[:] = [entry for entry in entries if entry.get("hooks") != []]
         if existing is None:
-            entry = {"hooks": [{"type": "command", "command": wanted, "timeout": 10}]}
+            entry = {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": command,
+                        "args": script_args,
+                        "timeout": 10,
+                    }
+                ]
+            }
             if matcher:
                 entry["matcher"] = matcher
             entries.append(entry)
             changes.append(f"registered {event} -> {filename}")
             continue
         entry, hook = existing
-        if hook.get("command") != wanted:
-            hook["command"] = wanted
+        if hook.get("command") != command or hook.get("args") != script_args:
+            hook["command"] = command
+            hook["args"] = script_args
             changes.append(f"updated {event} -> {filename} (interpreter)")
         if matcher and entry.get("matcher") != matcher:
             entry["matcher"] = matcher
