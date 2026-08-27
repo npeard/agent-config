@@ -55,7 +55,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "0f148018a9a9a064afcc24e45113e0ea553f4b5f93962a5c3b496eca046fbd9e"
+asset_sha = "e7f4f2cbffa9653790143b81098e4655a58fa0bb463a8afc70ea0dc8bf2782e3"
 note = """
 Two paths are in scope: text that reaches a shell interpreter, and
 `session_id` reaching a filename.
@@ -175,7 +175,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "e0fbae6b8efef995032b897828b489ae2a5f064109d3c082ef6b1593fecf34bb"
+asset_sha = "c518ce43c95233b3b7f2bb4c7967b496aade24d950c5b57d39668640e45d38ee"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -225,7 +225,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "a6cf57b488b174f652d7733666cd1e20bd2ba935a9d987ddb32b82c64c404da4"
+asset_sha = "7ec25ba512c5251262998b386a347e78b3ecd018861c13759a84712a5ffb0b06"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -270,7 +270,7 @@ principle = 4
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "73d22b0475c97608df518854a4fcc38996c125358d40b88655ce19db606022f5"
+asset_sha = "815210a0137ca0e77ee3a51c0cde793a77dc340c58900e15b3c8dc9bc2ea3430"
 note = """
 check_script_help's own rationale is "a script an agent must read to use has
 failed principle 3 while pretending to serve it" -- but this file is never
