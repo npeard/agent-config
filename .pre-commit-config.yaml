@@ -43,12 +43,16 @@ repos:
 
 -   repo: local
     hooks:
-    # Use the Pixi dev-env binary directly so the hook works even when git
-    # invokes pre-commit outside an activated Pixi shell. Requires
-    # `pixi install -e dev`.
+    # Routed through `pixi run` rather than the dev-env binary's path
+    # directly: that path forks at the env root on Windows (python.exe)
+    # vs. bin/ everywhere else -- the same split platform_paths.py exists
+    # to centralize -- and pre-commit's `entry` is a static string with no
+    # per-OS branch. `pixi` itself is a stable PATH entry from its own
+    # installer, unlike an *activated* Pixi shell, which is what this still
+    # does not require. Requires `pixi install -e dev`.
     -   id: suppressions
         name: Every linter suppression must say why
-        entry: .pixi/envs/dev/bin/python scripts/suppressions.py
+        entry: pixi run --manifest-path pixi.toml -e dev python scripts/suppressions.py
         language: system
         types: [file]
         # An explicit pattern rather than `types: [python]`. The checker also
@@ -61,7 +65,7 @@ repos:
         files: '(\.py|/pyproject\.toml|/ruff\.toml|/\.ruff\.toml|/setup\.cfg|/tox\.ini|/\.flake8|/mypy\.ini|/\.mypy\.ini)$|^(pyproject\.toml|ruff\.toml|\.ruff\.toml|setup\.cfg|tox\.ini|\.flake8|mypy\.ini|\.mypy\.ini)$'
     -   id: ascii-only
         name: ASCII-only source (no Unicode; use plain text or LaTeX)
-        entry: .pixi/envs/dev/bin/python scripts/check_ascii.py
+        entry: pixi run --manifest-path pixi.toml -e dev python scripts/check_ascii.py
         language: system
         types_or: [python, markdown]
 
