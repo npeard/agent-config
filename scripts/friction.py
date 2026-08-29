@@ -73,7 +73,15 @@ CLASSES: tuple[tuple[str, str], ...] = (
     ("ruff-other-lint", r"\b(PLW|RUF|ARG|SIM)\d+\b"),
     ("codespell-finding", r"==> "),
     ("test-failure", r"\b\d+ failed\b|FAILED tests?/"),
-    ("inline-script-error", r"Traceback \(most recent call last\)"),
+    # Named for what it matches, not where it came from. As "inline-script-
+    # error" it was read as "a heredoc probe went wrong" and decided tier-0 on
+    # that basis, but the pattern is any Python traceback from any source --
+    # a probe's own assertion, a real bug in a committed script, a path that
+    # does not exist on this OS. Those want different answers, and the comment
+    # on assertion-failed above already records why the name matters: reflect
+    # picks its cause from the class name, so a name that describes one of the
+    # causes decides the pass before the evidence is read.
+    ("python-traceback", r"Traceback \(most recent call last\)"),
     # Shell.
     ("cmd-not-found", r"command not found"),
     ("unrecognized-arg", r"unrecognized arguments|no matches found|invalid option"),

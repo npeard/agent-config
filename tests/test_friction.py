@@ -45,13 +45,34 @@ class TestClassify:
             ("NOTES.md:12: widget ==> gadget", "codespell-finding"),
             (
                 "Exit code 1 Traceback (most recent call last): TypeError",
-                "inline-script-error",
+                "python-traceback",
             ),
             ("zsh: command not found: task", "cmd-not-found"),
         ],
     )
     def test_recognizes(self, text: str, expected: str):
         assert expected in friction.classify(text)
+
+    def test_no_class_name_narrows_its_own_pattern(self):
+        """A class must be named for what it matches, not for one cause of it.
+
+        `reflect` picks its cause from the class name, so a name that already
+        names a cause settles the pass before the occurrences are read. That
+        happened once: `Traceback (most recent call last)` matches any Python
+        traceback, but was called "inline-script-error" and decided tier-0 as
+        "a throwaway probe failing is the probe doing its job" -- true of some
+        occurrences, false of a real bug in a committed script.
+        """
+        banned = {
+            "inline": "any traceback matches, not only an inline script",
+            "script": "any traceback matches, not only a script",
+            "probe": "a probe is one source among several",
+        }
+        for name, pattern in friction.CLASSES:
+            if pattern != r"Traceback \(most recent call last\)":
+                continue
+            for word, why in banned.items():
+                assert word not in name, f"{name!r} implies a source: {why}"
 
     def test_bare_nonzero_exit_is_benign_not_unclassified(self):
         """grep with no match and `||` fallbacks exit non-zero without being

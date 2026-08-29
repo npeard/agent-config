@@ -24,7 +24,7 @@ principle = 5
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "4bf95baf323fcf7b0243b44a62a8c0e9d90842d22a39223d4dc7dfd3e367ce8d"
+asset_sha = "c1dc4274c1ed9c684905edcc970dc71a78752bfc1af2ae027f8823b6a3854ee0"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
