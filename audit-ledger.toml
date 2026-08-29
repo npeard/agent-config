@@ -55,7 +55,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "e7f4f2cbffa9653790143b81098e4655a58fa0bb463a8afc70ea0dc8bf2782e3"
+asset_sha = "148f42879c60d587b254d8e48637ff73b171095121a73f92eee031b8e7d1958a"
 note = """
 Two paths are in scope: text that reaches a shell interpreter, and
 `session_id` reaching a filename.
@@ -100,6 +100,15 @@ when that fails. Arming is `O_CREAT|O_EXCL|O_WRONLY` rather than `touch()`,
 atomic against a racing second yield and refusing to follow a planted symlink.
 The nudge write is `O_WRONLY|O_NOFOLLOW` with no `O_CREAT`, so it can neither
 follow a planted link nor recreate a marker that a drain removed.
+
+Re-granted after fixing sound_argv()'s path/bare-name classification: it now
+tests the sound-name string's own shape (separator or drive-letter prefix)
+instead of the live host's os.sep, and the Windows-table existence check uses
+os.path.exists (posixpath/ntpath bound at interpreter start) instead of
+Path(...).is_file (which re-dispatches on the live, possibly-patched os.name
+and can silently re-render a foreign-shaped path). Neither change touches the
+interpreter-escaping or session_id/marker-directory reasoning above; both
+still read exactly as stated.
 """
 
 [[decision]]

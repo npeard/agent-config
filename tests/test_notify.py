@@ -202,6 +202,42 @@ class TestReason:
         assert notify.reason({"hook_event_name": "SessionStart"}) is None
 
 
+class TestPathClassification:
+    """looks_like_a_path() must read the STRING, not the host.
+
+    The prior implementation tested `os.sep in name`, which reads os.sep --
+    host state -- rather than the string's own shape. That classified a
+    Windows-style override string as a bare name on any POSIX host (os.sep
+    is "/", absent from "C:\\Windows\\Media\\tada.wav") and, symmetrically,
+    a POSIX-style override as bare on Windows. Every case below asserts the
+    same answer regardless of monkeypatched os.sep/os.name, which the old
+    version could not satisfy.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            r"C:\Windows\Media\tada.wav",
+            "/System/Library/Sounds/Hero.aiff",
+            "relative/unix.wav",
+            r"relative\windows.wav",
+            "C:bare-drive-relative.wav",
+        ],
+    )
+    def test_any_path_shaped_string_is_a_path_on_every_host(
+        self, notify, monkeypatch, name
+    ):
+        for fake_sep in ("/", "\\"):
+            monkeypatch.setattr(os, "sep", fake_sep)
+            assert notify.looks_like_a_path(name) is True
+
+    @pytest.mark.parametrize("name", ["Hero", "Tink", "Glass", ""])
+    def test_a_bare_name_is_never_a_path_on_any_host(self, notify, monkeypatch, name):
+        for fake_sep in ("/", "\\"):
+            monkeypatch.setattr(os, "sep", fake_sep)
+            assert notify.looks_like_a_path(name) is False
+
+
 class TestSoundResolution:
     def test_a_bare_name_resolves_against_the_system_sounds(
         self, notify, monkeypatch, tmp_path

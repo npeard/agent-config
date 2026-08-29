@@ -217,11 +217,26 @@ def sound_for(which):
     return os.environ.get(f"CLAUDE_NOTIFY_SOUND_{which.upper()}", SOUNDS.get(which, ""))
 
 
+def looks_like_a_path(name):
+    """Whether a sound name is a path rather than a bare system-sound name.
+
+    A property of the STRING, not of the host: checking against os.sep (or
+    handing the string to the host's native Path) makes the classification
+    depend on which platform is running the check rather than which platform
+    wrote the string. That misclassifies a Windows-style CLAUDE_NOTIFY_SOUND_*
+    override read on a POSIX host (os.sep is "/", so "C:\\...\\tada.wav" looks
+    bare) and, in the mirror direction, a POSIX-style override read on
+    Windows. Testing for either separator plus a drive-letter prefix covers
+    both shapes on every host.
+    """
+    return "/" in name or "\\" in name or (len(name) >= 2 and name[1] == ":")
+
+
 def sound_argv(name):
     """Player command for a sound name, or None if there is nothing to play."""
     if not name:
         return None
-    path = name if ("/" in name or os.sep in name) else None
+    path = name if looks_like_a_path(name) else None
     if sys.platform == "darwin":
         if path is None:
             candidate = MAC_SOUND_DIR / f"{name}.aiff"
@@ -241,9 +256,14 @@ def sound_argv(name):
         # Media is not identical across SKUs and locales -- Server, N and
         # LTSC ship subsets -- and SoundPlayer.PlaySync() on a missing file
         # throws into stderr this hook discards, which is indistinguishable
-        # from the sound being off.
+        # from the sound being off. os.path.exists rather than Path(...).is_file:
+        # Path() picks WindowsPath/PosixPath from the live os.name, so a test
+        # (or a host with a foreign-shaped candidate) that disagrees with the
+        # real interpreter build gets a silently mis-rendered path instead of
+        # an honest answer -- os.path defers to the same posixpath/ntpath
+        # module either way and stats the string as given.
         path = (
-            candidate if candidate is not None and Path(candidate).is_file() else None
+            candidate if candidate is not None and os.path.exists(candidate) else None
         )
     if path is None:
         # Nothing left to resolve against: a name absent from both tables
