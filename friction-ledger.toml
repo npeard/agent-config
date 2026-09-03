@@ -184,31 +184,44 @@ Evidence the rule works when followed: the branch that produced this entry ran
 
 [[decision]]
 class = "user-rejected-tool"
-date = "2026-08-24"
+date = "2026-09-03"
 cause = "underspecified-task"
 outcome = "tier-0"
-count_at_decision = 4
+count_at_decision = 9
 note = """
-Two of the four are one session's AskUserQuestion calls, both returned as
-"user wants to clarify" rather than answered. Reading them, the rejections
-were correct: each bundled several decisions at once and each rested on
-premises the user had no way to check from the question -- the first asked
-about scope, device, eval_rank and physics simultaneously while assuming a
-memory model I had not shown; the second re-asked after a measurement had
-already invalidated part of it.
+Re-decided after the count more than doubled (4 -> 9, 5 sessions), all in one
+project (a physics-research repo, `doqs`). Read all nine rather than
+re-stamping the prior note, because the shape underneath had shifted.
 
-Not a tooling gap. No tool can tell that a question is unanswerable because
-its premises are unstated, and the fix is not another artifact -- it is to
-put the measurement in front of the user before the question that depends on
-it, and to ask one decision at a time when the decisions are not actually
-coupled. Both rejections were followed by exactly that and then answered
-without difficulty.
+Seven of nine are AskUserQuestion calls rejected with "user wants to
+clarify"; two are bare "STOP what you are doing" with no elaboration. Unlike
+the 2026-08-24 batch, the questions themselves are not malformed -- checked
+two directly against their transcript: each is a single well-scoped decision
+(how to spend the next N hours of compute, given a specific measurement just
+obtained), with three mutually exclusive, non-overlapping options and no
+unstated premise. The rejection is not "this question is broken," it is "the
+menu does not contain the answer" -- the user has context (new data, a
+different tradeoff they want to make) that a fixed set of options drafted
+before that context existed cannot anticipate. This is the same cause as the
+prior decision wearing a different symptom: rework from a decision point
+where the model is asked to pre-enumerate options for a call that depends on
+information only the user has, not tooling failing to catch something.
 
-Tier 1 was considered and rejected: a hook could count questions per call but
-not judge whether their premises were established, so it would fire on the
-legitimate multi-part cases too. Tier 4 rejected as well -- "ask good
-questions" is already the ambient expectation and prose restating it would
-cost every future session for no added enforcement.
+Still tier-0. A hook can count AskUserQuestion calls or even flag a rejection,
+but cannot judge in advance whether a menu will cover the real answer --
+that judgment requires the domain context the tool call was trying to
+resolve in the first place, which is exactly what cause 6 excludes from a
+mechanical fix. Tier 4 considered and rejected again: "ask good questions"
+is already ambient, and the failure here is not question quality but
+timing -- asking for a menu-shaped decision immediately after a result lands,
+before the user has had a chance to react to the result itself. That is a
+per-situation judgment call, not a rule that compresses to one restatable
+line.
+
+If this reopens again, look specifically at whether long-running compute
+scoping (the recurring trigger in this batch: "how should I scope the next
+N-hour sweep") should default to a plain question with no options rather than
+AskUserQuestion, since six of the seven here were exactly that shape.
 
 Evidence the corrected behaviour works: later in the same session, questions
 that were preceded by the measurement they depended on (the eval-only ceiling
