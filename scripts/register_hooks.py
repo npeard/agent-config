@@ -21,9 +21,10 @@ parser would give three copies of that table to keep in agreement.
 
 Run by install.sh through the project's own interpreter, after the dev
 environment has been materialized. That ordering is not incidental: a
-registered hook names `.pixi/envs/dev/bin/python` in its command, so writing
-the registration before that binary exists produces hooks that cannot start
--- which is what an earlier version did, while reporting success.
+registered hook names the dev environment's interpreter for the current
+platform in its command, so writing the registration before that binary
+exists produces hooks that cannot start -- which is what an earlier version
+did, while reporting success.
 
 Usage:
     pixi run register-hooks [--check] [--settings PATH]
@@ -33,6 +34,7 @@ project interpreter. A bare `python3` would be whatever the machine ships.
 """
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -40,12 +42,29 @@ import sys
 import time
 from pathlib import Path
 
+
+def _load_platform_paths():
+    """Import the sibling module without a package, and without a
+    sys.path mutation `ruff --fix` would hoist above (E402) since this repo
+    ships zero suppressions. Mirrors the importlib pattern this repo's own
+    tests already use for hyphenated hook filenames.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+platform_paths = _load_platform_paths()
+
 REPO = Path(__file__).resolve().parent.parent
 MARKER = re.compile(r"^#\s*claude-hook:\s*(?P<event>\w+)(?:\s+(?P<matcher>\S+))?\s*$")
 DEFAULT_SETTINGS = Path.home() / ".claude" / "settings.json"
 # Hooks must run under the project's own interpreter, not whatever `python3`
 # the machine ships -- on macOS that is 3.9, below the declared floor.
-INTERPRETER = REPO / ".pixi" / "envs" / "dev" / "bin" / "python"
+INTERPRETER = platform_paths.interpreter(REPO)
 HOOKS_DIR = REPO / "hooks"
 
 
@@ -58,7 +77,9 @@ def declared_hooks(hooks_dir=HOOKS_DIR):
     """
     found = []
     for path in sorted(hooks_dir.glob("*.py")):
-        for line in path.read_text(errors="replace").splitlines()[:10]:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[
+            :10
+        ]:
             match = MARKER.match(line.strip())
             if match:
                 found.append((path.name, match.group("event"), match.group("matcher")))
@@ -71,11 +92,72 @@ def undeclared(hooks_dir=HOOKS_DIR):
 
 
 def command_for(filename):
-    return f"{INTERPRETER} {HOOKS_DIR / filename}"
+    """The (command, args) pair a hook entry should run this file with.
+
+    Per Claude Code's hooks reference, an entry with an `args` array is
+    spawned directly with no shell -- each element is one literal argument,
+    with no tokenization or quoting. A single joined string is instead
+    handed to a shell to tokenize (Git Bash or PowerShell on Windows, `sh -c`
+    elsewhere), which mangles any path containing a space and is ambiguous
+    on Windows where paths use backslashes. Splitting command/args sidesteps
+    the shell entirely, so this one path is correct on every platform.
+    """
+    return str(INTERPRETER), [str(HOOKS_DIR / filename)]
 
 
-def repo_hook_in(command):
-    """The name of the hook in this repo that `command` runs, else None.
+def _command_paths(command):
+    """Every substring of a legacy joined command that could be a script path.
+
+    Not `.split()`: a joined command is one shell string, so a path inside it
+    may contain spaces -- "/Users/me/My Projects/claude-config/hooks/
+    notify.py" splits into three fragments, none of them a path, and the hook
+    then reads as unregistered. That is the same space hazard the
+    command+args form was introduced to end, seen from the read side, and it
+    left `prune` unable to ever unregister a stale hook on such a machine.
+
+    Where a shell would need quoting rules to know where the path begins,
+    both callers only need the real path to appear somewhere in what is
+    offered: `repo_hook_in` requires the parent to be exactly HOOKS_DIR and
+    `invokes` compares basenames, so a candidate that starts too early or too
+    late simply fails to match. Offering every whitespace-anchored start for
+    each ".py" ending therefore finds the true path without guessing.
+    """
+    words = command.split()
+    starts = []
+    cursor = 0
+    for word in words:
+        cursor = command.index(word, cursor)
+        starts.append(cursor)
+        cursor += len(word)
+    candidates = []
+    for end, word in enumerate(words):
+        # A settings.json written by hand may quote the path it spells out.
+        if not word.rstrip("\"'").endswith(".py"):
+            continue
+        stop = starts[end] + len(word.rstrip("\"'"))
+        candidates.extend(
+            command[start:stop].lstrip("\"'") for start in starts[: end + 1]
+        )
+    return candidates
+
+
+def _tokens(hook):
+    """Every token of a hook's command, old and new form alike.
+
+    A hook dict may hold the current `command` + `args` form, or the legacy
+    single joined `command` string a pre-migration settings.json still has
+    on disk. Both must be recognised so an upgrading user's existing
+    registrations are updated in place rather than duplicated.
+    """
+    command = str(hook.get("command", ""))
+    tokens = command.split()
+    tokens.extend(_command_paths(command))
+    tokens.extend(str(a) for a in hook.get("args", []))
+    return tokens
+
+
+def repo_hook_in(hook):
+    """The name of the hook in this repo that `hook` runs, else None.
 
     Deliberately narrower than `invokes`: this answers "is this registration
     mine to delete", and only a path inside this repo's hooks directory is.
@@ -83,17 +165,17 @@ def repo_hook_in(command):
     to a previous clone, and removing it would be destroying someone else's
     configuration rather than tidying up after this one.
     """
-    for token in str(command).split():
+    for token in _tokens(hook):
         path = Path(token)
         if path.parent == HOOKS_DIR:
             return path.name
     return None
 
 
-def invokes(command, filename):
-    """Whether a settings command runs exactly this hook file.
+def invokes(hook, filename):
+    """Whether a settings hook entry runs exactly this hook file.
 
-    Compared basename by basename over the command's tokens, not with `in`:
+    Compared basename by basename over the hook's tokens, not with `in`:
     substring matching let a new `list.py` claim `task-list.py`'s existing
     registration and overwrite its command, silently unregistering a live
     hook while reporting nothing. Tokens rather than the whole string so a
@@ -101,7 +183,7 @@ def invokes(command, filename):
     old absolute path from a previous clone location still matches -- that
     is the case the interpreter rewrite exists for.
     """
-    return any(Path(token).name == filename for token in str(command).split())
+    return any(Path(token).name == filename for token in _tokens(hook))
 
 
 def prune(settings, hooks):
@@ -122,7 +204,7 @@ def prune(settings, hooks):
             registered = entry.get("hooks", [])
             keep = []
             for hook in registered:
-                name = repo_hook_in(hook.get("command", ""))
+                name = repo_hook_in(hook)
                 if name is not None and (name, event) not in declared:
                     changes.append(f"unregistered {event} -> {name}")
                 else:
@@ -150,7 +232,7 @@ def apply(settings, hooks):
     changes = []
     registry = settings.setdefault("hooks", {})
     for filename, event, matcher in hooks:
-        wanted = command_for(filename)
+        command, script_args = command_for(filename)
         entries = registry.setdefault(event, [])
         # Every match, not just the first. Stopping at the first left an old
         # clone's registration beside the rewritten one on a machine whose
@@ -161,7 +243,7 @@ def apply(settings, hooks):
             (entry, hook)
             for entry in entries
             for hook in entry.get("hooks", [])
-            if invokes(hook.get("command", ""), filename)
+            if invokes(hook, filename)
         ]
         existing, duplicates = (matches[0], matches[1:]) if matches else (None, [])
         for entry, hook in duplicates:
@@ -171,15 +253,25 @@ def apply(settings, hooks):
         # would keep its matcher registered against nothing.
         entries[:] = [entry for entry in entries if entry.get("hooks") != []]
         if existing is None:
-            entry = {"hooks": [{"type": "command", "command": wanted, "timeout": 10}]}
+            entry = {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": command,
+                        "args": script_args,
+                        "timeout": 10,
+                    }
+                ]
+            }
             if matcher:
                 entry["matcher"] = matcher
             entries.append(entry)
             changes.append(f"registered {event} -> {filename}")
             continue
         entry, hook = existing
-        if hook.get("command") != wanted:
-            hook["command"] = wanted
+        if hook.get("command") != command or hook.get("args") != script_args:
+            hook["command"] = command
+            hook["args"] = script_args
             changes.append(f"updated {event} -> {filename} (interpreter)")
         if matcher and entry.get("matcher") != matcher:
             entry["matcher"] = matcher
@@ -235,7 +327,7 @@ def main(argv):
     existed = args.settings.is_file()
     if existed:
         try:
-            settings = json.loads(args.settings.read_text())
+            settings = json.loads(args.settings.read_text(encoding="utf-8"))
         except ValueError:
             print(f"{args.settings} is not valid JSON; refusing to touch it.")
             return 1
@@ -266,7 +358,7 @@ def main(argv):
     else:
         backup = None
         args.settings.parent.mkdir(parents=True, exist_ok=True)
-    args.settings.write_text(json.dumps(settings, indent=2) + "\n")
+    args.settings.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     for change in changes:
         print(f"  {change}")
     if backup is not None:

@@ -3,7 +3,7 @@
 Personal, cross-project Claude Code configuration: a master `CLAUDE.md`
 of operational preferences (workflow habits, verification philosophy,
 design taste) and personal `skills/`, shared across every project via
-symlinks into `~/.claude/`.
+links into `~/.claude/`.
 
 Project-specific `CLAUDE.md` files stay in their own repos and add only
 what's local to that project (build commands, architecture, domain
@@ -11,21 +11,41 @@ conventions) -- they should not repeat what's here.
 
 ## Install (new machine)
 
+macOS and Linux:
+
 ```
 git clone <remote-url> ~/Documents/Projects/claude-config
 ~/Documents/Projects/claude-config/install.sh
 ```
 
-One command, deliberately. `install.sh` links the config, materializes
-the dev environment, and registers the hooks *in that order* --
-registered hooks name `.pixi/envs/dev/bin/python` in their command, so
-registering before the environment exists writes hooks that cannot
-start. Requires `pixi` on PATH.
+Windows (PowerShell):
 
-Re-running `install.sh` is safe -- it replaces existing symlinks, prunes
-links to skills this repo no longer has, and backs up any real file it
-would otherwise overwrite (`<path>.<timestamp>.bak`, dated so that a
-second run cannot destroy the first run's backup).
+```
+git clone <remote-url> ~/Documents/Projects/claude-config
+~\Documents\Projects\claude-config\install.ps1
+```
+
+Both are thin shims over `install.py`; run that directly with
+`pixi run -e dev python install.py` if you prefer. One command,
+deliberately: the installer links the config, materializes the dev
+environment, and registers the hooks *in that order* -- registered hooks
+name the dev environment's python in their command, so registering
+before the environment exists writes hooks that cannot start. Requires
+`pixi` on PATH.
+
+No elevation and no Developer Mode is required on Windows. Skills are
+linked with directory junctions rather than symlinks, since a junction
+needs no privilege (`os.symlink` fails there with `WinError 1314`
+without one), and `~/.claude/CLAUDE.md` is written as an `@import` stub
+that names this repo's copy rather than linked at all -- junctions
+cannot span to a file. Both are handled by `scripts/platform_paths.py`,
+the one place each platform difference this repo cares about is decided.
+
+Re-running the installer is safe -- it replaces existing links, prunes
+links to skills this repo no longer has, and backs up anything real it
+would otherwise overwrite, file or directory alike
+(`<path>.<timestamp>.bak`, dated so that a second run cannot destroy the
+first run's backup).
 
 ## Development commands
 
@@ -43,7 +63,7 @@ interpreter stops the remaining checks -- the alternative was a copy of
 preflight reporting one failure and inspecting nothing.
 
 Hooks in `~/.claude/settings.json` must therefore name this repo's
-environment python explicitly, not `python3`. `./install.sh` writes that
+environment python explicitly, not `python3`. The installer writes that
 for you, backing the file up first, so the interpreter cannot drift by
 hand.
 
@@ -69,22 +89,35 @@ pixi run all                        # format, lint, ascii, spell,
 
 ## Layout
 
-- `CLAUDE.md` -- symlinked to `~/.claude/CLAUDE.md`, loaded in every
-  Claude Code session.
-- `skills/<name>/` -- each symlinked to `~/.claude/skills/<name>/`.
-  `preflight` reports a skill this repo carries that is not linked on
-  this machine, and a link left behind by one that was renamed or
-  deleted -- machine state, like hook registration, and the same manual
-  step nothing verified. `./install.sh` writes the missing links and
-  prunes the stale ones.
+- `CLAUDE.md` -- imported by `~/.claude/CLAUDE.md`, loaded in every
+  Claude Code session. Not linked on any platform: `~/.claude/CLAUDE.md`
+  is written as a one-line
+  `@~/Documents/Projects/claude-config/CLAUDE.md` stub, which needs no
+  privilege anywhere and behaves identically everywhere, so there is no
+  second code path to keep in step.
+- `skills/<name>/` -- each linked to `~/.claude/skills/<name>/`: a
+  symlink on macOS/Linux, a directory junction (no elevation, no
+  Developer Mode) on Windows. `preflight` reports a skill this repo
+  carries that is not linked on this machine, and a link left behind by
+  one that was renamed or deleted -- machine state, like hook
+  registration, and the same manual step nothing verified. The installer
+  writes the missing links and prunes the stale ones.
 - `skills/standards-and-spec-review/CODING_STANDARDS.md` -- the single
   definition of the house coding rules. The master `CLAUDE.md` names
   them as triggers and points here; nothing restates them.
-- `install.sh` -- creates/repairs the symlinks above and registers
-  hooks.
+- `install.py` -- creates/repairs the links above and registers hooks;
+  the actual installer behind both shims below.
+- `install.sh` -- POSIX shim over `install.py`, for macOS and Linux.
+- `install.ps1` -- PowerShell shim over `install.py`, for Windows.
+- `scripts/platform_paths.py` -- where every platform difference the
+  installer, hook registration, `preflight` and the audit care about is
+  decided once: the pixi interpreter layout, what counts as a link, and
+  junction vs symlink. A library module, not a script -- hooks
+  deliberately do not import it, since they run standalone under
+  whatever interpreter `~/.claude/settings.json` names.
 - `hooks/` -- invoked by `~/.claude/settings.json`. Each hook declares
   its own event in a marker comment near the top
-  (`# claude-hook: PostToolUse Write|Edit`) and `./install.sh` registers
+  (`# claude-hook: PostToolUse Write|Edit`) and the installer registers
   them, so adding a hook needs no manual edit and cannot silently ship
   inert. A hook may carry several markers and answer several events. A
   test fails if a hook omits its marker; `preflight` reports when this
@@ -142,8 +175,8 @@ pixi run all                        # format, lint, ascii, spell,
   gets reached for otherwise.
 - `hooks/promotion-check.py` -- fires when a `CLAUDE.md`, memory or
   skill file is written *outside* this repo, asking whether the
-  preference is general enough to belong here instead. It resolves
-  symlinks before matching, because `install.sh` links this repo into
+  preference is general enough to belong here instead. It resolves links
+  before matching, because the installer links this repo into
   `~/.claude`, so editing the config through its installed path would
   otherwise look like editing a foreign project and the hook would tell
   you to promote a file you are already editing here.
@@ -203,7 +236,7 @@ pixi run all                        # format, lint, ascii, spell,
   BEL written to a tty, so a bare terminal, the VSCode integrated
   terminal and tmux all behave alike. It replaces the
   `singularityinc.claude-notifier` VSCode extension, which did the same
-  job but kept its sounds in a machine-local file `install.sh` knows
+  job but kept its sounds in a machine-local file the installer knows
   nothing about -- so a new machine came up silent until someone
   remembered an extension. On macOS the banner is posted by
   `terminal-notifier` when it is installed and by `osascript` otherwise;

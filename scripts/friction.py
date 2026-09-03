@@ -73,7 +73,15 @@ CLASSES: tuple[tuple[str, str], ...] = (
     ("ruff-other-lint", r"\b(PLW|RUF|ARG|SIM)\d+\b"),
     ("codespell-finding", r"==> "),
     ("test-failure", r"\b\d+ failed\b|FAILED tests?/"),
-    ("inline-script-error", r"Traceback \(most recent call last\)"),
+    # Named for what it matches, not where it came from. As "inline-script-
+    # error" it was read as "a heredoc probe went wrong" and decided tier-0 on
+    # that basis, but the pattern is any Python traceback from any source --
+    # a probe's own assertion, a real bug in a committed script, a path that
+    # does not exist on this OS. Those want different answers, and the comment
+    # on assertion-failed above already records why the name matters: reflect
+    # picks its cause from the class name, so a name that describes one of the
+    # causes decides the pass before the evidence is read.
+    ("python-traceback", r"Traceback \(most recent call last\)"),
     # Shell.
     ("cmd-not-found", r"command not found"),
     ("unrecognized-arg", r"unrecognized arguments|no matches found|invalid option"),
@@ -151,7 +159,7 @@ def iter_errors(paths: list[Path], since: str = ""):
     """Yield (session_id, timestamp, text) for each failed tool result."""
     for path in paths:
         try:
-            lines = path.read_text(errors="replace").splitlines()
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
         for line in lines:
@@ -240,7 +248,7 @@ def read_ledger(path: Path | None = None) -> tuple[dict[str, dict], str | None]:
     if not path.is_file():
         return {}, None  # No ledger yet is a real state, not a failure.
     try:
-        data = tomllib.loads(path.read_text())
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, OSError) as exc:
         return {}, f"ledger unreadable ({type(exc).__name__}); decisions ignored"
     return {d["class"]: d for d in data.get("decision", []) if "class" in d}, None

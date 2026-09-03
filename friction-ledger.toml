@@ -94,18 +94,46 @@ trip. Removing or muting it would trade a real guarantee for that round trip.
 """
 
 [[decision]]
-class = "inline-script-error"
-date = "2026-08-20"
-cause = "working-as-designed"
-outcome = "tier-0"
-count_at_decision = 5
+class = "python-traceback"
+date = "2026-08-29"
+cause = "rule-not-enforced"
+outcome = "tier-2"
+count_at_decision = 11
 note = """
-The class lumps two things together, and neither is actionable. Most
-occurrences are a throwaway heredoc probe whose assertion failed -- the probe
-doing its job, reported instantly. The rest are relative paths used after a
-`cd` in an earlier call, and that the working directory persists is already
-stated in the Bash tool's own description. A rule restating it would be paid
-by every future session for a lapse the tool already reports.
+Re-decided after the count doubled from 5 to 11, and renamed: the class was
+"inline-script-error", but its pattern is `Traceback (most recent call last)`
+-- any Python traceback, from any source. The 2026-08-20 decision read the
+name rather than the pattern and concluded "a throwaway probe failing is the
+probe doing its job", which is true of some occurrences and false of others.
+The comment on `assertion-failed` two lines above the pattern already warned
+about exactly this: reflect picks its cause from the class name, so a name
+naming one cause settles the pass before the evidence is read. That is what
+happened, so the fix is the name.
+
+The tier-2 artifact is the rename itself in scripts/friction.py, not a new
+guard. Nothing here needs a hook: walking causes 1-7 over the renamed class
+finds the occurrences split across at least three unrelated causes -- a
+scientific probe's assertion failing in another repo (working-as-designed), a
+genuine bug in a script under development (working-as-designed, the traceback
+is the report), and POSIX paths used on Windows (rule-not-enforced).
+
+The last of those is the only one with a rule behind it, and the rule already
+exists and is already stated where it applies: the harness system prompt names
+a per-session scratchpad directory and says to use it instead of /tmp. It is
+not in this repo's CLAUDE.md and should not be added -- tier 4 is paid by
+every future session forever to restate a rule the session is already handed.
+Two occurrences in this branch's own session were `/tmp` paths passed to
+Python on Windows, where "/tmp/x" becomes "\\tmp\\x" and does not exist; both
+self-reported instantly and cost one round trip each.
+
+What the rename buys is that the next pass over this class reads "python-
+traceback", has to open the occurrences to say anything at all, and cannot
+reach a cause by reading the label. If a single dominant cause emerges later,
+it can be split out into its own pattern then, with evidence. A speculative
+sub-pattern now was tried and rejected: the candidate regex for the
+POSIX-path-on-Windows shape matched none of the three real samples it was
+written against, which is a fair warning about narrow classifiers guessed
+rather than measured.
 """
 
 [[decision]]

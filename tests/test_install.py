@@ -1,112 +1,242 @@
-"""End-to-end tests for install.sh, run against a throwaway HOME.
+"""install.py, driven against a temp HOME.
 
-install.sh is the single documented entry point for a new machine and had no
-tests at all, which is how four defects accumulated in it -- including one
-that aborted a genuinely fresh install on its first command. Every case here
-runs the real script with HOME pointed at a temp directory, because the
-defects were in the script's interaction with the filesystem rather than in
-anything a unit could observe.
+Never the real ~/.claude: these tests move files aside and delete links.
+Most pass --skip-env, which stops before the pixi step; the one case that
+does not stubs that step rather than materializing an environment, and
+redirects hook registration at a settings file under the temp home.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
-import os
 import subprocess
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-INSTALL = REPO_ROOT / "install.sh"
+REPO = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location("install", REPO / "install.py")
+install = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(install)
+
+import platform_paths_helper as pp  # provided by conftest; see Step 2
 
 
-def install(home: Path) -> subprocess.CompletedProcess[str]:
-    """Run install.sh with HOME redirected at `home`.
-
-    The assertion is not paranoia for its own sake: this script rewrites
-    ~/.claude, so a test that leaked the real HOME would rewrite the
-    machine's live configuration rather than fail.
-    """
-    assert home.resolve() != Path.home().resolve()
-    return subprocess.run(
-        [str(INSTALL)],
-        env={**os.environ, "HOME": str(home)},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def skill_names() -> list[str]:
-    return sorted(p.name for p in (REPO_ROOT / "skills").iterdir() if p.is_dir())
+def run(home: Path) -> int:
+    return install.main(["--home", str(home), "--skip-env"])
 
 
 class TestFreshMachine:
-    """The documented new-machine path: nothing under HOME yet."""
+    def test_a_fresh_home_gets_a_claude_md_stub(self, tmp_path):
+        assert run(tmp_path) == 0
+        stub = tmp_path / ".claude" / "CLAUDE.md"
+        assert stub.is_file()
+        assert stub.read_text(encoding="utf-8").strip().startswith("@")
+        # A stub, not a link: it needs no privilege on any platform.
+        assert not pp.is_link(stub)
 
-    def test_a_fresh_home_is_installed_from_nothing(self, tmp_path: Path):
-        """install.sh linked into $HOME/.claude before creating it, so under
-        `set -e` the one documented command for a new machine died on its
-        first line -- before the env was materialized or hooks registered."""
-        result = install(tmp_path)
-        assert result.returncode == 0, result.stderr
-        claude = tmp_path / ".claude"
-        assert (claude / "CLAUDE.md").resolve() == (REPO_ROOT / "CLAUDE.md").resolve()
-        for name in skill_names():
-            assert (claude / "skills" / name).resolve() == (
-                REPO_ROOT / "skills" / name
-            ).resolve()
-        # A new machine has no settings.json, and registration used to report
-        # "nothing to do" for that case: the install said success and left the
-        # machine with no hooks at all.
-        hooks = json.loads((claude / "settings.json").read_text())["hooks"]
+    def test_every_skill_is_linked_and_reads_through(self, tmp_path):
+        assert run(tmp_path) == 0
+        for src in sorted((REPO / "skills").iterdir()):
+            if not src.is_dir():
+                continue
+            dest = tmp_path / ".claude" / "skills" / src.name
+            assert dest.exists(), f"{src.name} not installed"
+            assert pp.verify_link(dest, REPO), f"{src.name} is a copy, not a link"
+
+    def test_rerunning_is_safe(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        for src in sorted((REPO / "skills").iterdir()):
+            if src.is_dir():
+                assert (tmp_path / ".claude" / "skills" / src.name).exists()
+
+
+class TestEnvironmentAndHookRegistration:
+    """The half of main() that --skip-env returns before reaching.
+
+    install.py's docstring calls its ordering load-bearing: the pixi
+    environment must exist before hooks are registered, because a registered
+    hook names that environment's interpreter in its command. Every other test
+    here passes --skip-env and so asserts nothing about it. The step that is
+    genuinely expensive is `pixi install`, so that one is stubbed and the
+    registration it gates is run for real -- against a settings file under the
+    temp home, never ~/.claude/settings.json.
+    """
+
+    def run_with_stubbed_env(self, home: Path, monkeypatch) -> tuple[int, list[str]]:
+        """(exit code, order the two steps ran in) for a full install."""
+        order: list[str] = []
+        settings = home / ".claude" / "settings.json"
+
+        def fake_materialize() -> int:
+            order.append("env")
+            return 0
+
+        real_run = subprocess.run
+
+        def run(argv, **kwargs):
+            # install.subprocess and platform_paths.subprocess are the same
+            # module object, so this also sees link_dir's mklink calls on
+            # Windows. Only the registration is redirected; everything else
+            # is passed straight through.
+            if str(REPO / "scripts" / "register_hooks.py") not in argv:
+                return real_run(argv, **kwargs)
+            # Given --settings so it writes under the temp home; without it
+            # the default is the real ~/.claude/settings.json.
+            order.append("register")
+            return real_run([*argv, "--settings", str(settings)], **kwargs)
+
+        monkeypatch.setattr(install, "materialize_env", fake_materialize)
+        monkeypatch.setattr(install.subprocess, "run", run)
+        # The interpreter guard between the two steps is a real existence
+        # check against this repo's own dev environment, which is what is
+        # running these tests, so it needs no stub.
+        return install.main(["--home", str(home)]), order
+
+    def test_the_env_is_materialized_before_hooks_are_registered(
+        self, tmp_path, monkeypatch
+    ):
+        """A registered hook names the dev interpreter in its command, so
+        registering first writes hooks that cannot start -- while reporting
+        success, which is what an earlier version did."""
+        code, order = self.run_with_stubbed_env(tmp_path, monkeypatch)
+        assert code == 0
+        assert order == ["env", "register"]
+
+    def test_a_fresh_home_ends_up_with_hooks_pointing_into_this_repo(
+        self, tmp_path, monkeypatch
+    ):
+        """A new machine has no settings.json, and registration used to report
+        "nothing to do" for that case: the install said success and left the
+        machine with no hooks at all."""
+        code, _ = self.run_with_stubbed_env(tmp_path, monkeypatch)
+        assert code == 0
+        hooks = json.loads(
+            (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )["hooks"]
         assert hooks
-        assert all(
-            any(str(REPO_ROOT / "hooks") in h["command"] for h in entry["hooks"])
-            for entries in hooks.values()
-            for entry in entries
-        )
+        entries = [
+            h for group in hooks.values() for entry in group for h in entry["hooks"]
+        ]
+        assert entries
+        for h in entries:
+            # The interpreter is the command and the hook file is its
+            # argument, which is the ordering install.py exists to guarantee:
+            # a hook naming an interpreter that does not exist is silently
+            # dead, so both halves are asserted, not just that a row is there.
+            assert h["command"] == str(install.platform_paths.interpreter(REPO))
+            assert any(str(REPO / "hooks") in arg for arg in h["args"])
 
-    def test_rerunning_is_safe(self, tmp_path: Path):
-        assert install(tmp_path).returncode == 0
-        second = install(tmp_path)
-        assert second.returncode == 0, second.stderr
-        claude = tmp_path / ".claude"
-        assert (claude / "CLAUDE.md").is_symlink()
-        assert sorted(p.name for p in (claude / "skills").iterdir()) == skill_names()
+    def test_a_failed_env_stops_before_registering_anything(
+        self, tmp_path, monkeypatch
+    ):
+        """The ordering only buys anything if the failure stops the sequence;
+        registering after a failed `pixi install` is the exact case that
+        writes hooks naming an interpreter that is not there."""
+        ran: list[str] = []
+        real_run = subprocess.run
+
+        def run(argv, **kwargs):
+            if str(REPO / "scripts" / "register_hooks.py") in argv:
+                ran.append("register")
+                raise AssertionError("registered after a failed environment step")
+            return real_run(argv, **kwargs)
+
+        monkeypatch.setattr(install, "materialize_env", lambda: 1)
+        monkeypatch.setattr(install.subprocess, "run", run)
+        assert install.main(["--home", str(tmp_path)]) == 1
+        assert ran == []
+        assert not (tmp_path / ".claude" / "settings.json").exists()
 
 
 class TestBackups:
-    def test_a_second_run_keeps_the_first_backup(self, tmp_path: Path):
-        """Both install.sh and register_hooks.py wrote a fixed `.bak`, so
-        re-running replaced the only copy of the previous state; ~/.claude had
-        already accumulated three backups of a single generation."""
+    def test_an_existing_regular_file_is_backed_up(self, tmp_path):
         claude = tmp_path / ".claude"
         claude.mkdir()
-        for content in ("first", "second"):
-            (claude / "CLAUDE.md").unlink(missing_ok=True)
-            (claude / "CLAUDE.md").write_text(content)
-            assert install(tmp_path).returncode == 0
-        saved = sorted(p.read_text() for p in claude.glob("CLAUDE.md.*"))
-        assert saved == ["first", "second"]
+        (claude / "CLAUDE.md").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        assert len(backups) == 1
+        assert backups[0].read_text(encoding="utf-8") == "mine"
+
+    def test_a_second_run_keeps_the_first_backup(self, tmp_path):
+        claude = tmp_path / ".claude"
+        claude.mkdir()
+        (claude / "CLAUDE.md").write_text("first", encoding="utf-8")
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        # The stub the first run wrote is identical to what the second would
+        # write, so the second must not churn another backup.
+        assert len(backups) == 1
+        assert backups[0].read_text(encoding="utf-8") == "first"
+
+    def test_a_directory_at_the_claude_md_path_is_backed_up(self, tmp_path):
+        # install.sh tested `-e`, which matches a directory; the port tested
+        # is_file() and rmtree'd anything else, destroying it unrecoverably.
+        claude = tmp_path / ".claude"
+        claude.mkdir()
+        (claude / "CLAUDE.md").mkdir()
+        (claude / "CLAUDE.md" / "important.txt").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(claude.glob("CLAUDE.md.*.bak"))
+        assert len(backups) == 1
+        assert (backups[0] / "important.txt").read_text(encoding="utf-8") == "mine"
+        assert (claude / "CLAUDE.md").is_file()
+
+    def test_a_real_directory_at_a_skill_path_is_backed_up(self, tmp_path):
+        skills = tmp_path / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
+        (skills / name).mkdir()
+        (skills / name / "MY_WORK.md").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(skills.glob(f"{name}.*.bak"))
+        assert len(backups) == 1
+        assert (backups[0] / "MY_WORK.md").read_text(encoding="utf-8") == "mine"
+        assert pp.verify_link(skills / name, REPO)
+
+    def test_a_correct_install_rerun_writes_no_skill_backup(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        assert not list(skills.glob("*.bak"))
 
 
 class TestSkillLinks:
-    def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path: Path):
-        """A renamed or deleted skill left its link behind, and a stale link
-        in ~/.claude/skills is offered to every session as a real skill."""
+    def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path):
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        ghost = REPO / "skills" / "was-deleted"
+        ghost.mkdir()
+        try:
+            pp.link_dir(ghost, skills / "was-deleted")
+        finally:
+            ghost.rmdir()
+        assert run(tmp_path) == 0
+        assert not (skills / "was-deleted").exists()
+
+    def test_a_foreign_link_is_left_alone(self, tmp_path):
+        # Only links into this repo are ours to prune.
+        assert run(tmp_path) == 0
+        skills = tmp_path / ".claude" / "skills"
+        other = tmp_path / "other-tool"
+        other.mkdir()
+        pp.link_dir(other, skills / "foreign")
+        assert run(tmp_path) == 0
+        assert (skills / "foreign").exists()
+
+
+class TestCopyDetection:
+    def test_a_copy_left_by_a_previous_bad_install_is_replaced(self, tmp_path):
+        # Git Bash's `ln -s` deep-copies on a machine without Developer Mode,
+        # so a previously "successful" install can leave copies behind. They
+        # must be repaired, not accepted.
+        import shutil
+
         skills = tmp_path / ".claude" / "skills"
         skills.mkdir(parents=True)
-        stale = skills / "renamed-away"
-        stale.symlink_to(REPO_ROOT / "skills" / "renamed-away")
-        foreign = skills / "another-tools-skill"
-        foreign.symlink_to(tmp_path / "nowhere")
-        assert install(tmp_path).returncode == 0
-        assert not stale.is_symlink()
-        # Only links into this repo are ours to remove; another tool's are not.
-        assert foreign.is_symlink()
-
-    def test_live_skill_links_survive_pruning(self, tmp_path: Path):
-        assert install(tmp_path).returncode == 0
-        assert install(tmp_path).returncode == 0
-        skills = tmp_path / ".claude" / "skills"
-        assert sorted(p.name for p in skills.iterdir()) == skill_names()
+        name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
+        shutil.copytree(REPO / "skills" / name, skills / name)
+        assert run(tmp_path) == 0
+        assert pp.verify_link(skills / name, REPO)

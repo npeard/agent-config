@@ -38,11 +38,29 @@ abort a session over a warning.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+
+def _load_platform_paths():
+    """Import the sibling module without a package, and without a
+    sys.path mutation `ruff --fix` would hoist above (E402) since this repo
+    ships zero suppressions. Mirrors the importlib pattern this repo's own
+    tests already use for hyphenated hook filenames.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+platform_paths = _load_platform_paths()
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -135,7 +153,7 @@ def declared_floor(root: Path) -> tuple[int, int] | None:
         path = root / name
         if not path.is_file():
             continue
-        text = path.read_text(errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
         # Anchored to a line start: unanchored, `python` matched the tail of
         # `ipython = ">=8.0"` and read as a floor of 8.0 -- and a failure here
         # short-circuits every later check.
@@ -237,7 +255,11 @@ def check_precommit_installed(report: Report, root: Path) -> None:
     # wherever this process happens to have been invoked from.
     hook_path = git("-C", str(root), "rev-parse", "--git-path", "hooks/pre-commit")
     hook = (root / hook_path) if hook_path else None
-    if hook and hook.is_file() and "pre-commit" in hook.read_text(errors="replace"):
+    if (
+        hook
+        and hook.is_file()
+        and "pre-commit" in hook.read_text(encoding="utf-8", errors="replace")
+    ):
         report.add(OK, "pre-commit hook installed")
     else:
         report.add(FAIL, "pre-commit hook installed", "run: pre-commit install")
@@ -256,7 +278,9 @@ def configured_revs(config: Path) -> list[tuple[str, str]]:
     to zero pairs, which the caller reports as "cannot check".
     """
     keys: list[tuple[int, str, str]] = []
-    for lineno, line in enumerate(config.read_text(errors="replace").splitlines()):
+    for lineno, line in enumerate(
+        config.read_text(encoding="utf-8", errors="replace").splitlines()
+    ):
         stripped = line.strip().lstrip("-").strip()
         for kind in ("repo", "rev"):
             prefix = f"{kind}:"
@@ -370,7 +394,7 @@ def _pixi_has_test_task(path: Path) -> bool:
     import tomllib
 
     try:
-        data = tomllib.loads(path.read_text())
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, OSError):
         return False
     tasks = dict(data.get("tasks", {}))
@@ -381,14 +405,14 @@ def _pixi_has_test_task(path: Path) -> bool:
 
 def _npm_has_test_script(path: Path) -> bool:
     try:
-        return "test" in json.loads(path.read_text()).get("scripts", {})
+        return "test" in json.loads(path.read_text(encoding="utf-8")).get("scripts", {})
     except (ValueError, OSError):
         return False
 
 
 def _mentions_test(path: Path) -> bool:
     """Crude fallback for formats with no cheap stdlib parser (YAML)."""
-    return "test" in path.read_text()
+    return "test" in path.read_text(encoding="utf-8")
 
 
 # Priority order: a project's own task runner knows more than a bare pytest
@@ -547,17 +571,32 @@ def check_hooks(report: Report, root: Path) -> None:
     report.add(
         WARN,
         "hooks registered",
-        f"{len(drift)} out of date: {'; '.join(drift[:2])} (./install.sh)",
+        f"{len(drift)} out of date: {'; '.join(drift[:2])} ({_install_hint()})",
     )
+
+
+def _install_hint() -> str:
+    """The installer command for this platform, for use in remediation hints.
+
+    Git Bash's `ln -s` silently deep-copies instead of failing on a Windows
+    machine without Developer Mode, so the two platforms need different
+    installers -- telling a Windows user to run install.sh names the wrong
+    command entirely, not just a cosmetic mismatch.
+    """
+    return "./install.ps1" if platform_paths.WINDOWS else "./install.sh"
 
 
 def check_skills(report: Report, root: Path, installed: Path) -> None:
     """Report skills the repo carries that this machine cannot see.
 
     Machine state, like hook registration: skills reach a session only through
-    the symlinks install.sh writes, so a skill added without re-running it is
+    the links install.py writes, so a skill added without re-running it is
     invisible to every session while the whole suite stays green -- the same
-    "manual step nothing verifies" class as the hook that shipped inert.
+    "manual step nothing verifies" class as the hook that shipped inert. A
+    copy is reported separately from a missing link: it looks installed
+    because `.exists()` cannot tell it apart from a real link, but it tracks
+    nothing, and Git Bash's `ln -s` produces exactly this on Windows without
+    Developer Mode instead of failing outright.
 
     Matched by name rather than by link target, because a git worktree's
     skills are legitimately linked from the parent checkout and comparing
@@ -565,26 +604,40 @@ def check_skills(report: Report, root: Path, installed: Path) -> None:
     no installer, since preflight is copied into repos that install nothing.
     """
     source = root / "skills"
-    if not source.is_dir() or not (root / "install.sh").is_file():
+    if not source.is_dir() or not (root / "install.py").is_file():
         return
     carried = {p.name for p in source.iterdir() if p.is_dir()}
     # exists() follows the link, so a dangling one reads as absent -- which is
     # what it is, from a session's point of view.
     unlinked = sorted(name for name in carried if not (installed / name).exists())
+    # A copy exists but does not track the repo, so it is reported apart from
+    # a missing link: the fix is the same, the symptom is not. Link-ness is
+    # the whole test -- verify_link() additionally requires the target to sit
+    # under `root`, which in a git worktree is the worktree while the link
+    # points at the parent checkout, so every legitimately linked skill was
+    # reported as a copy and the user told to re-run the installer, which
+    # would relink them away from the parent.
+    copies = sorted(
+        name
+        for name in carried
+        if (installed / name).exists() and not platform_paths.is_link(installed / name)
+    )
     dangling = sorted(
         p.name
         for p in (installed.iterdir() if installed.is_dir() else [])
-        if p.is_symlink() and not p.exists() and p.name not in carried
+        if platform_paths.is_link(p) and not p.exists() and p.name not in carried
     )
-    if not unlinked and not dangling:
+    if not unlinked and not copies and not dangling:
         report.add(OK, "skills linked", f"{len(carried)} linked")
         return
     parts = []
     if unlinked:
         parts.append(f"not linked: {', '.join(unlinked)}")
+    if copies:
+        parts.append(f"copy, not a link: {', '.join(copies)}")
     if dangling:
         parts.append(f"stale link: {', '.join(dangling)}")
-    report.add(WARN, "skills linked", "; ".join(parts) + " (./install.sh)")
+    report.add(WARN, "skills linked", "; ".join(parts) + f" ({_install_hint()})")
 
 
 def detect_test_command(root: Path) -> str | None:

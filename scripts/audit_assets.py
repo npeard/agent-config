@@ -156,7 +156,7 @@ def skill_texts(root: Path = REPO_ROOT) -> list[tuple[Path, str]]:
     the overlap scan -- and each walking skill_files itself meant the same
     file was read three times and the same two lines written three times.
     """
-    return [(path, path.read_text()) for path in skill_files(root)]
+    return [(path, path.read_text(encoding="utf-8")) for path in skill_files(root)]
 
 
 def first_clause(text: str) -> str:
@@ -326,7 +326,8 @@ def required_references(path: Path, text: str) -> list[Path]:
 def effective_words(path: Path, text: str) -> int:
     """What one invocation of this skill costs: body plus required references."""
     return words(text) + sum(
-        words(ref.read_text()) for ref in required_references(path, text)
+        words(ref.read_text(encoding="utf-8"))
+        for ref in required_references(path, text)
     )
 
 
@@ -338,7 +339,7 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     # dangling references that rename produces -- the audit failing exactly
     # when it has something to say.
     claude_md = root / "CLAUDE.md"
-    n = words(claude_md.read_text()) if claude_md.is_file() else 0
+    n = words(claude_md.read_text(encoding="utf-8")) if claude_md.is_file() else 0
     if n > CLAUDE_MD_MAX_WORDS:
         out.append(
             Finding(
@@ -367,7 +368,7 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
                 )
             )
         for ref in reference_files(path.parent):
-            n = words(ref.read_text())
+            n = words(ref.read_text(encoding="utf-8"))
             if n > REFERENCE_MAX_WORDS:
                 out.append(
                     Finding(
@@ -456,7 +457,7 @@ def check_evidence(root: Path = REPO_ROOT) -> list[Finding]:
         # `pixi run all`, a stray binary broke the whole build. Presence is
         # what qualifies a worked artifact above; text is only needed for the
         # prose patterns below.
-        texts = [f.read_text() for f in files if f.suffix == ".md"]
+        texts = [f.read_text(encoding="utf-8") for f in files if f.suffix == ".md"]
         if not any(r.search(text) for text in texts for r in EVIDENCE):
             out.append(
                 Finding(
@@ -476,7 +477,7 @@ def check_script_help(root: Path = REPO_ROOT) -> list[Finding]:
     pretending to serve it."""
     out = []
     for path in script_files(root):
-        if "ArgumentParser" not in path.read_text():
+        if "ArgumentParser" not in path.read_text(encoding="utf-8"):
             out.append(
                 Finding(
                     4,
@@ -546,7 +547,7 @@ def pixi_tasks(root: Path = REPO_ROOT) -> set[str]:
     path = root / "pixi.toml"
     if not path.exists():
         return set()
-    data = tomllib.loads(path.read_text())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
     names = set(data.get("tasks", {}))
     for feature in data.get("feature", {}).values():
         names |= set(feature.get("tasks", {}))
@@ -560,7 +561,7 @@ def check_script_references(root: Path = REPO_ROOT) -> list[Finding]:
     tasks = pixi_tasks(root)
     out = []
     for path in prose_files(root):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         asset = rel(path, root)
         for name in sorted(set(SCRIPT_REF.findall(text)) - have):
             out.append(Finding(4, asset, f"names scripts/{name}, which does not exist"))
@@ -642,7 +643,7 @@ def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
     readme = root / "README.md"
     if not readme.is_file():
         return []
-    region = layout_section(readme.read_text())
+    region = layout_section(readme.read_text(encoding="utf-8"))
     assets = [*hook_files(root), *script_files(root)]
     assets += [d for d in sorted((root / "skills").glob("*")) if d.is_dir()]
     out = []
@@ -722,7 +723,7 @@ def check_read_and_emit(root: Path = REPO_ROOT) -> list[Finding]:
     for path in [*script_files(root), *hook_files(root)]:
         if path.name == SELF:
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         sources = sorted(k for k, r in UNTRUSTED_SOURCES.items() if r.search(text))
         sinks = sorted(k for k, r in EMIT_SINKS.items() if r.search(text))
         # A source is always required. Keyed on the sink alone this reported
@@ -841,7 +842,7 @@ def load_ledger(path: Path = LEDGER) -> dict[str, str]:
     if not path.exists():
         return {}
     out = {}
-    for d in tomllib.loads(path.read_text()).get("decision", []):
+    for d in tomllib.loads(path.read_text(encoding="utf-8")).get("decision", []):
         missing = REQUIRED_LEDGER_FIELDS - {k for k, v in d.items() if str(v).strip()}
         if missing:
             raise SystemExit(
@@ -1008,7 +1009,7 @@ def owed_assets(root: Path, branch: str, *, any_branch: bool) -> list[str]:
     marker = root / MARKER
     if not marker.is_file():
         return []
-    obligations, discharges = parse_marker(marker.read_text())
+    obligations, discharges = parse_marker(marker.read_text(encoding="utf-8"))
     out = set()
     for recorded, asset in obligations:
         if recorded and not any_branch and recorded != branch:
@@ -1125,7 +1126,7 @@ def clear_owed(root: Path) -> str:
     marker = root / MARKER
     if not marker.is_file():
         return "no audit owed"
-    obligations, discharges = parse_marker(marker.read_text())
+    obligations, discharges = parse_marker(marker.read_text(encoding="utf-8"))
     branch = current_branch(root)
 
     if not branch:
@@ -1184,7 +1185,7 @@ def clear_owed(root: Path) -> str:
 def _write_marker(marker: Path, kept: list[str]) -> None:
     """Write the surviving lines back, or remove an emptied marker."""
     if kept:
-        marker.write_text("\n".join(kept) + "\n")
+        marker.write_text("\n".join(kept) + "\n", encoding="utf-8")
     else:
         marker.unlink()
 

@@ -145,6 +145,21 @@ PARKED = "parked"
 # nudge would become a ten-minute alarm for as long as the task lives.
 NUDGED = "nudged"
 
+# Bare names resolve against the platform's own sound set. macOS has one at
+# a known path; Windows does not, so each SOUNDS entry's macOS name is mapped
+# to a file that ships in C:\Windows\Media rather than left unresolvable --
+# which is why every ping was silent there. Keyed by SOUNDS' *values*, not
+# its roles: sound_argv() below only ever sees the resolved name ("Hero"),
+# never which role ("done") asked for it -- the same string an environment
+# override like CLAUDE_NOTIFY_SOUND_DONE could substitute.
+WINDOWS_SOUNDS = {
+    SOUNDS["done"]: r"C:\Windows\Media\tada.wav",
+    SOUNDS["permission"]: r"C:\Windows\Media\Windows Notify.wav",
+    SOUNDS["question"]: r"C:\Windows\Media\Windows Ding.wav",
+    SOUNDS["agent"]: r"C:\Windows\Media\Windows Notify Messaging.wav",
+    SOUNDS["stalled"]: r"C:\Windows\Media\Windows Exclamation.wav",
+}
+
 MAC_SOUND_DIR = Path("/System/Library/Sounds")
 # Absolute paths rather than a PATH lookup, because a hook inherits whatever
 # environment the host had and Homebrew's bin is often not on it.
@@ -202,11 +217,26 @@ def sound_for(which):
     return os.environ.get(f"CLAUDE_NOTIFY_SOUND_{which.upper()}", SOUNDS.get(which, ""))
 
 
+def looks_like_a_path(name):
+    """Whether a sound name is a path rather than a bare system-sound name.
+
+    A property of the STRING, not of the host: checking against os.sep (or
+    handing the string to the host's native Path) makes the classification
+    depend on which platform is running the check rather than which platform
+    wrote the string. That misclassifies a Windows-style CLAUDE_NOTIFY_SOUND_*
+    override read on a POSIX host (os.sep is "/", so "C:\\...\\tada.wav" looks
+    bare) and, in the mirror direction, a POSIX-style override read on
+    Windows. Testing for either separator plus a drive-letter prefix covers
+    both shapes on every host.
+    """
+    return "/" in name or "\\" in name or (len(name) >= 2 and name[1] == ":")
+
+
 def sound_argv(name):
     """Player command for a sound name, or None if there is nothing to play."""
     if not name:
         return None
-    path = name if ("/" in name or os.sep in name) else None
+    path = name if looks_like_a_path(name) else None
     if sys.platform == "darwin":
         if path is None:
             candidate = MAC_SOUND_DIR / f"{name}.aiff"
@@ -216,9 +246,30 @@ def sound_argv(name):
                 return None
             path = str(candidate)
         return ["afplay", "-v", str(VOLUME), path]
+    if path is None and os.name == "nt":
+        # Windows has no named system sound set either, but the handful of
+        # macOS names SOUNDS actually uses are known ahead of time, so they
+        # resolve through this table instead of a filesystem lookup like
+        # macOS's.
+        candidate = WINDOWS_SOUNDS.get(name)
+        # Checked for the same reason the darwin branch checks: C:\Windows\
+        # Media is not identical across SKUs and locales -- Server, N and
+        # LTSC ship subsets -- and SoundPlayer.PlaySync() on a missing file
+        # throws into stderr this hook discards, which is indistinguishable
+        # from the sound being off. os.path.exists rather than Path(...).is_file:
+        # Path() picks WindowsPath/PosixPath from the live os.name, so a test
+        # (or a host with a foreign-shaped candidate) that disagrees with the
+        # real interpreter build gets a silently mis-rendered path instead of
+        # an honest answer -- os.path defers to the same posixpath/ntpath
+        # module either way and stats the string as given.
+        path = (
+            candidate if candidate is not None and os.path.exists(candidate) else None
+        )
     if path is None:
-        # Only macOS has a named system sound set. Elsewhere a bare name has
-        # nothing to resolve against, so point SOUNDS at real files.
+        # Nothing left to resolve against: a name absent from both tables
+        # plays nothing rather than handing the player a path that does not
+        # exist, which fails invisibly -- the same reasoning as the darwin
+        # branch above.
         return None
     if os.name == "nt":
         # PowerShell single-quoted strings escape ' by doubling it; nothing
@@ -249,6 +300,17 @@ def banner_argv(title, message):
         # AppleScript string literals escape only backslash and quote.
         script = f'display notification "{applescript(message)}" with title "{applescript(title)}"'
         return ["osascript", "-e", script]
+    if os.name == "nt":
+        # A balloon through the shell's own notify area: it needs no
+        # third-party module, unlike the toast APIs.
+        script = (
+            "[reflection.assembly]::LoadWithPartialName('System.Windows.Forms')|Out-Null;"
+            "$n=New-Object System.Windows.Forms.NotifyIcon;"
+            "$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;"
+            f"$n.ShowBalloonTip(5000,{powershell_literal(title)},{powershell_literal(message)},'Info');"
+            "Start-Sleep -Seconds 5;$n.Dispose()"
+        )
+        return ["powershell", "-NoProfile", "-Command", script]
     notify_send = shutil.which("notify-send")
     if notify_send:
         return [notify_send, "--app-name=Claude Code", title, message]
@@ -257,6 +319,11 @@ def banner_argv(title, message):
 
 def applescript(text):
     return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def powershell_literal(text):
+    """A single-quoted PowerShell string. Only ' is special, doubled."""
+    return "'" + text.replace("'", "''") + "'"
 
 
 def project(data):
@@ -472,7 +539,7 @@ def watchdog(session, pid, title):
     time.sleep(long_task_seconds())
     marker = watch_path(session)
     try:
-        reported = marker.read_text().strip() == NUDGED
+        reported = marker.read_text(encoding="utf-8").strip() == NUDGED
     except OSError:
         # The work drained and some later turn disarmed us.
         return

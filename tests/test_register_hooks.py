@@ -9,6 +9,7 @@ so preflight reports it instead.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -103,7 +104,8 @@ class TestMerge:
 
     def test_updates_a_stale_interpreter_without_duplicating(self):
         """The live drift: promotion-check was registered under a bare
-        python3, below the declared floor."""
+        python3, below the declared floor. Legacy joined-string form, since
+        that is what a pre-migration settings.json holds on disk."""
         settings = {
             "hooks": {
                 "PostToolUse": [
@@ -123,9 +125,55 @@ class TestMerge:
         changes = register_hooks.apply(settings, self.hooks())
         assert any("interpreter" in c for c in changes)
         assert len(settings["hooks"]["PostToolUse"]) == 1
-        command = settings["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
-        assert command.endswith("hooks/promotion-check.py")
-        assert "/.pixi/envs/dev/bin/python " in command
+        hook = settings["hooks"]["PostToolUse"][0]["hooks"][0]
+        assert hook["args"][0].endswith(str(Path("hooks") / "promotion-check.py"))
+        expected = "python.exe" if os.name == "nt" else "/.pixi/envs/dev/bin/python"
+        assert expected in hook["command"]
+
+    def test_migrates_the_new_form_idempotently(self):
+        """Running registration against settings already holding the new
+        command+args form must be a no-op -- the duplication bug this task
+        exists to fix showed up only because repo_hook_in/invokes inspected
+        `command` alone and never recognised this form."""
+        settings: dict = {}
+        register_hooks.apply(settings, self.hooks())
+        hook = settings["hooks"]["PostToolUse"][0]["hooks"][0]
+        assert "args" in hook  # confirms the fixture is genuinely the new form
+        assert register_hooks.apply(settings, self.hooks()) == []
+
+    def test_migrates_the_legacy_joined_string_without_duplicating(self):
+        """A user upgrading from an older install has joined-string entries
+        on disk. They must be recognised and updated in place, never
+        duplicated -- the concrete harm this task exists to fix."""
+        settings = {
+            "hooks": {
+                "PostToolUse": [
+                    {
+                        "matcher": "Write|Edit",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": (
+                                    f"{register_hooks.INTERPRETER} "
+                                    f"{register_hooks.HOOKS_DIR / 'promotion-check.py'}"
+                                ),
+                                "timeout": 10,
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+        changes = register_hooks.apply(settings, self.hooks())
+        assert len(settings["hooks"]["PostToolUse"]) == 1
+        hooks = settings["hooks"]["PostToolUse"][0]["hooks"]
+        assert len(hooks) == 1
+        assert any("updated" in c for c in changes)
+        command, args = register_hooks.command_for("promotion-check.py")
+        assert hooks[0]["command"] == command
+        assert hooks[0]["args"] == args
+        # A second run against the now-migrated settings is a no-op.
+        assert register_hooks.apply(settings, self.hooks()) == []
 
     def test_corrects_a_wrong_matcher(self):
         settings = {
@@ -147,6 +195,7 @@ class TestMerge:
         """The match was `filename in command`, so introducing a `list.py`
         claimed `task-list.py`'s registration and overwrote its command --
         silently unregistering a live hook, with no change reported."""
+        command, args = register_hooks.command_for("task-list.py")
         settings = {
             "hooks": {
                 "SessionStart": [
@@ -154,7 +203,8 @@ class TestMerge:
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": register_hooks.command_for("task-list.py"),
+                                "command": command,
+                                "args": args,
                             }
                         ]
                     }
@@ -165,10 +215,13 @@ class TestMerge:
             settings,
             [("task-list.py", "SessionStart", None), ("list.py", "SessionStart", None)],
         )
-        commands = [
-            h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]
+        names = [
+            Path(a).name
+            for e in settings["hooks"]["SessionStart"]
+            for h in e["hooks"]
+            for a in h["args"]
         ]
-        assert sorted(Path(c).name for c in commands) == ["list.py", "task-list.py"]
+        assert sorted(names) == ["list.py", "task-list.py"]
 
     def test_leaves_unrelated_hooks_alone(self):
         settings = {
@@ -194,26 +247,18 @@ class TestPrune:
     """
 
     def registry(self, event, *filenames):
-        return {
-            "hooks": {
-                event: [
-                    {
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": register_hooks.command_for(name),
-                                "timeout": 10,
-                            }
-                        ]
-                    }
-                    for name in filenames
-                ]
-            }
-        }
+        def hook_for(name):
+            command, args = register_hooks.command_for(name)
+            return {"type": "command", "command": command, "args": args, "timeout": 10}
+
+        return {"hooks": {event: [{"hooks": [hook_for(name)]} for name in filenames]}}
 
     def commands(self, settings, event):
+        # Last token covers both forms: the script is args[-1] in the new
+        # form, and the tail of the joined string in the legacy form some
+        # cases here deliberately still use.
         return sorted(
-            Path(h["command"]).name
+            register_hooks._tokens(h)[-1].rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
             for e in settings["hooks"].get(event, [])
             for h in e["hooks"]
         )
@@ -249,6 +294,9 @@ class TestPrune:
         rewritten one: identical commands, the hook firing twice per tool
         call, and every later run reporting "already registered". prune()
         cannot reach it either -- the name is still declared."""
+        _promotion_check_command, _promotion_check_args = register_hooks.command_for(
+            "promotion-check.py"
+        )
         settings = {
             "hooks": {
                 "PostToolUse": [
@@ -266,9 +314,8 @@ class TestPrune:
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": register_hooks.command_for(
-                                    "promotion-check.py"
-                                ),
+                                "command": _promotion_check_command,
+                                "args": _promotion_check_args,
                                 "timeout": 10,
                             }
                         ],
@@ -305,12 +352,14 @@ class TestPrune:
         register_hooks.main(["--settings", str(settings)])
         assert register_hooks.main(["--check", "--settings", str(settings)]) == 0
         current = json.loads(settings.read_text())
+        command, args = register_hooks.command_for("gone.py")
         current["hooks"]["SessionStart"].append(
             {
                 "hooks": [
                     {
                         "type": "command",
-                        "command": register_hooks.command_for("gone.py"),
+                        "command": command,
+                        "args": args,
                     }
                 ]
             }
@@ -384,6 +433,81 @@ class TestMainContract:
         assert not settings.exists()
 
 
+class TestSpacedRepoPath:
+    """A repo path containing a space -- "/Users/me/My Projects/..." -- is
+    ordinary on macOS and Windows alike. Legacy joined commands were parsed
+    with str.split(), which shredded such a path into fragments that named no
+    file, so repo_hook_in returned None and prune could never unregister a
+    stale hook on those machines. The command+args write path was already
+    fixed for this; this is the same hazard on the read path.
+    """
+
+    SPACED = Path("/Users/me/My Projects/claude-config")
+
+    @pytest.fixture(autouse=True)
+    def _spaced_repo(self, monkeypatch: pytest.MonkeyPatch):
+        hooks_dir = self.SPACED / "hooks"
+        monkeypatch.setattr(register_hooks, "HOOKS_DIR", hooks_dir)
+        monkeypatch.setattr(
+            register_hooks,
+            "INTERPRETER",
+            self.SPACED / ".pixi" / "envs" / "dev" / "bin" / "python",
+        )
+        return hooks_dir
+
+    def legacy(self, filename):
+        return {
+            "type": "command",
+            "command": (
+                f"{register_hooks.INTERPRETER} {register_hooks.HOOKS_DIR / filename}"
+            ),
+            "timeout": 10,
+        }
+
+    def test_repo_hook_in_finds_the_hook_despite_the_space(self):
+        assert register_hooks.repo_hook_in(self.legacy("notify.py")) == "notify.py"
+
+    def test_a_stale_legacy_registration_is_pruned(self):
+        settings = {"hooks": {"SessionStart": [{"hooks": [self.legacy("gone.py")]}]}}
+        changes = register_hooks.apply(settings, [])
+        assert changes == ["unregistered SessionStart -> gone.py"]
+        assert settings["hooks"] == {}
+
+    def test_a_legacy_registration_migrates_in_place_exactly_once(self):
+        settings = {
+            "hooks": {
+                "SessionStart": [{"hooks": [self.legacy("task-list.py")]}],
+            }
+        }
+        hooks = [("task-list.py", "SessionStart", None)]
+        register_hooks.apply(settings, hooks)
+        entries = settings["hooks"]["SessionStart"]
+        assert len(entries) == 1 and len(entries[0]["hooks"]) == 1
+        command, args = register_hooks.command_for("task-list.py")
+        assert entries[0]["hooks"][0]["command"] == command
+        assert entries[0]["hooks"][0]["args"] == args
+        assert register_hooks.apply(settings, hooks) == []
+
+    def test_a_foreign_command_with_a_space_is_still_left_alone(self):
+        """Widening the parse must not widen ownership: only a path whose
+        parent is exactly this repo's hooks dir is ours to remove."""
+        settings = {
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python /Other Tool/hooks/gone.py",
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        assert register_hooks.apply(settings, []) == []
+
+
 class TestInterpreterPrerequisite:
     """A registered hook names the project interpreter in its command, so that
     binary is a prerequisite for the hook to run at all. An earlier version
@@ -404,6 +528,7 @@ class TestInterpreterPrerequisite:
         assert json.loads(settings.read_text()) == {}
 
     def test_command_names_the_project_interpreter(self):
-        command = register_hooks.command_for("task-list.py")
-        assert "/.pixi/envs/dev/bin/python " in command
-        assert command.endswith("hooks/task-list.py")
+        command, args = register_hooks.command_for("task-list.py")
+        expected = "python.exe" if os.name == "nt" else "/.pixi/envs/dev/bin/python"
+        assert expected in command
+        assert args[0].endswith(str(Path("hooks") / "task-list.py"))

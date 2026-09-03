@@ -7,9 +7,11 @@ in review, rather than to a restatement of the implementation.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
+import platform_paths
 import preflight
 import pytest
 from conftest import run_git
@@ -215,10 +217,24 @@ class TestHookInstalled:
 
 
 class TestTests:
-    def test_absent_runner_reports_instead_of_raising(self, git_repo: Path):
+    def test_absent_runner_reports_instead_of_raising(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         """A runner not on PATH used to raise FileNotFoundError out of the
-        report entirely."""
+        report entirely.
+
+        Asserting that a bare command name (e.g. "task") is absent from PATH
+        would be environment-dependent by construction -- this machine, for
+        instance, has an unrelated `task` executable installed -- so the
+        FileNotFoundError branch is exercised directly by stubbing
+        subprocess.run rather than relying on real PATH contents.
+        """
         (git_repo / "Taskfile.yml").write_text("tasks:\n  test:\n    cmds: [true]\n")
+
+        def fake_run(*a, **kw):
+            raise FileNotFoundError("task")
+
+        monkeypatch.setattr(preflight.subprocess, "run", fake_run)
         report = preflight.Report()
         preflight.check_tests(report, git_repo, run=True)
         assert statuses(report, "tests") == [FAIL]
@@ -386,6 +402,11 @@ class TestInterpreter:
         preflight.check_interpreter(report, tmp_path)
         assert statuses(report, "interpreter") == [WARN]
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="os.symlink needs elevation or Developer Mode on Windows; the "
+        "junction path is covered by tests/test_platform_paths.py",
+    )
     def test_an_env_reached_through_a_symlink_is_local(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
@@ -529,24 +550,30 @@ class TestSkillsLinked:
     """
 
     def project(self, root: Path, *names: str) -> Path:
-        (root / "install.sh").write_text("#!/bin/sh\n")
+        # Gated on install.py, not install.sh: the installer is
+        # platform-dispatched (install.ps1 on Windows), and install.py is the
+        # one file present under every dispatch.
+        (root / "install.py").write_text("", encoding="utf-8")
         for name in names:
             (root / "skills" / name).mkdir(parents=True)
         installed = root / "installed"
         installed.mkdir()
         return installed
 
+    def link(self, installed: Path, name: str, target: Path) -> None:
+        platform_paths.link_dir(target, installed / name)
+
     def test_ok_when_every_skill_is_linked(self, tmp_path: Path):
         installed = self.project(tmp_path, "alpha", "beta")
         for name in ("alpha", "beta"):
-            (installed / name).symlink_to(tmp_path / "skills" / name)
+            self.link(installed, name, tmp_path / "skills" / name)
         report = preflight.Report()
         preflight.check_skills(report, tmp_path, installed)
         assert statuses(report, "skills linked") == [OK]
 
     def test_warns_about_a_skill_that_was_never_linked(self, tmp_path: Path):
         installed = self.project(tmp_path, "alpha", "beta")
-        (installed / "alpha").symlink_to(tmp_path / "skills" / "alpha")
+        self.link(installed, "alpha", tmp_path / "skills" / "alpha")
         report = preflight.Report()
         preflight.check_skills(report, tmp_path, installed)
         assert statuses(report, "skills linked") == [WARN]
@@ -554,8 +581,13 @@ class TestSkillsLinked:
 
     def test_warns_about_a_link_whose_skill_is_gone(self, tmp_path: Path):
         installed = self.project(tmp_path, "alpha")
-        (installed / "alpha").symlink_to(tmp_path / "skills" / "alpha")
-        (installed / "renamed-away").symlink_to(tmp_path / "skills" / "renamed-away")
+        self.link(installed, "alpha", tmp_path / "skills" / "alpha")
+        # link_dir requires a real target, unlike the dangling link this
+        # simulates, so the junction/symlink is built by hand here.
+        gone = tmp_path / "skills" / "renamed-away"
+        gone.mkdir()
+        self.link(installed, "renamed-away", gone)
+        gone.rmdir()
         report = preflight.Report()
         preflight.check_skills(report, tmp_path, installed)
         assert statuses(report, "skills linked") == [WARN]
@@ -568,3 +600,40 @@ class TestSkillsLinked:
         report = preflight.Report()
         preflight.check_skills(report, tmp_path, tmp_path / "installed")
         assert report.rows == []
+
+    def test_a_worktree_link_into_the_parent_checkout_is_not_a_copy(
+        self, tmp_path: Path
+    ):
+        """The case this check's docstring says it matches by name to avoid.
+
+        main() passes `root` as `git rev-parse --show-toplevel`, which inside
+        a worktree is the worktree -- while the installed links still point at
+        the parent checkout they were written from. Comparing targets against
+        `root` reported every skill as "copy, not a link" and told the user to
+        re-run the installer, which would relink them away from the parent.
+        This repo's CLAUDE.md mandates worktrees for parallel phases.
+        """
+        parent = tmp_path / "parent"
+        (parent / "skills" / "alpha").mkdir(parents=True)
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        installed = self.project(worktree, "alpha")
+        # Linked from the parent checkout, as a real install would have been.
+        self.link(installed, "alpha", parent / "skills" / "alpha")
+        report = preflight.Report()
+        preflight.check_skills(report, worktree, installed)
+        assert statuses(report, "skills linked") == [OK]
+
+    def test_a_copy_is_reported_rather_than_counted_as_linked(self, tmp_path: Path):
+        # The failure mode this check exists for: Git Bash's `ln -s` deep-copies
+        # instead of failing on a Windows machine without Developer Mode, so a
+        # copy looks installed and silently stops tracking the repo.
+        import shutil
+
+        installed = self.project(tmp_path, "alpha")
+        shutil.copytree(tmp_path / "skills" / "alpha", installed / "alpha")
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, installed)
+        assert statuses(report, "skills linked") == [WARN]
+        assert "alpha" in details(report, "skills linked")
+        assert "copy" in details(report, "skills linked")

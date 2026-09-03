@@ -191,6 +191,33 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
+# A native Windows path: drive letter, colon, backslash, then everything up to
+# the next whitespace or shell metacharacter. Only backslashes inside a match
+# are doubled below.
+NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
+
+
+def with_doubled_separators(line: str) -> str:
+    """The line with the backslashes inside native Windows paths doubled.
+
+    shlex(posix=True) always treats "\\" as an escape character, which ate the
+    separators out of a path like "C:\\Users\\...\\CLAUDE.md" -- so it no longer
+    matched the directory it lives in, and this hook fired on the master repo's
+    own files, telling the agent to promote a file it was already editing in
+    place.
+
+    Keyed on the shape of the text rather than on os.name, because os.name is
+    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
+    legitimately contains POSIX escapes. Doubling every backslash on Windows
+    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
+    {} \\;` holding a stray "\\" -- inventing a destination that was never
+    written, the exact error tokenize() below declines to risk. A drive-letter
+    prefix is what separates the one shape shlex cannot read from the many it
+    can.
+    """
+    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
+
+
 def tokenize(line: str) -> "list[str] | None":
     """Tokens for one shell line, or None if it cannot be read at all.
 
@@ -200,8 +227,15 @@ def tokenize(line: str) -> "list[str] | None":
     one lifts *paths* out of the command, so stripping an unbalanced quote
     could invent a destination that was never written and put a wrong advisory
     into context. Declining is the cheaper error here.
+
+    Duplicated verbatim in promotion-check.py and audit-owed.py: a hook runs
+    standalone under whatever interpreter ~/.claude/settings.json names,
+    stdlib-only and with no sys.path manipulation, so a shared module is not
+    available here.
     """
-    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer = shlex.shlex(
+        with_doubled_separators(line), posix=True, punctuation_chars=True
+    )
     lexer.whitespace_split = True
     try:
         return list(lexer)
