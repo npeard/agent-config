@@ -353,6 +353,22 @@ def main() -> None:
     # in a worktree was recorded under the main checkout's branch. A rewrite
     # dropped this guard and three tests kept passing, because they only ever
     # asserted silence and the master repo's HEAD had no config asset in it.
+    #
+    # It closes the common case and not all of it, which is worth stating
+    # because the guard reads absolute. `cwd` is the *session's* directory,
+    # so a command that cd's elsewhere and commits there still arrives
+    # claiming this repo -- observed 2026-09-04, from
+    # `cd $(mktemp -d) && git init && git commit`, which recorded an
+    # obligation here for whatever the master repo's own HEAD had touched.
+    #
+    # Left unfixed deliberately, and the reasoning is `failed()`'s: the
+    # residue is one line in a gitignored marker, answered by any matching
+    # discharge and removed by --clear-owed, while both available fixes are
+    # worse. Parsing `cd` out of the command is guesswork about shell state,
+    # and checking HEAD's commit time costs a third subprocess against the
+    # ten-second budget register_hooks.py writes -- and every wrong answer in
+    # that direction silently *forgets* a real obligation, which is the one
+    # failure this hook exists to prevent.
     cwd = data.get("cwd")
     if not isinstance(cwd, str) or not cwd:
         return

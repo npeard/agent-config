@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import platform_paths
 import preflight
 import pytest
 from conftest import run_git
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 OK, WARN, FAIL = preflight.OK, preflight.WARN, preflight.FAIL
 
@@ -628,8 +632,6 @@ class TestSkillsLinked:
         # The failure mode this check exists for: Git Bash's `ln -s` deep-copies
         # instead of failing on a Windows machine without Developer Mode, so a
         # copy looks installed and silently stops tracking the repo.
-        import shutil
-
         installed = self.project(tmp_path, "alpha")
         shutil.copytree(tmp_path / "skills" / "alpha", installed / "alpha")
         report = preflight.Report()
@@ -637,3 +639,80 @@ class TestSkillsLinked:
         assert statuses(report, "skills linked") == [WARN]
         assert "alpha" in details(report, "skills linked")
         assert "copy" in details(report, "skills linked")
+
+
+class TestCopiedAloneIntoANewProject:
+    """The docstring and README both advertise this file as copyable into a
+    new project verbatim, and `scripts/platform_paths.py` is deliberately not
+    on that list -- it is described as a library module, not a copied tool.
+
+    So a bare copy has to work. It did not: the sibling was loaded
+    unconditionally at module scope, so a copy raised FileNotFoundError from
+    the import before a single check ran -- and in a script whose exit
+    contract is 0 unless --strict, precisely so a SessionStart hook can never
+    abort a session over a warning.
+    """
+
+    def copy_alone(self, tmp_path: Path) -> Path:
+        target = tmp_path / "preflight.py"
+        shutil.copy(REPO_ROOT / "scripts" / "preflight.py", target)
+        subprocess.run(
+            ["git", "init", "-q", "-b", "main", "."], cwd=tmp_path, check=True
+        )
+        return target
+
+    def test_a_bare_copy_still_reports_rather_than_crashing(self, tmp_path: Path):
+        script = self.copy_alone(tmp_path)
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            # The point of the test is that it exits 0; asserting that is
+            # more informative than raising on it.
+            check=False,
+        )
+        assert "Traceback" not in result.stderr, result.stderr
+        assert "FileNotFoundError" not in result.stderr
+        assert result.returncode == 0
+        # It ran the checks that do not need the sibling.
+        assert "git repository" in result.stdout
+
+    def test_the_checks_that_need_the_sibling_skip_silently(self, tmp_path: Path):
+        """The idiom this file already uses for every other optional sibling:
+        skip, rather than warn about a file the reader did not copy on
+        purpose."""
+        script = self.copy_alone(tmp_path)
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            # The point of the test is that it exits 0; asserting that is
+            # more informative than raising on it.
+            check=False,
+        )
+        assert "skills linked" not in result.stdout
+
+
+class TestInstallHintWithoutTheSibling:
+    """The fallback branch added when platform_paths became optional. It is
+    one boolean, but it is the boolean that decides whether a Windows user is
+    told to run install.sh -- the wrong command entirely, not a cosmetic
+    mismatch."""
+
+    def test_the_sibling_decides_when_it_is_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        class Stub:
+            WINDOWS = True
+
+        monkeypatch.setattr(preflight, "platform_paths", Stub)
+        assert preflight._install_hint() == "./install.ps1"
+
+    def test_os_name_decides_when_it_is_absent(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(preflight, "platform_paths", None)
+        monkeypatch.setattr(preflight.os, "name", "nt")
+        assert preflight._install_hint() == "./install.ps1"
+        monkeypatch.setattr(preflight.os, "name", "posix")
+        assert preflight._install_hint() == "./install.sh"

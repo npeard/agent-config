@@ -286,11 +286,13 @@ pixi run all                        # format, lint, ascii, spell,
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `burn.py`, `toolgaps.py`, `suppressions.py`,
   `thresholds.py`) meant to be copied into new projects rather than
-  rewritten from scratch, plus `register_hooks.py` and
-  `audit_assets.py`, which are specific to this repo -- the first to its
-  install, the second because it knows this layout rather than
-  describing a capability every project has. `audit_assets.py` also owns
-  the always-loaded context ceilings, which
+  rewritten from scratch. Copied alone each one runs; `preflight.py`
+  skips its two link-related checks unless `platform_paths.py` is copied
+  beside it, and says so rather than failing to start. Plus
+  `register_hooks.py` and `audit_assets.py`, which are specific to this
+  repo -- the first to its install, the second because it knows this
+  layout rather than describing a capability every project has.
+  `audit_assets.py` also owns the always-loaded context ceilings, which
   `tests/test_context_budget.py` imports rather than restating, so the
   gate and the report share one definition of each number.
   `check_ascii.py` lets a single file opt out with a reason-bearing

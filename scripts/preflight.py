@@ -12,7 +12,10 @@ should have at all (capability).** Pre-commit installation and test results
 are state and belong here; "is there a type checker at all" does not.
 
 Deliberately stdlib-only and project-agnostic -- it is meant to be copied
-into new projects verbatim, per this repo's ``scripts/`` convention. It
+into new projects verbatim, per this repo's ``scripts/`` convention. Copied
+alone it runs and reports; the two checks that ask what a link is on this
+platform (hook registration and skill links) need ``platform_paths.py``
+beside it and skip without it. It
 assumes a current interpreter rather than degrading to whatever `python3`
 the machine ships: every project gets a local pixi environment, and hooks
 invoke that environment's python explicitly. See the interpreter check
@@ -40,6 +43,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -47,14 +51,31 @@ from pathlib import Path
 
 
 def _load_platform_paths():
-    """Import the sibling module without a package, and without a
-    sys.path mutation `ruff --fix` would hoist above (E402) since this repo
-    ships zero suppressions. Mirrors the importlib pattern this repo's own
-    tests already use for hyphenated hook filenames.
+    """The sibling platform module, or None when it was not copied along.
+
+    Loaded by path rather than by name so resolution does not depend on
+    sys.path, and so no sys.path mutation is needed -- `ruff --fix` would
+    hoist one above the E402 boundary, and this repo ships zero
+    suppressions. (An earlier version of this docstring cited the importlib
+    pattern the tests use for *hyphenated* hook filenames as the precedent.
+    That is a different problem: `platform_paths` is a legal identifier and
+    could be imported by name. Loading by path is still the better fit here,
+    for the sys.path reason, but the cited precedent did not support it.)
+
+    None is not an error. This file's own docstring and the README both
+    advertise it as copyable into a new project verbatim, and
+    platform_paths.py is deliberately not on that list -- it is a library
+    module. Loading it unconditionally broke that promise the loudest way
+    available: a FileNotFoundError traceback from module scope, before a
+    single check ran, in a script whose exit contract is 0 unless --strict
+    precisely so a SessionStart hook can never abort a session over a
+    warning. The checks that need it now skip, which is the idiom every
+    other optional sibling here already uses.
     """
-    spec = importlib.util.spec_from_file_location(
-        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
-    )
+    path = Path(__file__).resolve().parent / "platform_paths.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("platform_paths", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -582,8 +603,14 @@ def _install_hint() -> str:
     machine without Developer Mode, so the two platforms need different
     installers -- telling a Windows user to run install.sh names the wrong
     command entirely, not just a cosmetic mismatch.
+
+    Falls back to os.name when the sibling was not copied along. That is the
+    one platform fact this file can answer for itself -- it is what
+    platform_paths.WINDOWS is defined as -- and a remediation hint is worth
+    more approximately right than absent.
     """
-    return "./install.ps1" if platform_paths.WINDOWS else "./install.sh"
+    windows = platform_paths.WINDOWS if platform_paths else os.name == "nt"
+    return "./install.ps1" if windows else "./install.sh"
 
 
 def check_skills(report: Report, root: Path, installed: Path) -> None:
@@ -605,6 +632,12 @@ def check_skills(report: Report, root: Path, installed: Path) -> None:
     """
     source = root / "skills"
     if not source.is_dir() or not (root / "install.py").is_file():
+        return
+    # Link-ness is the whole check, and platform_paths owns what a link is on
+    # each platform. Without it there is nothing to report, so skip rather
+    # than guess -- a wrong "copy, not a link" tells the user to re-run the
+    # installer, which is the one action that would make things worse.
+    if platform_paths is None:
         return
     carried = {p.name for p in source.iterdir() if p.is_dir()}
     # exists() follows the link, so a dangling one reads as absent -- which is

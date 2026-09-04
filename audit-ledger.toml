@@ -234,7 +234,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "7ec25ba512c5251262998b386a347e78b3ecd018861c13759a84712a5ffb0b06"
+asset_sha = "7e5c28276d38775bd3e066c87aea7f07db4450dec864305f0b00e62f57429b27"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -264,13 +264,37 @@ neither that path nor the branch name is emitted. Marker writes are O_APPEND
 so concurrent hooks cannot interleave, and a marker holding undecodable bytes
 is read as empty rather than raising.
 
-Re-granted after two Windows fixes: `master_repo` now substitutes HOME itself
-before falling back to expanduser (which prefers USERPROFILE there), and
-`tokenize` doubles backslashes before shlex for the same native-path reason as
-promotion-check.py and prose-writing.py. Both change how the diff-tree paths
-and the master-repo location are resolved and parsed, not what is done with
-them once resolved -- the four-item cap, JSON-string-literal framing, and
-marker quoting this entry rests on are all unchanged.
+Re-granted after the Windows portability commit (79e8ff7), and this paragraph
+was wrong when first written: it claimed `master_repo` had started
+substituting HOME itself before falling back to expanduser. That commit did
+the opposite -- it *removed* a HOME substitution, and `master_repo()` now
+leaves "~" entirely to `os.path.expanduser`, whose docstring records why
+(Git Bash and MSYS2 export HOME in POSIX form or on a mapped drive, either of
+which made the hook name a directory that does not exist and silently never
+fire). Corrected 2026-09-04 by the audit that was owed on this asset.
+
+The claim mattering here is not the mechanism but its reach, and that is
+unchanged either way: `tokenize` doubles backslashes before shlex for the
+same native-path reason as promotion-check.py and prose-writing.py, and both
+that and the master-repo resolution change *how* diff-tree paths and the
+repo location are resolved and parsed, not what is done with them once
+resolved. The four-item cap, the JSON-string-literal framing and the marker
+quoting this entry rests on are untouched.
+
+Worth naming because the mechanical check cannot reach it: `asset_sha` was
+bumped in the same commit as the code, so the entry looked current while
+saying something false about the code it certified. A hash proves the file
+has not changed since the note was written; it cannot prove the note was
+ever true.
+
+Re-granted again 2026-09-04, for a comment-only change: the cwd guard now
+states that it closes the common case and not all of it. A `git commit` run
+under a `cd` elsewhere in the same Bash command still arrives claiming this
+repo, because the payload's `cwd` is the session's directory. That is an
+accuracy limit rather than a trust-boundary one -- nothing new reaches a
+sink, and the residue is one line in a gitignored marker that any matching
+discharge answers -- so this entry's reasoning is unchanged. Re-granted only
+because the hash is over content, which a comment changes.
 """
 
 [[decision]]
