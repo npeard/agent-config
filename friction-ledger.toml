@@ -187,9 +187,6 @@ rejected: it would add always-injected context to every session in every
 project to save an occasional round trip, and the correct invocation differs
 per project.
 
-`jq` is absent and might be worth having on the machine for its own sake.
-That is a machine change rather than a repo one, so it is noted here and not
-made.
 """
 
 [[decision]]
@@ -409,15 +406,20 @@ outcome = "tier-0"
 count_at_decision = 9
 note = """
 New class, from the same unclassified sweep as `command-timeout`: 9 errors
-where a shell command was handed a path that is not there. Deliberately not
+where a command was handed a path that is not there, 8 of which were
+unclassified before (the ninth is a `FileNotFoundError` traceback already
+counted under `python-traceback`). Deliberately not
 merged into `file-not-found`, which matches the Read tool's own "File does
 not exist" -- the boundary is one sentence, the harness refusing a path it
 was asked to read versus a shell command failing on one, and the fixes
 differ, so counting them together would hide which is which.
 
-Three of the nine are `cd: no such file or directory` on a relative path,
-and the rest are `sed`/`ugrep` on a filename that was guessed rather than
-listed. The recurring shape is a relative path resolved against a working
+Counted, since this note claims to be: 3 are `cd: no such file or directory`
+on a relative path, 4 are `sed` or `ugrep` on a filename that was guessed
+rather than listed, and 2 are neither -- a Ghostscript initialisation
+failure and the traceback noted above. So the shape below describes 7 of the
+9 and not all of them. The recurring shape is a relative path resolved
+against a working
 directory the command was not actually in -- which is a real hazard here,
 because the Bash tool's cwd persists between calls and is not always where
 the last `cd` left it.

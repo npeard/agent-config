@@ -24,7 +24,7 @@ principle = 5
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "c1dc4274c1ed9c684905edcc970dc71a78752bfc1af2ae027f8823b6a3854ee0"
+asset_sha = "4acc49978d39b2b17225548e1715dac0e71f93b0706502ce82505fca6215c9f4"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
@@ -47,6 +47,15 @@ actionable. The finding was about framing, not about the feature.
 Re-granted after adding encoding="utf-8" to two read_text calls
 (cross-platform default-encoding fix). Neither call is on the excerpt path;
 the framing this entry rests on is unchanged.
+
+Re-verified 2026-09-04 for the two classes added to the CLASSES table
+(`command-timeout`, `path-not-found`). That table is matched against error
+text and yields only names this repo authored; the excerpt path this entry
+actually rests on -- `review_bundle`'s single `json.dumps` of a
+400-character transcript slice -- is untouched. Which is the pattern of
+every re-grant on this asset so far: the file keeps changing where it
+classifies rather than where it emits, and the note is re-read rather than
+re-stamped because a hash cannot tell those two apart.
 """
 
 [[decision]]

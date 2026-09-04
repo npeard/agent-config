@@ -450,6 +450,14 @@ class TestBenignAnchoring:
         what the unclassified rate exists to drive towards -- and only the
         over-specified assertion failed. The docstring above was always
         about the benign bucket.
+
+        Verified as still a gate rather than a formality: with HARD_FAILURE
+        neutered, the segfault and parse-error cases fail. The timeout case
+        does not, and that is not a hole -- `command-timeout` matches it
+        before the benign fallback is reached, so it now passes for a
+        different reason than its two siblings. The unclassified fallback
+        itself is held by `test_genuinely_unknown_is_unclassified` above,
+        which is where that concern belongs.
         """
         assert friction.BENIGN not in friction.classify(text)
 
@@ -466,10 +474,14 @@ class TestBenignAnchoring:
 
 class TestClassesCompletedFromTheUnclassifiedBucket:
     """Two shapes that HARD_FAILURE already refused to call benign but that
-    no class matched, so they sat in `unclassified` -- 21 of the 31 there
+    no class matched, so they sat in `unclassified` -- 22 of the 31 there
     when this was measured (2026-09-04). The unclassified rate is supposed
     to measure classifier decay; a shape the author deliberately excluded
     from the benign bucket and then never named is that decay showing up.
+
+    22, not 23: one of the 23 errors matching a new class also matches
+    `python-traceback`, so it was already counted and only 22 left the
+    unclassified bucket. 31 - 22 = 9, which is what the table now reports.
     """
 
     def test_a_timed_out_command_is_classified(self):
