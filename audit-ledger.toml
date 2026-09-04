@@ -303,22 +303,57 @@ principle = 5
 date = "2026-09-03"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "a270e9b9ebf1b8219c401620d86a25b66a61d60d7d19cd1447db459bb7e08a60"
+asset_sha = "1401da72ed8e13a12042adb47ccc618574d6b33160e9283d555051c6d7cdeeaf"
 note = """
 Reads every session transcript and prints a report a model will read, so it
 hits the same read/emit conjunction as friction.py. Fixed rather than
 accepted, and by a different means, because the untrusted values have a
 different shape.
 
-friction.py emits 400 characters of transcript *prose*, which can only be
-made safe by quoting -- hence its JSON string literal. Everything untrusted
-here is a short identifier: a project directory name, an Agent dispatch's
-`model` string, and a timestamp. Each goes through `safe()`, which filters
-to `[A-Za-z0-9._:@/[]-]` and bounds the length, so a value cannot contain a
-newline, tab, quote, backslash or escape sequence -- it cannot forge a table
+Re-granted 2026-09-04: the branch that added the read-size distribution
+introduced a second class of untrusted value, and the previous note's claim
+that "no token from `tool_input` is emitted" became false. Both classes and
+both answers are recorded below, because the reason they differ is the part
+that would be lost.
+
+**Identifiers** -- a project directory name, an Agent dispatch's `model`
+string, a timestamp -- go through `safe()`, which filters to
+`[A-Za-z0-9._:@/[]-]` and bounds the length, so a value cannot contain a
+newline, tab, quote, backslash or escape sequence. It cannot forge a table
 row, restate the totals, clear the screen, or smuggle an instruction. A
 value reduced to nothing prints a placeholder rather than an empty cell, so
 it cannot shift the columns either.
+
+**A Bash command** is the new one, printed in the "largest read-only
+results" rows so the reader can recognise the call worth changing. It cannot
+use the identifier charset, because that charset forbids spaces and a
+command without spaces is unreadable -- which was the whole reason for
+printing it. So it is answered the way friction.py answers transcript
+prose: the print site emits the value as a JSON string literal, which
+escapes control characters and quotes, so the row is unambiguously a datum
+being reported rather than a line addressed to the reader.
+
+Which half does what matters here, because a mutation test found the
+intuitive answer was wrong. `json.dumps` is the boundary and is
+independently load-bearing -- it escapes a newline or an ANSI escape on its
+own, so it alone is what stops a forged row or a cleared screen.
+`safe_command()` is *presentation*: it collapses whitespace to one readable
+line, filters to printable ASCII, and bounds the width via `elide()`. Both
+are wanted, and the distinction is recorded because a test asserting the
+escaping passes with `safe_command` removed, so a reader who believes it is
+the security mechanism can delete the wrong one and see green. The test
+that holds `safe_command` at that call site asserts the width bound, which
+is the property that actually disappears without it.
+
+Two consequences worth keeping straight. `collect()` bounds the retained
+command to 400 characters, but that is a memory bound and makes no safety
+claim -- the filtering happens at the print site like everything else here,
+and `safe_command()` re-collapses whitespace itself rather than trusting its
+caller to have done it. That bound uses `elide()` rather than a slice: 11%
+of observed commands are longer, and a front slice discarded the real end,
+so a bounded `... | head -50` printed as unbounded. And `safe_command()`'s
+return value must not be printed bare; its docstring says so, because the
+JSON quoting is the half of the answer that lives at the call site.
 
 Slicing a value short is not a substitute for filtering it, and this is the
 mistake to not reintroduce: a timestamp is printed as `first[:10]`, and ten
@@ -332,15 +367,16 @@ format string, and equally cannot stop the sweep: a string count used to
 raise out of `cost()` and kill a whole 30-day run, which broke this
 script's own promise to be a report and not a gate. Session keys are
 derived from filesystem paths and used only for grouping, never emitted.
-Bash commands and skill names are matched against regexes and yield only
-counts; no token from `tool_input` is emitted.
+Skill names are matched against regexes and yield only counts.
 
 Verified by execution against a transcript tree whose project directory
 name, model string and timestamp all carry newlines and an ANSI escape,
 and whose usage record carries a non-numeric count -- the forged rows
 render as single filtered cells and the sweep completes. Regression tests
 are TestUntrustedNames, TestTimestampIsAlsoUntrusted and
-TestMalformedUsageIsTolerated in tests/test_burn.py.
+TestMalformedUsageIsTolerated in tests/test_burn.py, plus TestSafeCommand
+and TestRenderedDistribution's `test_a_command_is_printed_as_a_quoted_datum`
+for the command path.
 
 The PRICING table is the residual risk this cannot close by construction: a
 stale rate produces confidently wrong dollars. Answered by printing the

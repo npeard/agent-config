@@ -27,6 +27,37 @@ the point of having an instrument rather than an anecdote:
                             do not fall from the 3-5 observed before that
                             change, the change did not work.
 
+It also reports the *shape* of read-only shell output, not only its share.
+The share said reading was 50% of what entered context on 2026-09-04; it
+cannot say whether
+that is a handful of unbounded reads or a thousand well-scoped ones, and
+those want opposite answers -- the first is worth a check at the call site,
+the second would be friction for no saving. `oversized_share` is the
+discriminator and the largest reads are named, so the question "would a hook
+here pay for itself" has an answer before the hook exists.
+
+First measured 2026-09-04, and the answer was no: of some 1240 read-only
+results over 30 days, median 1.4k chars, p90 5.8k, p99 18.4k, largest 29.5k.
+The 9 at or over 20k carried 7.5% of read chars, and read-only output was
+half of all tool output -- so a check that eliminated every one of them
+outright would recover under 4% of what enters context.
+
+It would not eliminate them. Three of the nine were already bounded
+(`| tail -40`, `sed -n <range>`). The other six were a `cat` of a whole file
+read for its contents -- a CLAUDE.md, two scripts, a skill file. Denying the
+`cat` moves the same chars into a Read, and `head`-ing a file you are reading
+to understand loses the thing you read it for, so a check at the call site
+redirects the cost rather than removing it. What removes it is delegation, because a subagent's
+context is discarded when it returns -- which is what the break-even below
+already argues, and why hooks/agent-model.py enforces the model half of it.
+
+Every figure above is one this tool prints, so re-run it before revisiting
+rather than trusting this paragraph -- and note what the first run got
+wrong. safe_command() then truncated from the front, so a `cd <path> &&`
+prefix ate the visible part of four rows and the largest reads read as
+already-bounded `sed -n` forms; "the reads are all scoped already" looked
+obvious and was an artefact. The shape, not the anecdote, is the decision.
+
 Usage:
     python scripts/burn.py [--json] [--project NAME] [--since DAYS]
                            [--all-time] [--sessions]
@@ -121,22 +152,129 @@ REVIEW_SKILLS = frozenset(
 CATCH_ALL = frozenset({"", "general-purpose", "claude", "default"})
 
 
-# Everything this report prints that it did not author itself -- project
-# directory names, and the `model` string off an Agent dispatch -- comes out
-# of a transcript, and a transcript can contain anything a model or a tool
-# result put there. friction.py has the same boundary and answers it by
-# quoting an excerpt as a JSON string literal; here the untrusted values are
-# short identifiers rather than prose, so they are filtered to an identifier
-# charset instead. That is the stronger answer for this shape: a name that
-# cannot contain a newline or an escape cannot forge a row, restate the
-# totals, or smuggle an instruction into a report a model will read.
+# The standard rough conversion. A break-even, not a bill: a 10-20% error in
+# it does not change which side of the line a model tier falls on.
+CHARS_PER_TOKEN = 4
+
+# When one read-only result is large enough that it should have been a
+# subagent's problem, expressed as the thing that actually matters -- what
+# retaining it costs. A result at this size costs OVERSIZED_DOLLARS to carry
+# for the rest of a long session at opus cache-read rates, which is more than
+# the median haiku dispatch this report prices below: it has already cost
+# more sitting in context than delegating the read would have.
+#
+# Derived rather than hardcoded, for the reason the PRICING note above gives.
+# A threshold justified by arithmetic in a comment drifts silently when the
+# rates move; one computed from them moves with them, and render() prints the
+# figure it arrived at.
+OVERSIZED_DOLLARS = 0.75
+RETAINED_TURNS = 300
+OVERSIZED_CHARS = round(
+    OVERSIZED_DOLLARS
+    * CHARS_PER_TOKEN
+    * 1e6
+    / (RETAINED_TURNS * CACHE_READ * PRICING[DEFAULT_FAMILY][0])
+)
+# Enough rows to see whether the largest reads share a shape, few enough that
+# the section stays readable in a terminal.
+TOP_READS = 5
+# How much of a command is printed.
+COMMAND_CHARS = 64
+# How much of one is retained. A pure memory bound, and nothing else: the
+# raw command can be a multi-kilobyte heredoc, and a 30-day sweep holds one
+# string per read. friction.py bounds a transcript excerpt at the same 400
+# for the same reason.
+#
+# Bounded with elide() rather than a slice, which is the whole point: 11% of
+# observed commands are over 400 chars, and a front slice discarded their
+# real end -- so the tail elide() later printed was a fragment from around
+# character 400 presented as the command's ending, and a `... | head -50`
+# read as unbounded. That is this branch's own recurring bug moved from the
+# front of the string to the back. Eliding at both stages composes: the
+# outer call takes its head from the original head and its tail from the
+# original tail.
+RAW_COMMAND_CHARS = 400
+
+# Everything this report prints that it did not author itself comes out of a
+# transcript, and a transcript can contain anything a model or a tool result
+# put there. There are two classes of it here, and they need different
+# answers -- conflating them is how a boundary goes quietly wrong:
+#
+# Identifiers -- a project directory name, the `model` string off an Agent
+# dispatch, a timestamp -- are short and have no legitimate spaces, so
+# safe() filters them to an identifier charset. A value that cannot hold a
+# newline, a quote, an escape or a space cannot forge a row, restate the
+# totals, or read as a sentence.
+#
+# A Bash command is not that shape: it is readable text whose spaces are the
+# point, so the identifier charset would destroy the only thing printing it
+# achieves. safe_command() bounds it structurally -- one line, printable
+# ASCII, 64 chars -- which stops it forging a row or restating a total, but
+# 64 printable characters can still read as an instruction. So the print
+# site quotes it as a JSON string literal, which is the answer friction.py
+# reaches for with transcript prose: quoted text is unambiguously a datum
+# being reported rather than a line addressed to the reader.
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._:@/\[\]-]")
+# Printable ASCII only. Whitespace is collapsed before this runs, so the
+# range excluding \x7f is the whole filter a command needs.
+SAFE_COMMAND = re.compile(r"[^\x20-\x7e]")
 
 
 def safe(value: str, limit: int = 40) -> str:
     """A transcript-derived identifier, reduced to something printable."""
     cleaned = SAFE_NAME.sub("?", str(value))[:limit]
     return cleaned or "(blank)"
+
+
+def elide(text: str, limit: int) -> str:
+    """`text` bounded to `limit`, losing the middle rather than either end.
+
+    Slicing a shell command from the front discards what it acted on, which
+    is the half worth reading: `cd /long/path && cat notes.md` cut to 64
+    chars reads as a `cd`. Slicing from the back discards the command name
+    instead. Neither end is safe to drop, so the middle goes.
+
+    General on purpose. The first version of this stripped a known
+    `cd <path> &&` prefix, which covers only the one setup form that had
+    been noticed -- `export X=1 &&`, `pushd`, and a long `find ... -exec`
+    with no prefix at all all reproduce the same failure. That shallow
+    version misread the largest reads as already-bounded and very nearly
+    carried a wrong conclusion into the docstring below.
+    """
+    if len(text) <= limit:
+        return text
+    marker = "..."
+    if limit <= len(marker):
+        return text[:limit]
+    keep = limit - len(marker)
+    head = keep // 2
+    return text[:head] + marker + text[len(text) - (keep - head) :]
+
+
+def safe_command(value: str, limit: int = 64) -> str:
+    """A transcript-derived shell command, reduced to one printable line.
+
+    A wider charset than safe() on purpose. SAFE_NAME turns a space into
+    "?", which is right for an identifier and useless here: the point of
+    printing the command is that the reader recognises the call they would
+    stop making, and `cat?x.py?|?head` is not recognisable.
+
+    So this bounds shape rather than vocabulary. Collapsing whitespace first
+    means no newline or tab survives, and one printable line of bounded
+    length cannot forge a table row or restate the totals. What it does not
+    do -- and safe()'s charset did, by accident of forbidding spaces -- is
+    stop the value reading as a sentence: 64 printable characters are enough
+    for an instruction. That residual is closed at the print site, which
+    emits this as a JSON string literal; see the boundary note above. Do not
+    print the return value bare.
+
+    Collapsing here as well as at ingest is deliberate rather than
+    redundant: this filter's guarantees have to hold for any caller, and one
+    that depends on having been handed normalised text is one bad call site
+    away from printing a newline.
+    """
+    cleaned = SAFE_COMMAND.sub("?", " ".join(str(value).split()))
+    return elide(cleaned, limit) or "(blank)"
 
 
 def is_delegable_read(name: str, tool_input: dict) -> bool:
@@ -284,13 +422,16 @@ class Burn:
         self.dispatches = 0
         self.max_context = 0
         self.turn_costs: list[float] = []
-        # Chars of tool output landing in orchestrator context, split by
-        # whether the call that produced it was delegable. This is the
+        # Chars of tool output landing in orchestrator context. The total
+        # is what accumulates; read_sizes is the delegable part of it, kept
+        # per result rather than summed, because the distribution answers
+        # questions the total cannot -- see distribution(). This is the
         # measurement that justifies delegating at all: read-only shell
-        # output is 41% of everything accumulating in context, and context
-        # is re-read at cache-read rates on every later turn.
+        # output was 50% of everything accumulating in context when last
+        # measured (2026-09-04), and context is re-read at cache-read rates
+        # on every later turn.
         self.result_chars = 0
-        self.read_only_chars = 0
+        self.read_sizes: list[tuple[int, str]] = []
         # One subagent transcript is one dispatch, so its own total is what
         # a dispatch costs -- the number the delegate-or-inline decision
         # has to be weighed against.
@@ -342,10 +483,28 @@ class Burn:
         elif name == "Skill" and str(tool_input.get("skill")) in REVIEW_SKILLS:
             self.review_rounds += 1
 
-    def record_result(self, chars: int, delegable: bool) -> None:
+    def record_result(self, chars: int, command: str) -> None:
+        """Size one tool result. A command means it was a delegable read.
+
+        Empty is unambiguous: is_delegable_read() is false for an empty
+        command, so no delegable call can arrive without one.
+
+        Required rather than defaulted to "". Omitting it would mean "not a
+        read", so a caller that forgot it would drop the result from
+        read_sizes, from read_only_chars, and from the share -- while still
+        counting it in result_chars. That is a silent undercount of the
+        measurement this whole report is built on, which is the one failure
+        mode worth a mandatory argument.
+        """
         self.result_chars += chars
-        if delegable:
-            self.read_only_chars += chars
+        if command:
+            self.read_sizes.append((chars, command))
+
+    @property
+    def read_only_chars(self) -> int:
+        """Summed rather than counted alongside, so the share this feeds and
+        the distribution beside it cannot disagree about the same calls."""
+        return sum(size for size, _ in self.read_sizes)
 
     def record_dispatch_cost(self, spend: float, model: str | None) -> None:
         self.dispatch_costs.append((spend, family(model)))
@@ -369,11 +528,20 @@ def collect(files: list[tuple[Path, bool]], since: str = "") -> dict[str, Burn]:
         except OSError:
             continue
         key = session_of(path, is_subagent)
-        # tool_use id -> whether that call was delegable reading. A result
-        # arrives in a later record than the call that caused it, so sizing
-        # it by origin needs this join; without it every result looks alike
-        # and the delegable share cannot be separated out.
-        delegable: dict[str, bool] = {}
+        # tool_use id -> the command, if that call was delegable reading,
+        # and "" otherwise. A result arrives in a later record than the call
+        # that caused it, so sizing it by origin needs this join; without it
+        # every result looks alike and the delegable share cannot be
+        # separated out. Every id is stored, delegable or not, because
+        # membership is what distinguishes "not a read" from "no such call".
+        #
+        # Bounded here, but filtered at the print site like every other
+        # untrusted value in this file -- two jobs, kept apart. Collapsing
+        # and slicing to RAW_COMMAND_CHARS is only about not holding a
+        # multi-kilobyte heredoc for the length of a 30-day sweep; it makes
+        # no safety claim, and safe_command() re-establishes the boundary
+        # itself rather than trusting this step to have run.
+        reads: dict[str, str] = {}
         file_cost = 0.0
         file_model = None
         for line in lines:
@@ -390,12 +558,12 @@ def collect(files: list[tuple[Path, bool]], since: str = "") -> dict[str, Burn]:
                     if block.get("type") != "tool_result":
                         continue
                     origin = block.get("tool_use_id")
-                    if origin not in delegable:
+                    if origin not in reads:
                         continue
                     burn = sessions.get(key)
                     if burn is not None:
                         burn.record_result(
-                            result_size(block.get("content")), delegable[origin]
+                            result_size(block.get("content")), reads[origin]
                         )
                 continue
             if record.get("type") != "assistant":
@@ -428,7 +596,12 @@ def collect(files: list[tuple[Path, bool]], since: str = "") -> dict[str, Burn]:
                     tool_input = tool_input if isinstance(tool_input, dict) else {}
                     name = block.get("name") or ""
                     burn.record_tool(name, tool_input)
-                    delegable[block.get("id")] = is_delegable_read(name, tool_input)
+                    command = " ".join(str(tool_input.get("command") or "").split())
+                    reads[block.get("id")] = (
+                        elide(command, RAW_COMMAND_CHARS)
+                        if is_delegable_read(name, tool_input)
+                        else ""
+                    )
         if is_subagent and file_cost:
             parent = sessions.get(key)
             if parent is not None:
@@ -457,6 +630,71 @@ def deciles(sessions: dict[str, Burn], buckets: int = 10) -> list[float]:
     return [t / c if c else 0.0 for t, c in zip(totals, counts, strict=True)]
 
 
+def nearest_rank(sizes_asc: list[int], percentile: int) -> int:
+    """The smallest measured value that `percentile`% of the data is within.
+
+    Nearest-rank rather than statistics.quantiles, which interpolates and
+    raises below two data points -- and a window holding one read is an
+    ordinary short session, not a case worth special-casing at the call
+    site. One definition serves median, p90 and p99 together, because a dict
+    whose three percentiles were computed two different ways invites the
+    reader to compare them as if they were not.
+
+    The -1 is what makes this a rank rather than an off-by-one: for ten
+    sorted values p90 is the ninth, not the tenth.
+    """
+    if not sizes_asc:
+        return 0
+    return sizes_asc[max((percentile * len(sizes_asc) - 1) // 100, 0)]
+
+
+def all_read_sizes(sessions) -> list[tuple[int, str]]:
+    """Every session's read sizes as one list, for distribution()."""
+    return [entry for session in sessions for entry in session.read_sizes]
+
+
+def distribution(sizes: list[tuple[int, str]]) -> dict:
+    """The shape of read-only result sizes, not just their mean.
+
+    A mean cannot distinguish the two worlds a hook decision turns on. If a
+    few unbounded reads carry most of the chars, a check aimed at those calls
+    recovers most of the cost; if the chars are spread evenly over reads that
+    were already scoped, the same check is pure friction. `oversized_share`
+    is that discriminator -- the fraction of read chars coming from results
+    at or over OVERSIZED_CHARS -- and `top` names the calls to look at.
+
+    p99 is reported alongside p90 because the question is about a tail, and
+    a tail is where the two worlds first look different.
+
+    `total` comes back with the rest because both callers were summing the
+    same read sizes again for the share line beside it, and two sums of one
+    list are two chances to disagree about it.
+    """
+    # One sort, ascending, serving both the percentiles and the top rows.
+    # Sorting the same chars twice in two directions was measurably 2x this
+    # function, and the descending copy existed to be sliced five deep.
+    ordered = sorted(sizes, key=lambda entry: entry[0])
+    # Sizes, not counts of anything: every statistic below is over the chars
+    # one result contributed.
+    sizes_asc = [size for size, _ in ordered]
+    total = sum(sizes_asc)
+    over = [size for size in sizes_asc if size >= OVERSIZED_CHARS]
+    # No empty-input branch: nearest_rank answers 0 for no data, and the two
+    # remaining unsafe spots are guarded inline. A second copy of this schema
+    # to return zeros from is one a later key silently escapes.
+    return {
+        "count": len(sizes_asc),
+        "total": total,
+        "median": nearest_rank(sizes_asc, 50),
+        "p90": nearest_rank(sizes_asc, 90),
+        "p99": nearest_rank(sizes_asc, 99),
+        "largest": sizes_asc[-1] if sizes_asc else 0,
+        "oversized": len(over),
+        "oversized_share": sum(over) / total if total else 0.0,
+        "top": list(reversed(ordered[-TOP_READS:])),
+    }
+
+
 def tokens(n: int) -> str:
     for unit, size in (("M", 1e6), ("k", 1e3)):
         if n >= size:
@@ -468,8 +706,8 @@ def summary(sessions: dict[str, Burn]) -> dict:
     """Machine-readable, for tracking the two regression signals over time."""
     rounds = [b.review_rounds for b in sessions.values() if b.review_rounds]
     result_chars = sum(b.result_chars for b in sessions.values())
-    read_only_chars = sum(b.read_only_chars for b in sessions.values())
-    share = read_only_chars / result_chars if result_chars else 0.0
+    spread = distribution(all_read_sizes(sessions.values()))
+    share = spread["total"] / result_chars if result_chars else 0.0
     return {
         "sessions": len(sessions),
         "cost_total": round(sum(b.total for b in sessions.values()), 2),
@@ -480,6 +718,11 @@ def summary(sessions: dict[str, Burn]) -> dict:
         "read_only_bash": sum(b.read_only_bash for b in sessions.values()),
         "acting_bash": sum(b.acting_bash for b in sessions.values()),
         "read_only_context_share": round(share, 3),
+        "read_only_median_chars": round(spread["median"]),
+        "read_only_p90_chars": spread["p90"],
+        "read_only_p99_chars": spread["p99"],
+        "read_only_oversized": spread["oversized"],
+        "read_only_oversized_share": round(spread["oversized_share"], 3),
         "review_rounds_max": max(rounds, default=0),
         "review_rounds_mean": round(sum(rounds) / len(rounds), 1) if rounds else 0.0,
     }
@@ -562,18 +805,43 @@ def render(sessions: dict[str, Burn], since: str, show_sessions: bool) -> None:
 
     dispatch_costs = [c for b in ordered for c in b.dispatch_costs]
     result_chars = sum(b.result_chars for b in ordered)
-    read_only_chars = sum(b.read_only_chars for b in ordered)
+    spread = distribution(all_read_sizes(ordered))
+    read_only_chars = spread["total"]
     if result_chars:
         print(
             f"  read-only shell output is {100 * read_only_chars / result_chars:.0f}%"
             " of tool output entering context"
         )
+    if spread["count"]:
+        print(
+            f"  of {spread['count']} read-only results: "
+            f"median {tokens(spread['median'])} chars, "
+            f"p90 {tokens(spread['p90'])}, p99 {tokens(spread['p99'])}, "
+            f"largest {tokens(spread['largest'])}"
+        )
+        print(
+            f"  {spread['oversized']} of {spread['count']} are >="
+            f"{tokens(OVERSIZED_CHARS)} chars and carry "
+            f"{100 * spread['oversized_share']:.0f}% of read-only chars"
+        )
+        print("\n  largest read-only results:")
+        for chars, command in spread["top"]:
+            # Quoted and bounded here, at the boundary: see the note at the
+            # top of the file. The two halves are separable, which is worth
+            # knowing before removing either -- json.dumps escapes control
+            # characters on its own, so it is what stops a forged row, while
+            # safe_command supplies the width bound and the readable single
+            # line. A test asserting the escaping passes without
+            # safe_command; the one that holds it here asserts the width.
+            print(
+                f"    {tokens(chars):>7}  "
+                f"{json.dumps(safe_command(command, COMMAND_CHARS))}"
+            )
     if dispatch_costs and read_only_chars and read_only:
         mean_chars = read_only_chars / read_only
-        # ~4 chars per token is the standard rough conversion; this is a
-        # break-even ratio, so a 10-20% error in it does not change which
-        # side of the line a model tier falls on.
-        kept = mean_chars / 4 * CACHE_READ * PRICING[DEFAULT_FAMILY][0] / 1e6
+        kept = (
+            mean_chars / CHARS_PER_TOKEN * CACHE_READ * PRICING[DEFAULT_FAMILY][0] / 1e6
+        )
         by_family = collections.defaultdict(list)
         for spend, fam in dispatch_costs:
             by_family[fam].append(spend)

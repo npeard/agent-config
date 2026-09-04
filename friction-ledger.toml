@@ -256,3 +256,45 @@ decidable from the string, so it would fire on correct commands. Tier 4 was
 rejected because a line spent in CLAUDE.md is read by every future session
 forever, and this buys back one round trip per three weeks.
 """
+
+[[decision]]
+class = "assertion-failed"
+date = "2026-09-04"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 8
+note = """
+Two benign things share this class, and reading the example rather than the
+name is what separates them.
+
+Most occurrences are an inline heredoc script's own guard: the shape is
+`File "<stdin>", line 9, in <module> AssertionError`, from an
+`assert src.count(old) == 1` written before a string replacement so the edit
+cannot silently no-op or apply twice. When it fires it has prevented a bad
+edit and cost one round trip, which is the definition of cause 4. Removing
+the guard to remove the friction would trade a real guarantee for a smaller
+error count -- the same trade codespell-finding already rejected.
+
+The rest are tests failing during test-driven development, where red before
+green is the method working. A class that counts those as friction is
+counting the process.
+
+The recurring *trigger* for the guard version is worth naming even though it
+changes nothing: edit a file, run `pixi run format`, then try to match text
+the formatter has since rewrapped. Reading the current text first is the fix,
+and the failure already says exactly that at the point of use, with the
+mismatched anchor quoted. A hook cannot help -- it has no way to know what
+string a future replacement intends to match -- and tier 4 was rejected
+because CLAUDE.md is at 1249 of 1250 words and the guidance would restate
+what the traceback already reports.
+
+Checked against write-before-read, which shares that trigger and was also
+decided tier-0. They are distinct, and the boundary is one sentence:
+write-before-read is the harness refusing an edit to a file that changed on
+disk, this is an inline script's own guard refusing a replacement whose
+anchor text no longer matches. Kept separate on that basis.
+
+If this reaches 16, look at whether the guard is firing on *formatter*
+rewrapping specifically, and whether editing before formatting rather than
+after would remove the class without removing the guard.
+"""

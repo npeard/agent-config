@@ -142,7 +142,15 @@ pixi run all                        # format, lint, ascii, spell,
   `hooks/agent-model.py` is registered, and review rounds per session
   should fall from the 3-5 seen before step 6 was scoped to the fix
   diff. The `PRICING` table is the one thing that can go stale and still
-  produce confident output, so the rates travel with every report.
+  produce confident output, so the rates travel with every report. It
+  reports the *shape* of read-only output as well as its share --
+  median, p90, p99, the largest calls by name, and the fraction of read
+  chars coming from results at or over `OVERSIZED_CHARS` -- because the
+  share alone cannot say whether a check at the call site would pay for
+  itself or just be friction, and that is the evidence a tier-1 decision
+  needs. The first run's answer, recorded in the docstring, was that it
+  would not: the largest reads wanted the file contents they fetched, so
+  a check there redirects the cost instead of removing it.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
