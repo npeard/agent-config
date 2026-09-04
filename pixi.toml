@@ -22,6 +22,7 @@ dev = { features = ["dev"], solve-group = "default" }
 ascii = "python scripts/check_ascii.py"
 preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"
+burn = "python scripts/burn.py"
 toolgaps = "python scripts/toolgaps.py"
 suppressions = "python scripts/suppressions.py"
 thresholds = "python scripts/thresholds.py --strict"

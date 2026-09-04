@@ -76,6 +76,7 @@ pixi run lint                       # ruff check
 pixi run ascii                      # scripts/check_ascii.py
 pixi run spell                      # codespell
 pixi run friction                   # recurring friction from transcripts
+pixi run burn                       # where a session's tokens went
 pixi run toolgaps                   # missing tooling + reusable assets
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
@@ -123,6 +124,25 @@ pixi run all                        # format, lint, ascii, spell,
   test fails if a hook omits its marker; `preflight` reports when this
   machine's registrations are out of date, since that is machine state
   rather than repo state and no test can gate it.
+- `scripts/burn.py` -- where a session's tokens actually went, as
+  `pixi run burn`. The companion to `friction.py`, and the same shape:
+  it reads the transcripts off disk, so observing costs no model
+  context, and it always exits 0 because a report is not a gate. It
+  exists because this repo measured everything except the bill --
+  `friction.py` counts recurring *errors* and `audit_assets.py` bounds
+  *static* always-loaded prose, and neither can see the dominant cost,
+  which is dynamic: cache reads -- the conversation being re-sent every
+  turn -- were 61% of orchestrator spend in the first month measured
+  this way, and the mean cost of a turn rose 2.7x between a session's
+  first decile and its last. It prices subagent transcripts too (they
+  are nested under `<session>/subagents/`, and a top-level-only sweep
+  made delegation look free -- they were 23% of spend). Two of its
+  numbers are regression signals for changes already made:
+  `dispatches_missing_model` should stay at 0 while
+  `hooks/agent-model.py` is registered, and review rounds per session
+  should fall from the 3-5 seen before step 6 was scoped to the fix
+  diff. The `PRICING` table is the one thing that can go stale and still
+  produce confident output, so the rates travel with every report.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
@@ -207,6 +227,18 @@ pixi run all                        # format, lint, ascii, spell,
   deleting it, so an audit run too early re-opens by itself when the
   asset next changes. `CLAUDE_CONFIG_REPO` overrides the install path
   for a clone kept elsewhere.
+- `hooks/agent-model.py` -- denies an `Agent` dispatch that omits
+  `model` when the agent type is a catch-all (`general-purpose`,
+  `claude`, or absent), because those inherit the session model and this
+  config runs Opus. CLAUDE.md already asks for the cheapest model that
+  holds accuracy, but the harness default fights the rule: the only way
+  to miss it is upward, and forgetting the field costs the most a
+  dispatch can cost. Measured over 30 days, 19 of 163 dispatches omitted
+  it, and one session omitted it on all 10 of its own. It denies rather
+  than advises because an advisory is a second request to behave and the
+  first one was already being ignored; `opus` stays a valid answer, it
+  just has to be typed. Named specialists and `fork` are left alone -- a
+  specialist may pin its own model, and `fork` ignores the override.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn genuinely comes back to you: the work finished (`Stop`), a tool
   wants permission or a background agent is blocked on an answer
@@ -244,14 +276,15 @@ pixi run all                        # format, lint, ascii, spell,
   silently if that app has no notification permission, so
   `brew install terminal-notifier` is the fix for a missing banner.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
-  `friction.py`, `toolgaps.py`, `suppressions.py`, `thresholds.py`)
-  meant to be copied into new projects rather than rewritten from
-  scratch, plus `register_hooks.py` and `audit_assets.py`, which are
-  specific to this repo -- the first to its install, the second because
-  it knows this layout rather than describing a capability every project
-  has. `audit_assets.py` also owns the always-loaded context ceilings,
-  which `tests/test_context_budget.py` imports rather than restating, so
-  the gate and the report share one definition of each number.
+  `friction.py`, `burn.py`, `toolgaps.py`, `suppressions.py`,
+  `thresholds.py`) meant to be copied into new projects rather than
+  rewritten from scratch, plus `register_hooks.py` and
+  `audit_assets.py`, which are specific to this repo -- the first to its
+  install, the second because it knows this layout rather than
+  describing a capability every project has. `audit_assets.py` also owns
+  the always-loaded context ceilings, which
+  `tests/test_context_budget.py` imports rather than restating, so the
+  gate and the report share one definition of each number.
   `check_ascii.py` lets a single file opt out with a reason-bearing
   `check-ascii: allow` marker in its first ten lines; a marker with no
   reason fails rather than skipping, so the exemption is documented

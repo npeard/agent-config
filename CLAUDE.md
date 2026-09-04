@@ -72,10 +72,10 @@ invoke a skill by the pattern you are fixing, not by the file extension.
    through `superpowers:receiving-code-review` before acting on any of
    them, then fix. Then `standards-and-spec-review` in `branch` mode for
    cross-phase house rules and spec fulfillment, then `simplify` -- it
-   rewrites the tree itself -- then re-verify, since the tree you
-   verified at step 5 no longer exists. Loop while findings remain --
-   but findings massed in the last round's fix mean it added a
-   subsystem, which re-enters at step 4.
+   rewrites the tree itself -- then re-verify, since step 5's tree is
+   gone. Loop on correctness findings over the fix diff -- but findings
+   massed in the last round's fix mean it added a subsystem, which
+   re-enters at step 4.
 7. **Integrate.** `superpowers:finishing-a-development-branch`. Ask
    whether to open a PR or merge locally; if a PR is opened, run
    `/code-review` on it as an independent second pass.

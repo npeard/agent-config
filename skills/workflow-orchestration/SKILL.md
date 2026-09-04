@@ -177,29 +177,30 @@ Order matters here, and the obvious order is wrong:
 3. Dispatch a fix subagent for the survivors.
 4. `standards-and-spec-review` in `branch` mode over the whole branch --
    house rules and spec fulfillment across phases, which per-phase
-   review cannot see. Skip the axes already covered per phase only if
-   every phase was reviewed; otherwise this is the first standards pass.
+   review cannot see. Skip axes covered per phase only if every phase
+   was reviewed.
 5. `simplify` -- reuse, simplification, efficiency. This one *applies*
    its own edits rather than reporting them, so it cannot be gated by
-   the filter above; read the diff it produces and revert anything that
-   buys brevity at the cost of clarity.
+   the filter above; read its diff and revert brevity that costs
+   clarity.
 6. **Re-run Verify (step 5).** The fix subagent and `simplify` have both
    rewritten the tree, so the tree that was verified before this step is
    not the tree that exists now.
-7. If step 1 has new findings to report, loop.
+7. Loop only on surviving correctness findings, over the fix diff.
 
 **A fix that adds a subsystem re-enters at step 4, not step 6.** Read
 *where* the findings are: spread across the branch, the review is
-working. Massed in the code written to answer the last round, the fix
-added machinery -- which owes tests and a phase review before another
-high-effort pass, and is evidence the approach costs more than the one
-it beat.
+working. Massed in the code answering the last round, the fix added
+machinery -- which owes tests and a phase review first.
 
-**Loop exit conditions.** Leave the loop when review yields no surviving
-findings and verification passes. Escalate to the user instead when: the
-same finding recurs after two fix attempts (thrash, not progress); a
-finding implies the spec was wrong (that is a design bifurcation); or
-three full rounds have completed without converging. Report the state
+**Scope each re-review to the fix diff; loop on correctness only.**
+Re-reading cleared code re-derives a settled answer, and a reviewer
+asked for uncertain findings always returns some, so an unscoped loop
+has no fixed point -- quality findings belong to `simplify`, not another
+lap. Leave when no correctness finding survives and verification passes.
+Escalate instead when the same finding recurs after two fix attempts
+(thrash, not progress), a finding implies the spec was wrong (a design
+bifurcation), or three full rounds have completed. Report the state
 plainly rather than looping silently.
 
 ### 7. Integrate -- `superpowers:finishing-a-development-branch`

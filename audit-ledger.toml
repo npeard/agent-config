@@ -296,3 +296,54 @@ not exist. The check has no way to distinguish an importable module from an
 entry-point script, so this is the false positive rather than a gap to close
 by writing to the check.
 """
+
+[[decision]]
+asset = "scripts/burn.py"
+principle = 5
+date = "2026-09-03"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+asset_sha = "a270e9b9ebf1b8219c401620d86a25b66a61d60d7d19cd1447db459bb7e08a60"
+note = """
+Reads every session transcript and prints a report a model will read, so it
+hits the same read/emit conjunction as friction.py. Fixed rather than
+accepted, and by a different means, because the untrusted values have a
+different shape.
+
+friction.py emits 400 characters of transcript *prose*, which can only be
+made safe by quoting -- hence its JSON string literal. Everything untrusted
+here is a short identifier: a project directory name, an Agent dispatch's
+`model` string, and a timestamp. Each goes through `safe()`, which filters
+to `[A-Za-z0-9._:@/[]-]` and bounds the length, so a value cannot contain a
+newline, tab, quote, backslash or escape sequence -- it cannot forge a table
+row, restate the totals, clear the screen, or smuggle an instruction. A
+value reduced to nothing prints a placeholder rather than an empty cell, so
+it cannot shift the columns either.
+
+Slicing a value short is not a substitute for filtering it, and this is the
+mistake to not reintroduce: a timestamp is printed as `first[:10]`, and ten
+characters are enough to hold two newlines and a forged row. It is filtered
+for that reason, not for its length.
+
+Model names off an assistant record reach `family()` for pricing and are
+never printed. Token counts go through `numeric()`, which yields 0.0 for
+anything not already an int or float -- so a crafted count cannot reach a
+format string, and equally cannot stop the sweep: a string count used to
+raise out of `cost()` and kill a whole 30-day run, which broke this
+script's own promise to be a report and not a gate. Session keys are
+derived from filesystem paths and used only for grouping, never emitted.
+Bash commands and skill names are matched against regexes and yield only
+counts; no token from `tool_input` is emitted.
+
+Verified by execution against a transcript tree whose project directory
+name, model string and timestamp all carry newlines and an ANSI escape,
+and whose usage record carries a non-numeric count -- the forged rows
+render as single filtered cells and the sweep completes. Regression tests
+are TestUntrustedNames, TestTimestampIsAlsoUntrusted and
+TestMalformedUsageIsTolerated in tests/test_burn.py.
+
+The PRICING table is the residual risk this cannot close by construction: a
+stale rate produces confidently wrong dollars. Answered by printing the
+rates and their verification date alongside every total, so the assumption
+travels with the number instead of living in a comment nobody re-reads.
+"""
