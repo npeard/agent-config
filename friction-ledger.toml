@@ -151,24 +151,53 @@ than prose here could give, delivered exactly where the mistake happens.
 
 [[decision]]
 class = "cmd-not-found"
-date = "2026-08-20"
-cause = "missing-tooling"
+date = "2026-09-04"
+cause = "working-as-designed"
 outcome = "tier-0"
-count_at_decision = 4
+count_at_decision = 8
 note = """
 Genuine cause-1 friction, but not this repo's. Every occurrence is a PDF
 extraction binary (`pdftotext`, `mutool`) that claude-config has no use for;
 the tool belongs in whichever project reads PDFs, added to that project's own
 environment. Recording it here so it is not re-proposed against this repo,
 where installing poppler would be dependency weight nothing uses.
+
+Re-decided 2026-09-04 after the count doubled to 8, and the cause changed
+with it -- the paragraph above is no longer true of the class it describes.
+"Every occurrence is a PDF extraction binary" held at 4; at 8 the shape is:
+`python` three times, `jq` twice, and one each of `brew`, `gh`, `pdftotext`.
+Worth stating plainly because a ledger note is read as current: this one was
+accurate when written and decayed silently, which is the same failure the
+audit-ledger hit on hooks/audit-owed.py.
+
+The missing-tooling half has largely resolved itself without a decision: `gh`
+is now installed, and the `jq` occurrences came from `promotion-check.sh`,
+which no longer exists -- it was rewritten as `promotion-check.py` and needs
+no `jq`. Only `pdftotext`/`mutool` remain absent, and the original reasoning
+still covers them.
+
+What actually recurs now is `command not found: python`, including once in
+the session that wrote this. It is not missing tooling: this machine
+deliberately has no bare `python`, only the project-local pixi
+interpreters, and reaching for `python` is habit rather than a gap. Cause 4:
+the shell names the missing command instantly and the fix is one round trip
+to `pixi run` or the env's interpreter. Tier 1 was considered -- extending
+the SessionStart task-list hook to name the environment's python -- and
+rejected: it would add always-injected context to every session in every
+project to save an occasional round trip, and the correct invocation differs
+per project.
+
+`jq` is absent and might be worth having on the machine for its own sake.
+That is a machine change rather than a repo one, so it is noted here and not
+made.
 """
 
 [[decision]]
 class = "hook-modified-files"
-date = "2026-08-20"
-cause = "rule-not-enforced"
+date = "2026-09-04"
+cause = "working-as-designed"
 outcome = "tier-0"
-count_at_decision = 5
+count_at_decision = 11
 note = """
 Committing before running the formatter, so pre-commit stashes unstaged work,
 a hook rewrites a staged file, and the commit exits 1. The rule already exists
@@ -180,6 +209,23 @@ mutating files from a pre-tool hook on every commit. That is a large,
 always-on cost against a failure that self-describes and costs one `git add`.
 Evidence the rule works when followed: the branch that produced this entry ran
 `pixi run format` before all eight commits and hit this zero times.
+
+Re-decided 2026-09-04 at 11, and the cause is downgraded from
+rule-not-enforced to working-as-designed. Reading the eleven: three are
+`nbstripout`, three `ruff-format`, three `mdformat`, one
+`trailing-whitespace`, one `end-of-file-fixer`. Every one is an *auto-fixer*
+reporting that it fixed something. Failing the commit after rewriting a
+staged file is how an auto-fixer asks to be re-staged; there is no version of
+that which is not one extra `git add` and one extra `git commit`. Calling it
+a rule that was not enforced overstated it -- the rule prevents the subset
+this repo's own `pixi run format` covers, and pre-commit is deliberately the
+net under the rest.
+
+The growth is also mostly not this repo's. All three `nbstripout` occurrences
+are in a notebook project whose own format task does not strip notebooks,
+which is a project-local tooling gap belonging in that project's CLAUDE.md,
+not here. The prior entry's evidence held again: the branch that wrote this
+ran `pixi run all` before every commit and hit this zero times.
 """
 
 [[decision]]
@@ -231,10 +277,10 @@ were answered directly on the first ask.
 
 [[decision]]
 class = "unrecognized-arg"
-date = "2026-08-26"
+date = "2026-09-04"
 cause = "working-as-designed"
 outcome = "tier-0"
-count_at_decision = 3
+count_at_decision = 7
 note = """
 Not friction, and the class name misdescribes it. Every occurrence is zsh's
 `nomatch` refusing a glob that matched no files -- `rm -f dir/payload-*.json`
@@ -255,6 +301,22 @@ which globs in a command string are allowed to match nothing, which is not
 decidable from the string, so it would fire on correct commands. Tier 4 was
 rejected because a line spent in CLAUDE.md is read by every future session
 forever, and this buys back one round trip per three weeks.
+
+Re-affirmed 2026-09-04 at 7, same cause, and the doubling did bring one thing
+the entry above did not cover. Five of the seven are the glob-matched-nothing
+shape already described. The other two are `no matches found: --include=*.py`
+-- an argument meant for `grep` to expand, which zsh ate first because it was
+unquoted. That is the opposite error: not a glob that should have matched,
+but a pattern that should never have reached the shell. Its fix is quoting
+the argument, and it is worth naming separately because "guard the glob with
+`2>/dev/null || true`" is the wrong advice for it.
+
+`unsetopt nomatch` was considered this time and rejected. It would make both
+shapes disappear by giving zsh bash's pass-through behaviour, but it is a
+change to the user's own interactive shell as well as the agent's, and the
+first paragraph above is the argument against it on the merits: the refusal
+catches a class of silent wrong-file action that pass-through converts into
+a no-op nobody sees.
 """
 
 [[decision]]
@@ -297,4 +359,75 @@ anchor text no longer matches. Kept separate on that basis.
 If this reaches 16, look at whether the guard is firing on *formatter*
 rewrapping specifically, and whether editing before formatting rather than
 after would remove the class without removing the guard.
+"""
+
+[[decision]]
+class = "command-timeout"
+date = "2026-09-04"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+count_at_decision = 14
+note = """
+New class, added the same day it was decided: it was 14 of the 31 errors
+sitting in `unclassified`, the largest single shape there, and `HARD_FAILURE`
+had already refused to file "timed out" as benign -- so the intent to count
+it predated the regex by weeks. That is what the unclassified rate is for.
+
+The 14 split three ways, counted rather than estimated: 6 are polling loops
+at the default 2m budget (they print `poll 1`, `poll 2`, ...), 6 are bare 2m
+timeouts with no distinguishing output, and 2 are long compute runs that had
+already been given a 10m budget and outran it.
+
+The last two are not friction at all -- a training run exceeding a budget
+someone chose is the budget working, and the `timeout` parameter exists for
+exactly that. The 6 polling loops are, and they are the same root behaviour
+as `sleep-blocked` rather than a new one: choosing to poll for work the
+harness already reports instead of yielding the turn. That entry asked, at 8,
+that if it reached 16 someone check "whether polling is being chosen over
+yielding". It is still at 8, but this class is that check arriving from the
+other side, and the answer is yes -- 6 more instances, none of which used
+`sleep`, so `sleep-blocked` could never have seen them.
+
+Still tier-0, and for the reason that entry gave: the alternatives are worse.
+A hook cannot recognise a poll loop from a command string without also
+refusing correct commands, and the harness already re-invokes a session when
+harness-tracked work finishes, so there is no rule to add that is not already
+true at the point of use. What this decision buys is the measurement: the two
+entries now cross-reference, and if the polling share of this class grows the
+evidence will be in one place instead of split across two symptoms.
+
+Kept as a separate class from `sleep-blocked` on a statable boundary:
+sleep-blocked is the harness refusing a `sleep`, this is a command exceeding
+its budget, of which polling is one cause among three.
+"""
+
+[[decision]]
+class = "path-not-found"
+date = "2026-09-04"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 9
+note = """
+New class, from the same unclassified sweep as `command-timeout`: 9 errors
+where a shell command was handed a path that is not there. Deliberately not
+merged into `file-not-found`, which matches the Read tool's own "File does
+not exist" -- the boundary is one sentence, the harness refusing a path it
+was asked to read versus a shell command failing on one, and the fixes
+differ, so counting them together would hide which is which.
+
+Three of the nine are `cd: no such file or directory` on a relative path,
+and the rest are `sed`/`ugrep` on a filename that was guessed rather than
+listed. The recurring shape is a relative path resolved against a working
+directory the command was not actually in -- which is a real hazard here,
+because the Bash tool's cwd persists between calls and is not always where
+the last `cd` left it.
+
+Tier 0. The shell names the exact missing path, the cost is one round trip,
+and the guidance that prevents it -- prefer absolute paths -- is already in
+the Bash tool description, which is the point of use. Tier 1 was considered
+and rejected: a PreToolUse hook checking whether path-shaped arguments exist
+would have to know which arguments are paths and which paths are about to be
+created, and it would fire on every `mkdir`, `touch` and redirect. Tier 4 was
+rejected because CLAUDE.md is at its word ceiling and would be restating a
+tool description.
 """

@@ -441,7 +441,17 @@ class TestBenignAnchoring:
         ],
     )
     def test_an_exit_line_carrying_a_real_error_is_not_benign(self, text: str):
-        assert friction.classify(text) == [friction.UNCLASSIFIED]
+        """Asserts not-benign, not unclassified-exactly.
+
+        It used to assert `== [UNCLASSIFIED]`, which described the state
+        rather than the property: at the time no class matched any of these,
+        so the two readings agreed. Adding `command-timeout` made the first
+        case classified -- the intended direction, since a named class is
+        what the unclassified rate exists to drive towards -- and only the
+        over-specified assertion failed. The docstring above was always
+        about the benign bucket.
+        """
+        assert friction.BENIGN not in friction.classify(text)
 
     @pytest.mark.parametrize(
         "text", ["Exit code 1", "  Exit code 2  ", "Exit code 127"]
@@ -452,3 +462,58 @@ class TestBenignAnchoring:
     def test_a_recognised_class_still_wins_over_both_buckets(self):
         """The class table is checked first, so anchoring did not change it."""
         assert friction.classify("Exit code 1 Blocked: sleep 60") == ["sleep-blocked"]
+
+
+class TestClassesCompletedFromTheUnclassifiedBucket:
+    """Two shapes that HARD_FAILURE already refused to call benign but that
+    no class matched, so they sat in `unclassified` -- 21 of the 31 there
+    when this was measured (2026-09-04). The unclassified rate is supposed
+    to measure classifier decay; a shape the author deliberately excluded
+    from the benign bucket and then never named is that decay showing up.
+    """
+
+    def test_a_timed_out_command_is_classified(self):
+        assert "command-timeout" in friction.classify(
+            "Exit code 143 Command timed out after 2m 0s"
+        )
+
+    def test_a_ten_minute_timeout_is_the_same_class(self):
+        """The budget differs, the friction does not."""
+        assert "command-timeout" in friction.classify(
+            "Exit code 143 Command timed out after 10m 0s TIMING L=5 wall=154.7s"
+        )
+
+    def test_capitalisation_is_not_load_bearing(self):
+        """classify() searches without re.IGNORECASE, so a class matching one
+        caller's exact capitalisation is a class that misses the next one."""
+        assert "command-timeout" in friction.classify("command timed out after 5s")
+        assert "path-not-found" in friction.classify(
+            "sed: x: no such file or directory"
+        )
+
+    def test_a_shell_path_miss_is_classified(self):
+        for text in (
+            "Exit code 1 sed: plot_dm_nnn.py: No such file or directory",
+            "Exit code 1 (eval):cd:1: no such file or directory: subfigures/dm_nnn",
+            "Exit code 1 ugrep: warning: x.py: No such file or directory",
+        ):
+            assert "path-not-found" in friction.classify(text), text
+
+    def test_the_harness_and_the_shell_stay_different_classes(self):
+        """`file-not-found` is the Read tool refusing a path that is not
+        there; `path-not-found` is a shell command saying so. Same mistake,
+        different tool, and the fixes differ -- so they are counted apart."""
+        harness = friction.classify("File does not exist")
+        shell = friction.classify("sed: x.py: No such file or directory")
+        assert harness == ["file-not-found"]
+        assert "file-not-found" not in shell
+        assert "path-not-found" not in harness
+
+    def test_neither_shape_is_filed_benign(self):
+        """HARD_FAILURE already covered both; this pins that the class and
+        the benign filter agree, since disagreeing would hide the class."""
+        for text in (
+            "Exit code 143 Command timed out after 2m 0s",
+            "Exit code 1 sed: x.py: No such file or directory",
+        ):
+            assert friction.BENIGN not in friction.classify(text), text

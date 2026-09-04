@@ -60,6 +60,14 @@ CLASSES: tuple[tuple[str, str], ...] = (
     ("sleep-blocked", r"Blocked: sleep"),
     ("user-rejected-tool", r"user doesn't want to proceed|tool use was rejected"),
     ("file-not-found", r"File does not exist"),
+    # The harness killing a command that outran its budget. Added after it
+    # was 13 of the 31 unclassified errors -- the single largest shape in
+    # that bucket, and one HARD_FAILURE below already refused to call benign,
+    # so the intent to count it predates the class by some weeks.
+    # classify() searches without re.IGNORECASE, so the leading character is
+    # spelled both ways rather than trusting one caller's capitalisation --
+    # the same reason path-not-found below does it.
+    ("command-timeout", r"[Cc]ommand timed out after"),
     # Deliberately not bare AssertionError: pytest's "N failed" summary often
     # lands in a different tool result from the traceback, so matching it here
     # labelled failing tests an Edit-tool problem -- and reflect picks its
@@ -84,6 +92,12 @@ CLASSES: tuple[tuple[str, str], ...] = (
     ("python-traceback", r"Traceback \(most recent call last\)"),
     # Shell.
     ("cmd-not-found", r"command not found"),
+    # A shell command given a path that is not there, which `file-not-found`
+    # above does not match: that one is the Read tool's own refusal. Kept
+    # apart because the fixes differ -- the harness message means the model
+    # named a file it had not looked up, while this is usually a relative
+    # path resolved against a cwd the model was not in.
+    ("path-not-found", r"[Nn]o such file or directory"),
     ("unrecognized-arg", r"unrecognized arguments|no matches found|invalid option"),
     ("permission-denied", r"Permission denied|EACCES"),
 )
