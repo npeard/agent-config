@@ -24,6 +24,7 @@ preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"
 burn = "python scripts/burn.py"
 toolgaps = "python scripts/toolgaps.py"
+skills = "python scripts/validate_skills.py"
 suppressions = "python scripts/suppressions.py"
 thresholds = "python scripts/thresholds.py --strict"
 register-hooks = "python scripts/register_hooks.py"
@@ -35,4 +36,4 @@ lint = "ruff check ."
 spell = "codespell ."
 precommit = "pre-commit run --all-files"
 test = "pytest -q"
-all = { depends-on = ["format", "lint", "ascii", "spell", "suppressions", "thresholds", "audit", "test"] }
+all = { depends-on = ["format", "lint", "ascii", "spell", "skills", "suppressions", "thresholds", "audit", "test"] }

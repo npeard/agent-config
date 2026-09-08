@@ -1,6 +1,7 @@
 ---
 name: standards-and-spec-review
 description: Use when reviewing a completed change against house standards and its originating spec - the two axes that correctness and quality review do not cover. Reports Standards and Spec findings side by side without merging them. Invoke per implementation phase as a cheap fresh-context reviewer, or per branch before integration.
+compatibility: Requires Git and the project's verification commands. Parallel branch review additionally requires host support for subagents.
 ---
 
 # Standards and Spec Review

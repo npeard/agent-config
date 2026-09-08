@@ -1,6 +1,7 @@
 ---
 name: quantikz
 description: Use when drawing, editing, or debugging quantum circuit diagrams in LaTeX with the quantikz / quantikz2 package (TikZ-based) - gates, controls, measurements, wire bundles, gategroup highlighting, slicing, multi-circuit alignment (align equals at), per-gate and global styling, custom gate shapes, and compile errors like "cells not found" or misaligned equals signs.
+compatibility: Producing or compiling diagrams requires a LaTeX distribution with TikZ and the quantikz or quantikz2 package.
 ---
 
 # Quantikz (quantikz2) Quantum Circuit Diagrams

@@ -1,6 +1,7 @@
 ---
 name: reflect
 description: Use when recurring friction needs a durable fix - diagnoses why it recurs before deciding what to change, checks whether an existing tool or a missing standard one already answers it, and consolidates duplicated concepts. Run when `pixi run friction` reports actionable classes, at branch completion, or on request.
+compatibility: Full operation requires this repository's Pixi tasks and Python scripts; transcript analysis currently supports Claude Code only.
 ---
 
 # Reflect

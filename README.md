@@ -78,6 +78,7 @@ pixi run spell                      # codespell
 pixi run friction                   # recurring friction from transcripts
 pixi run burn                       # where a session's tokens went
 pixi run toolgaps                   # missing tooling + reusable assets
+pixi run skills                     # validate portable Agent Skills metadata
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
 pixi run audit                      # agent-asset principle breaches
@@ -96,6 +97,9 @@ pixi run all                        # format, lint, ascii, spell,
   `@~/Documents/Projects/claude-config/CLAUDE.md` stub, which needs no
   privilege anywhere and behaves identically everywhere, so there is no
   second code path to keep in step.
+- `docs/PORTABILITY.md` -- the boundary between the portable core and
+  host-specific adapters, including the support matrix and the
+  conservative Agent Skills profile enforced by `pixi run skills`.
 - `skills/<name>/` -- each linked to `~/.claude/skills/<name>/`: a
   symlink on macOS/Linux, a directory junction (no elevation, no
   Developer Mode) on Windows. `preflight` reports a skill this repo
@@ -284,21 +288,21 @@ pixi run all                        # format, lint, ascii, spell,
   silently if that app has no notification permission, so
   `brew install terminal-notifier` is the fix for a missing banner.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
-  `friction.py`, `burn.py`, `toolgaps.py`, `suppressions.py`,
-  `thresholds.py`) meant to be copied into new projects rather than
-  rewritten from scratch. Copied alone each one runs; `preflight.py`
-  skips its two link-related checks unless `platform_paths.py` is copied
-  beside it, and says so rather than failing to start. Plus
-  `register_hooks.py` and `audit_assets.py`, which are specific to this
-  repo -- the first to its install, the second because it knows this
-  layout rather than describing a capability every project has.
-  `audit_assets.py` also owns the always-loaded context ceilings, which
-  `tests/test_context_budget.py` imports rather than restating, so the
-  gate and the report share one definition of each number.
-  `check_ascii.py` lets a single file opt out with a reason-bearing
-  `check-ascii: allow` marker in its first ten lines; a marker with no
-  reason fails rather than skipping, so the exemption is documented
-  rather than silent.
+  `friction.py`, `burn.py`, `toolgaps.py`, `validate_skills.py`,
+  `suppressions.py`, `thresholds.py`) meant to be copied into new
+  projects rather than rewritten from scratch. Copied alone each one
+  runs; `preflight.py` skips its two link-related checks unless
+  `platform_paths.py` is copied beside it, and says so rather than
+  failing to start. Plus `register_hooks.py` and `audit_assets.py`,
+  which are specific to this repo -- the first to its install, the
+  second because it knows this layout rather than describing a
+  capability every project has. `audit_assets.py` also owns the
+  always-loaded context ceilings, which `tests/test_context_budget.py`
+  imports rather than restating, so the gate and the report share one
+  definition of each number. `check_ascii.py` lets a single file opt out
+  with a reason-bearing `check-ascii: allow` marker in its first ten
+  lines; a marker with no reason fails rather than skipping, so the
+  exemption is documented rather than silent.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

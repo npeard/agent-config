@@ -1,6 +1,7 @@
 ---
 name: writing-orchestration
 description: Use when orchestrating a prose deliverable end to end -- a paper, thesis chapter, talk, or long-form documentation -- where no test can assert the result is correct. Carries what each spine step means for writing, the review axes a reader must judge, and how much ceremony the work needs.
+compatibility: Requires workflow-orchestration and currently expects the Superpowers skill set plus host support for subagents and independent review.
 ---
 
 # Writing Orchestration

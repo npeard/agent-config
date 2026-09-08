@@ -1,6 +1,7 @@
 ---
 name: workflow-orchestration
-description: Use when orchestrating a substantive engineering or research task end to end - carries the sequence from problem definition through spec, delegated implementation, review, and integration, and defines which human approval gates apply. Invoke before brainstorming, not after. Not for a subagent executing or reviewing a single phase.
+description: Use when orchestrating an engineering or research task end-to-end - carries the sequence from problem definition through spec, delegated implementation, review, and integration, and defines which approval gates apply. Invoke before brainstorming, not after. Not for a subagent executing or reviewing a single phase.
+compatibility: Requires Superpowers, Git, subagents, and worktrees.
 ---
 
 # Workflow Orchestration
