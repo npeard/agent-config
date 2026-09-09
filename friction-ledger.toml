@@ -54,7 +54,7 @@ re-invokes you when it finishes.
 Tier 1 was considered and rejected. A PreToolUse hook could only refuse what
 the harness already refuses, with a worse message, which the redundancy check
 calls duplication rather than defence in depth. Tier 4 was rejected too: the
-guidance exists in the Bash and ScheduleWakeup tool descriptions, CLAUDE.md has
+guidance exists in the Bash and ScheduleWakeup tool descriptions, AGENTS.md has
 36 words of headroom, and restating a rule that is already mechanically
 enforced is the thing the reflect skill's own red-flag table forbids.
 
@@ -71,7 +71,7 @@ outcome = "tier-1"
 count_at_decision = 3
 note = """
 Traced to invoking ruff directly instead of `pixi run format`, which
-CLAUDE.md required. The rule was a proxy for information: the failure was
+AGENTS.md required. The rule was a proxy for information: the failure was
 not knowing that a task existed covering the work. Fixed with a SessionStart
 hook that injects the project's actual task list, and the prose rule was
 deleted rather than restated. Under the bar when decided (3 occurrences, one
@@ -120,7 +120,7 @@ is the report), and POSIX paths used on Windows (rule-not-enforced).
 The last of those is the only one with a rule behind it, and the rule already
 exists and is already stated where it applies: the harness system prompt names
 a per-session scratchpad directory and says to use it instead of /tmp. It is
-not in this repo's CLAUDE.md and should not be added -- tier 4 is paid by
+not in this repo's AGENTS.md and should not be added -- tier 4 is paid by
 every future session forever to restate a rule the session is already handed.
 Two occurrences in this branch's own session were `/tmp` paths passed to
 Python on Windows, where "/tmp/x" becomes "\\tmp\\x" and does not exist; both
@@ -296,7 +296,7 @@ of use.
 Tier 1 was considered and rejected: a PreToolUse hook would have to decide
 which globs in a command string are allowed to match nothing, which is not
 decidable from the string, so it would fire on correct commands. Tier 4 was
-rejected because a line spent in CLAUDE.md is read by every future session
+rejected because a line spent in AGENTS.md is read by every future session
 forever, and this buys back one round trip per three weeks.
 
 Re-affirmed 2026-09-04 at 7, same cause, and the doubling did bring one thing
@@ -344,7 +344,7 @@ the formatter has since rewrapped. Reading the current text first is the fix,
 and the failure already says exactly that at the point of use, with the
 mismatched anchor quoted. A hook cannot help -- it has no way to know what
 string a future replacement intends to match -- and tier 4 was rejected
-because CLAUDE.md is at 1249 of 1250 words and the guidance would restate
+because AGENTS.md is at 1249 of 1250 words and the guidance would restate
 what the traceback already reports.
 
 Checked against write-before-read, which shares that trigger and was also
@@ -430,6 +430,6 @@ the Bash tool description, which is the point of use. Tier 1 was considered
 and rejected: a PreToolUse hook checking whether path-shaped arguments exist
 would have to know which arguments are paths and which paths are about to be
 created, and it would fire on every `mkdir`, `touch` and redirect. Tier 4 was
-rejected because CLAUDE.md is at its word ceiling and would be restating a
+rejected because AGENTS.md is at its word ceiling and would be restating a
 tool description.
 """

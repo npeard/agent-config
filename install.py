@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Install claude-config into ~/.claude. Safe to re-run, on any platform.
+"""Install claude-config's host adapters. Safe to re-run, on any platform.
 
 Ported from install.sh, which could not run outside a POSIX shell and whose
 `ln -s` silently deep-copied on Windows -- printing "Linked ..." for a copy
@@ -7,7 +7,7 @@ that would never track another edit. Every link written here is verified
 afterwards for that reason.
 
 The ordering below is load-bearing and was arrived at by fixing real
-failures: directories, then the CLAUDE.md stub, then skill links, then the
+failures: directories, then the instruction adapters, then skill links, then the
 prune, then the pixi environment, and only then hook registration. Hooks
 name the dev interpreter in their command, so registering before that
 interpreter exists writes hooks that cannot start and reports success.
@@ -38,10 +38,35 @@ def _load_platform_paths():
     return mod
 
 
+def _load_installation_contract():
+    """Import the required sibling contract without relying on sys.path."""
+    spec = importlib.util.spec_from_file_location(
+        "installation_contract",
+        Path(__file__).resolve().parent / "scripts" / "installation_contract.py",
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 platform_paths = _load_platform_paths()
+installation_contract = _load_installation_contract()
 
 REPO = Path(__file__).resolve().parent
-STUB = "@~/Documents/Projects/claude-config/CLAUDE.md\n"
+GUIDANCE_NAME = installation_contract.GUIDANCE_NAME
+CODEX_HEADER = installation_contract.CODEX_HEADER
+
+
+def canonical_guidance(repo: Path = REPO) -> str:
+    return installation_contract.canonical_guidance(repo)
+
+
+def claude_stub(repo: Path = REPO) -> str:
+    return installation_contract.claude_stub(repo)
+
+
+def codex_snapshot(repo: Path = REPO) -> str:
+    return installation_contract.codex_snapshot(repo)
 
 
 def back_up(dest: Path) -> None:
@@ -81,29 +106,29 @@ def clear(dest: Path) -> None:
         back_up(dest)
 
 
-def install_stub(claude_dir: Path) -> None:
-    """Write ~/.claude/CLAUDE.md as an @import of this repo's copy.
-
-    A stub, not a link: it needs no privilege on any platform and behaves
-    identically on both, so there is no second code path to keep in step.
-    """
-    dest = claude_dir / "CLAUDE.md"
-    if (
-        dest.is_file()
-        and not platform_paths.is_link(dest)
-        and dest.read_text(encoding="utf-8") == STUB
-    ):
-        print(f"{dest} already imports this repo")
-        return
+def install_generated_file(dest: Path, expected: str) -> None:
+    """Install one exact generated adapter without overwriting user data."""
+    if dest.is_file() and not platform_paths.is_link(dest):
+        try:
+            if dest.read_text(encoding="utf-8") == expected:
+                return
+        except UnicodeDecodeError:
+            # Unreadable text is still user data; clear() preserves its bytes.
+            pass
     clear(dest)
-    dest.write_text(STUB, encoding="utf-8")
-    print(f"Wrote {dest} -> {STUB.strip()}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(expected, encoding="utf-8")
 
 
-def install_skills(claude_dir: Path) -> list[str]:
+def install_instructions(home: Path) -> None:
+    """Install the exact Claude and Codex adapters from the canonical source."""
+    for dest, expected in installation_contract.instruction_adapters(REPO, home):
+        install_generated_file(dest, expected)
+
+
+def install_skills(installed: Path) -> list[str]:
     """Link every skill this repo carries, and verify each one landed."""
     source = REPO / "skills"
-    installed = claude_dir / "skills"
     installed.mkdir(parents=True, exist_ok=True)
     problems = []
     for src in sorted(p for p in source.iterdir() if p.is_dir()):
@@ -127,7 +152,7 @@ def install_skills(claude_dir: Path) -> list[str]:
     return problems
 
 
-def prune(claude_dir: Path) -> None:
+def prune(installed: Path) -> None:
     """Drop links into this repo whose skill is gone.
 
     A renamed or deleted skill otherwise leaves its link behind, and a stale
@@ -135,7 +160,6 @@ def prune(claude_dir: Path) -> None:
     repo are pruned: another tool's links, and links from a clone kept
     elsewhere, are not ours to remove.
     """
-    installed = claude_dir / "skills"
     if not installed.is_dir():
         return
     for p in sorted(installed.iterdir()):
@@ -183,9 +207,13 @@ def main(argv=None) -> int:
     claude_dir = args.home / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
 
-    install_stub(claude_dir)
-    problems = install_skills(claude_dir)
-    prune(claude_dir)
+    install_instructions(args.home)
+    problems = []
+    for installed in installation_contract.skill_destinations(args.home):
+        problems.extend(
+            f"{installed}: {problem}" for problem in install_skills(installed)
+        )
+        prune(installed)
     if problems:
         for p in problems:
             print(f"error: {p}", file=sys.stderr)

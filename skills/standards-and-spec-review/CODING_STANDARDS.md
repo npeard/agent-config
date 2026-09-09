@@ -1,6 +1,6 @@
 # Coding standards
 
-The single definition of the house rules. The master `CLAUDE.md` lists
+The single definition of the house rules. The master `AGENTS.md` lists
 these by name as author-facing triggers and points here; `SKILL.md`
 carries the review process and points here. Neither restates the
 content, so there is one place to change a rule.

@@ -9,7 +9,7 @@ the coupling that keeps the three copies honest: it does not care how any of
 them is implemented, only that they agree on the contract.
 
 shlex(posix=True) always treats "\\" as an escape character, which ate the
-separators out of a native Windows path like "C:\\Users\\...\\CLAUDE.md" and
+separators out of a native Windows path like "C:\\Users\\...\\AGENTS.md" and
 made it fail to match the directory it lives in -- the promotion-check
 self-guard's concrete symptom. Doubling the backslashes inside text shaped
 like a native Windows path is the fix under test, and the *shape* is the key,
@@ -54,8 +54,8 @@ def tokenize(request):
     return MODULES[request.param].tokenize
 
 
-WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\claude-config\CLAUDE.md"
-POSIX_PATH = "/home/npeard/Documents/Projects/claude-config/CLAUDE.md"
+WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\claude-config\AGENTS.md"
+POSIX_PATH = "/home/npeard/Documents/Projects/claude-config/AGENTS.md"
 
 
 def test_native_windows_path_survives_as_one_token(tokenize):

@@ -109,7 +109,7 @@ def fired(out: str) -> bool:
 class TestFiring:
     @pytest.mark.parametrize(
         "relative",
-        ["skills/x/SKILL.md", "scripts/x.py", "hooks/x.py", "CLAUDE.md"],
+        ["skills/x/SKILL.md", "scripts/x.py", "hooks/x.py", "AGENTS.md"],
     )
     def test_commit_touching_a_config_asset_records_and_injects(
         self, fake_master, tmp_path, relative
@@ -223,13 +223,13 @@ class TestIdempotence:
         rewriting the whole file on every commit, which is what lost a
         concurrent agent's entries.
         """
-        for relative in ("scripts/x.py", "hooks/y.py", "CLAUDE.md"):
+        for relative in ("scripts/x.py", "hooks/y.py", "AGENTS.md"):
             commit(fake_master, relative)
             run_hook(payload(fake_master), tmp_path)
         lines = (fake_master / MARKER).read_text().splitlines()
         assert len(lines) == len(set(lines))
         assert set(lines) == {
-            "main\tCLAUDE.md",
+            "main\tAGENTS.md",
             "main\thooks/y.py",
             "main\tscripts/x.py",
         }
@@ -391,8 +391,8 @@ class TestCommitShapes:
         run_git(repo, "init", "-q", "-b", "main", ".")
         run_git(repo, "config", "user.email", "t@e.invalid")
         run_git(repo, "config", "user.name", "t")
-        (repo / "CLAUDE.md").write_text("x\n")
-        run_git(repo, "add", "CLAUDE.md")
+        (repo / "AGENTS.md").write_text("x\n")
+        run_git(repo, "add", "AGENTS.md")
         run_git(repo, "commit", "-qm", "root")
         assert fired(run_hook(payload(repo), tmp_path))
 
@@ -475,7 +475,7 @@ class TestCommandGate:
         self, fake_master, tmp_path
     ):
         """This test used to assert the opposite, and the assumption was wrong.
-        `git commit -m "$(cat <<'EOF' ... EOF)"` is the message form CLAUDE.md
+        `git commit -m "$(cat <<'EOF' ... EOF)"` is the message form AGENTS.md
         mandates, and stripping its heredoc body leaves the opening line with
         an unbalanced quote -- so declining on one made the hook inert for the
         dominant commit form. Reporting on a commit that actually failed costs
@@ -521,7 +521,7 @@ class TestWorktrees:
     """`git worktree add ../wt` puts the checkout outside the main one.
 
     The cwd guard compared the payload's cwd against the master repo's path,
-    so a sibling worktree failed it and the hook went silent -- while CLAUDE.md
+    so a sibling worktree failed it and the hook went silent -- while AGENTS.md
     recommends worktrees for exactly the parallel-phase work most likely to
     change config assets. The branches this hook exists to catch armed nothing.
     """

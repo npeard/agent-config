@@ -1,6 +1,6 @@
 ---
 name: config-audit
-description: Use when a branch has changed claude-config's own skills, scripts, hooks or CLAUDE.md, or when `.audit-owed` exists - judges the assembled agent config against the five agent-asset principles, on the axes no mechanical check can reach.
+description: Use when a branch has changed claude-config's own skills, scripts, hooks or AGENTS.md, or when `.audit-owed` exists - judges the assembled agent config against the five agent-asset principles, on the axes no mechanical check can reach.
 compatibility: Requires this repository's Pixi environment and audit scripts. Git is required for branch-relative findings and audit obligations.
 ---
 

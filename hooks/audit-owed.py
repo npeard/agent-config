@@ -51,7 +51,7 @@ def master_repo() -> str:
 
 MARKER = ".audit-owed"
 CONFIG_PREFIXES = ("skills/", "scripts/", "hooks/")
-CONFIG_FILES = ("CLAUDE.md",)
+CONFIG_FILES = ("AGENTS.md",)
 
 # git's own options, before the subcommand. The two-argument ones must be
 # skipped as pairs or `git -C commit` would read its path argument as the
@@ -244,7 +244,7 @@ def checkout_and_branch(cwd: str) -> tuple[str, str]:
     The main checkout, not the toplevel: `git worktree add ../wt` puts the
     working copy outside the main one, so comparing the raw cwd against the
     master repo's path failed and the hook went silent -- on exactly the
-    parallel-phase branches CLAUDE.md recommends worktrees for, which are the
+    parallel-phase branches AGENTS.md recommends worktrees for, which are the
     ones most likely to be changing config assets. `--git-common-dir` is the
     mapping back: it names the main checkout's .git for a worktree and the
     local one otherwise.

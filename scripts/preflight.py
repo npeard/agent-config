@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Verify a project is in a fit state to start work in.
 
-Implements the master CLAUDE.md's "Step 0" as one command, so the check
+Implements the master AGENTS.md's "Step 0" as one command, so the check
 costs a single tool call rather than a handful of agent turns: pre-commit
 wired up and current, tests green, on the default branch, clean tree.
 
@@ -81,7 +81,19 @@ def _load_platform_paths():
     return mod
 
 
+def _load_installation_contract():
+    """The installer contract, or None when it was not copied along."""
+    path = Path(__file__).resolve().parent / "installation_contract.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("installation_contract", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 platform_paths = _load_platform_paths()
+installation_contract = _load_installation_contract()
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -613,7 +625,57 @@ def _install_hint() -> str:
     return "./install.ps1" if windows else "./install.sh"
 
 
-def check_skills(report: Report, root: Path, installed: Path) -> None:
+def installation_checkout(root: Path) -> Path:
+    """Resolve the main checkout without assuming where Git stores its metadata."""
+    root = root.resolve()
+    if not (root / ".git").is_file():
+        return root
+    # The first porcelain record is the main checkout. NUL delimiters preserve
+    # spaces and avoid Git's quoting of unusual paths; a bare repo owns no install.
+    listing = git("-C", str(root), "worktree", "list", "--porcelain", "-z")
+    if listing:
+        main = listing.split("\0\0", 1)[0].split("\0")
+        if main[0].startswith("worktree ") and "bare" not in main:
+            return Path(main[0].removeprefix("worktree ")).resolve()
+    return root
+
+
+def check_instructions(report: Report, root: Path, home: Path) -> None:
+    """Report generated instruction adapters that are missing or stale."""
+    root = installation_checkout(root)
+    if (
+        installation_contract is None
+        or platform_paths is None
+        or not (root / "install.py").is_file()
+        or not (root / installation_contract.GUIDANCE_NAME).is_file()
+    ):
+        return
+    for label, (dest, expected) in zip(
+        ("Claude instructions", "Codex instructions"),
+        installation_contract.instruction_adapters(root, home),
+        strict=True,
+    ):
+        try:
+            current = (
+                dest.is_file()
+                and not platform_paths.is_link(dest)
+                and dest.read_text(encoding="utf-8") == expected
+            )
+        except (OSError, UnicodeError):
+            current = False
+        if current:
+            report.add(OK, label, f"{dest}: current")
+        else:
+            report.add(
+                WARN,
+                label,
+                f"{dest}: missing or stale ({_install_hint()})",
+            )
+
+
+def check_skills(
+    report: Report, root: Path, installed: Path, label: str = "skills linked"
+) -> None:
     """Report skills the repo carries that this machine cannot see.
 
     Machine state, like hook registration: skills reach a session only through
@@ -625,52 +687,59 @@ def check_skills(report: Report, root: Path, installed: Path) -> None:
     nothing, and Git Bash's `ln -s` produces exactly this on Windows without
     Developer Mode instead of failing outright.
 
-    Matched by name rather than by link target, because a git worktree's
-    skills are legitimately linked from the parent checkout and comparing
-    targets would report every one of them as wrong. Silent in projects with
-    no installer, since preflight is copied into repos that install nothing.
+    A link must target the named skill in this checkout or its main checkout:
+    sessions in linked worktrees still consume the main installation. Silent
+    in projects with no installer, since preflight is copied into other repos.
     """
     source = root / "skills"
     if not source.is_dir() or not (root / "install.py").is_file():
         return
-    # Link-ness is the whole check, and platform_paths owns what a link is on
-    # each platform. Without it there is nothing to report, so skip rather
-    # than guess -- a wrong "copy, not a link" tells the user to re-run the
-    # installer, which is the one action that would make things worse.
+    # The optional sibling owns symlink and Windows junction handling.
     if platform_paths is None:
         return
     carried = {p.name for p in source.iterdir() if p.is_dir()}
     # exists() follows the link, so a dangling one reads as absent -- which is
     # what it is, from a session's point of view.
     unlinked = sorted(name for name in carried if not (installed / name).exists())
-    # A copy exists but does not track the repo, so it is reported apart from
-    # a missing link: the fix is the same, the symptom is not. Link-ness is
-    # the whole test -- verify_link() additionally requires the target to sit
-    # under `root`, which in a git worktree is the worktree while the link
-    # points at the parent checkout, so every legitimately linked skill was
-    # reported as a copy and the user told to re-run the installer, which
-    # would relink them away from the parent.
     copies = sorted(
         name
         for name in carried
         if (installed / name).exists() and not platform_paths.is_link(installed / name)
+    )
+    source_roots = {
+        source.resolve(),
+        (installation_checkout(root) / "skills").resolve(),
+    }
+    wrong = sorted(
+        name
+        for name in carried
+        if (installed / name).exists()
+        and platform_paths.is_link(installed / name)
+        and platform_paths.link_target(installed / name)
+        not in {(candidate / name).resolve() for candidate in source_roots}
     )
     dangling = sorted(
         p.name
         for p in (installed.iterdir() if installed.is_dir() else [])
         if platform_paths.is_link(p) and not p.exists() and p.name not in carried
     )
-    if not unlinked and not copies and not dangling:
-        report.add(OK, "skills linked", f"{len(carried)} linked")
+    if not unlinked and not copies and not wrong and not dangling:
+        report.add(OK, label, f"{installed}: {len(carried)} linked")
         return
     parts = []
     if unlinked:
         parts.append(f"not linked: {', '.join(unlinked)}")
     if copies:
         parts.append(f"copy, not a link: {', '.join(copies)}")
+    if wrong:
+        parts.append(f"wrong target: {', '.join(wrong)}")
     if dangling:
         parts.append(f"stale link: {', '.join(dangling)}")
-    report.add(WARN, "skills linked", "; ".join(parts) + f" ({_install_hint()})")
+    report.add(
+        WARN,
+        label,
+        f"{installed}: {'; '.join(parts)} ({_install_hint()})",
+    )
 
 
 def detect_test_command(root: Path) -> str | None:
@@ -738,7 +807,14 @@ def main(argv: list[str]) -> int:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
     check_hooks(report, root)
-    check_skills(report, root, Path.home() / ".claude" / "skills")
+    check_instructions(report, root, Path.home())
+    if installation_contract is not None:
+        for label, installed in zip(
+            ("Claude skills linked", "Portable skills linked"),
+            installation_contract.skill_destinations(Path.home()),
+            strict=True,
+        ):
+            check_skills(report, root, installed, label=label)
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)

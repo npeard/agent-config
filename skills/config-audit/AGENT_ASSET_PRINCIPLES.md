@@ -8,7 +8,7 @@ content, so there is one place to change a principle.
 
 **What "asset" means here:** anything that shapes an agent's behaviour
 across sessions -- a skill directory, a script under `scripts/`, a hook
-under `hooks/`, or `CLAUDE.md` itself. Not the projects those assets are
+under `hooks/`, or `AGENTS.md` itself. Not the projects those assets are
 used on.
 
 **Two binding rules for an auditor using this file:**
@@ -90,7 +90,7 @@ push the catalog to a reference file.
 The patterns themselves are in `patterns.md`. Read it before rewriting.
 ```
 
-**Mechanical:** `CLAUDE.md`, skill bodies and skill descriptions each
+**Mechanical:** `AGENTS.md`, skill bodies and skill descriptions each
 have a ceiling; so does every reference file, and so does a skill's
 per-invocation cost -- its body plus every reference an imperative step
 tells the reader to read -- which is set at one body plus one full

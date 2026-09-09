@@ -39,7 +39,7 @@ def fake_root(tmp_path: Path) -> Path:
     (tmp_path / "skills").mkdir()
     (tmp_path / "scripts").mkdir()
     (tmp_path / "hooks").mkdir()
-    (tmp_path / "CLAUDE.md").write_text("word " * 10)
+    (tmp_path / "AGENTS.md").write_text("word " * 10)
     (tmp_path / "pixi.toml").write_text('[tasks]\nfmt = "true"\n')
     write_skill(tmp_path, "alpha", "Use when you need alpha")
     return tmp_path
@@ -78,12 +78,12 @@ class TestTriggerShaped:
 
 
 class TestBudgets:
-    def test_oversized_claude_md_is_reported(self, fake_root):
-        (fake_root / "CLAUDE.md").write_text(
-            "word " * (audit_assets.CLAUDE_MD_MAX_WORDS + 1)
+    def test_oversized_agents_md_is_reported(self, fake_root):
+        (fake_root / "AGENTS.md").write_text(
+            "word " * (audit_assets.AGENTS_MD_MAX_WORDS + 1)
         )
         found = audit_assets.check_budgets(fake_root)
-        assert [f.asset for f in found] == ["CLAUDE.md"]
+        assert [f.asset for f in found] == ["AGENTS.md"]
         assert found[0].principle == 3
 
     def test_oversized_skill_body_is_reported(self, fake_root):
@@ -356,8 +356,8 @@ class TestScriptReferences:
         )
         assert audit_assets.check_script_references(fake_root)
 
-    def test_claude_md_is_covered_too(self, fake_root):
-        (fake_root / "CLAUDE.md").write_text("Run scripts/ghost.py\n")
+    def test_agents_md_is_covered_too(self, fake_root):
+        (fake_root / "AGENTS.md").write_text("Run scripts/ghost.py\n")
         assert any(
             "ghost.py" in f.detail
             for f in audit_assets.check_script_references(fake_root)

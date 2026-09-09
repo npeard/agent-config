@@ -6,6 +6,7 @@ in review, rather than to a restatement of the implementation.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -29,6 +30,12 @@ def statuses(report: preflight.Report, label: str) -> list[str]:
 
 def details(report: preflight.Report, label: str) -> str:
     return " ".join(d for _, lab, d in report.rows if lab == label)
+
+
+def isolate_preflight_home(monkeypatch: pytest.MonkeyPatch, root: Path) -> Path:
+    home = root / "home"
+    monkeypatch.setattr(preflight.Path, "home", lambda: home)
+    return home
 
 
 class TestConfiguredRevs:
@@ -265,6 +272,7 @@ class TestExitContract:
         self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.chdir(git_repo)
+        isolate_preflight_home(monkeypatch, git_repo)
         assert preflight.main(["--strict"]) == 1
 
     def test_default_is_zero_even_with_warnings(
@@ -272,6 +280,7 @@ class TestExitContract:
     ):
         """A SessionStart hook must never abort a session over a warning."""
         monkeypatch.chdir(git_repo)
+        isolate_preflight_home(monkeypatch, git_repo)
         assert preflight.main([]) == 0
 
 
@@ -447,6 +456,7 @@ class TestInterpreter:
         pre-commit and test checks -- the whole gate."""
         monkeypatch.chdir(git_repo)
         monkeypatch.setattr("sys.prefix", "/usr/local")
+        isolate_preflight_home(monkeypatch, git_repo)
         assert preflight.main([]) == 0
         assert "clean working tree" in capsys.readouterr().out
 
@@ -458,6 +468,7 @@ class TestInterpreter:
         (git_repo / "pixi.toml").write_text('python = ">=99.0"\n')
         monkeypatch.chdir(git_repo)
         self.local_env(monkeypatch, git_repo)
+        isolate_preflight_home(monkeypatch, git_repo)
         assert preflight.main(["--strict"]) == 1
         assert "clean working tree" not in capsys.readouterr().out
 
@@ -471,7 +482,7 @@ class TestAuditOwed:
         return report.rows
 
     def test_marker_with_assets_is_reported(self, tmp_path):
-        (tmp_path / ".audit-owed").write_text("scripts/x.py\nCLAUDE.md\n")
+        (tmp_path / ".audit-owed").write_text("scripts/x.py\nAGENTS.md\n")
         rows = self.report_for(tmp_path)
         assert len(rows) == 1
         status, label, detail = rows[0]
@@ -513,7 +524,7 @@ class TestAuditOwedBranchScoping:
     def test_this_branch_s_entries_are_counted(self, git_repo):
         self.on_branch(git_repo, "feat/x")
         (git_repo / ".audit-owed").write_text(
-            "feat/x\tscripts/x.py\nfeat/x\tCLAUDE.md\n"
+            "feat/x\tscripts/x.py\nfeat/x\tAGENTS.md\n"
         )
         assert "2 config asset(s)" in self.report_for(git_repo)[0][2]
 
@@ -606,27 +617,33 @@ class TestSkillsLinked:
         assert report.rows == []
 
     def test_a_worktree_link_into_the_parent_checkout_is_not_a_copy(
-        self, tmp_path: Path
+        self, git_repo: Path
     ):
-        """The case this check's docstring says it matches by name to avoid.
-
-        main() passes `root` as `git rev-parse --show-toplevel`, which inside
-        a worktree is the worktree -- while the installed links still point at
-        the parent checkout they were written from. Comparing targets against
-        `root` reported every skill as "copy, not a link" and told the user to
-        re-run the installer, which would relink them away from the parent.
-        This repo's CLAUDE.md mandates worktrees for parallel phases.
-        """
-        parent = tmp_path / "parent"
-        (parent / "skills" / "alpha").mkdir(parents=True)
-        worktree = tmp_path / "worktree"
-        worktree.mkdir()
-        installed = self.project(worktree, "alpha")
-        # Linked from the parent checkout, as a real install would have been.
-        self.link(installed, "alpha", parent / "skills" / "alpha")
+        installed = self.project(git_repo, "alpha")
+        (git_repo / "skills" / "alpha" / "SKILL.md").write_text("alpha\n")
+        run_git(git_repo, "add", "install.py", "skills")
+        run_git(git_repo, "commit", "-qm", "skill sources")
+        worktree = git_repo / "linked worktree"
+        run_git(git_repo, "worktree", "add", "-q", "-b", "feature", str(worktree))
+        self.link(installed, "alpha", git_repo / "skills" / "alpha")
         report = preflight.Report()
         preflight.check_skills(report, worktree, installed)
         assert statuses(report, "skills linked") == [OK]
+
+    @pytest.mark.parametrize("target", ["other/skills/alpha", "skills/beta"])
+    def test_a_live_link_to_the_wrong_skill_source_warns(self, tmp_path, target):
+        installed = self.project(tmp_path, "alpha")
+        wrong_source = tmp_path / target
+        wrong_source.mkdir(parents=True)
+        if target.startswith("other/"):
+            run_git(tmp_path / "other", "init", "-q", "-b", "main", ".")
+        else:
+            self.link(installed, "beta", wrong_source)
+        self.link(installed, "alpha", wrong_source)
+        report = preflight.Report()
+        preflight.check_skills(report, tmp_path, installed)
+        assert statuses(report, "skills linked") == [WARN]
+        assert "wrong target: alpha" in details(report, "skills linked")
 
     def test_a_copy_is_reported_rather_than_counted_as_linked(self, tmp_path: Path):
         # The failure mode this check exists for: Git Bash's `ln -s` deep-copies
@@ -639,6 +656,107 @@ class TestSkillsLinked:
         assert statuses(report, "skills linked") == [WARN]
         assert "alpha" in details(report, "skills linked")
         assert "copy" in details(report, "skills linked")
+        assert str(installed) in details(report, "skills linked")
+
+
+def make_installable_project(root: Path) -> Path:
+    """Build the minimum repository shape that owns installation checks."""
+    (root / "install.py").write_text("", encoding="utf-8")
+    (root / "AGENTS.md").write_text("canonical guidance\n", encoding="utf-8")
+    return root
+
+
+def write_expected_adapters(root: Path, home: Path) -> None:
+    for dest, expected in preflight.installation_contract.instruction_adapters(
+        root, home
+    ):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(expected, encoding="utf-8")
+
+
+class TestInstructionAdapters:
+    def test_current_instruction_adapters_are_ok(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        write_expected_adapters(root, home)
+        report = preflight.Report()
+        preflight.check_instructions(report, root, home)
+        assert statuses(report, "Claude instructions") == [OK]
+        assert statuses(report, "Codex instructions") == [OK]
+        assert str(home / ".claude" / "CLAUDE.md") in details(
+            report, "Claude instructions"
+        )
+        assert str(home / ".codex" / "AGENTS.md") in details(
+            report, "Codex instructions"
+        )
+
+    def test_a_missing_claude_adapter_warns_with_its_path(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        write_expected_adapters(root, home)
+        (home / ".claude" / "CLAUDE.md").unlink()
+        report = preflight.Report()
+        preflight.check_instructions(report, root, home)
+        assert statuses(report, "Claude instructions") == [WARN]
+        assert str(home / ".claude" / "CLAUDE.md") in details(
+            report, "Claude instructions"
+        )
+
+    def test_a_stale_codex_snapshot_warns(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        write_expected_adapters(root, home)
+        (home / ".codex" / "AGENTS.md").write_text("stale", encoding="utf-8")
+        report = preflight.Report()
+        preflight.check_instructions(report, root, home)
+        assert statuses(report, "Codex instructions") == [WARN]
+        assert "install" in details(report, "Codex instructions")
+        assert str(home / ".codex" / "AGENTS.md") in details(
+            report, "Codex instructions"
+        )
+
+    def test_a_linked_adapter_warns_with_its_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        write_expected_adapters(root, home)
+        claude_adapter = home / ".claude" / "CLAUDE.md"
+        real_is_link = preflight.platform_paths.is_link
+        monkeypatch.setattr(
+            preflight.platform_paths,
+            "is_link",
+            lambda path: Path(path) == claude_adapter or real_is_link(path),
+        )
+        report = preflight.Report()
+        preflight.check_instructions(report, root, home)
+        assert statuses(report, "Claude instructions") == [WARN]
+        assert str(claude_adapter) in details(report, "Claude instructions")
+
+
+class TestSkillDestinationOrchestration:
+    def test_main_checks_both_skill_destinations(
+        self,
+        git_repo: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = make_installable_project(git_repo)
+        (root / "skills" / "alpha").mkdir(parents=True)
+        home = tmp_path / "home"
+        write_expected_adapters(root, home)
+        claude_skills = home / ".claude" / "skills"
+        claude_skills.mkdir(parents=True)
+        platform_paths.link_dir(root / "skills" / "alpha", claude_skills / "alpha")
+        monkeypatch.chdir(git_repo)
+        assert isolate_preflight_home(monkeypatch, tmp_path) == home
+        assert preflight.main(["--no-friction"]) == 0
+        output = capsys.readouterr().out
+        assert "Claude skills linked" in output
+        assert str(claude_skills) in output
+        assert "Portable skills linked" in output
+        assert str(home / ".agents" / "skills") in output
 
 
 class TestCopiedAloneIntoANewProject:
@@ -660,6 +778,20 @@ class TestCopiedAloneIntoANewProject:
             ["git", "init", "-q", "-b", "main", "."], cwd=tmp_path, check=True
         )
         return target
+
+    def copy_with_contract(self, tmp_path: Path) -> Path:
+        script = self.copy_alone(tmp_path)
+        shutil.copy(
+            REPO_ROOT / "scripts" / "installation_contract.py",
+            tmp_path / "installation_contract.py",
+        )
+        return script
+
+    def load_script(self, script: Path):
+        spec = importlib.util.spec_from_file_location("copied_preflight", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     def test_a_bare_copy_still_reports_rather_than_crashing(self, tmp_path: Path):
         script = self.copy_alone(tmp_path)
@@ -693,6 +825,22 @@ class TestCopiedAloneIntoANewProject:
             check=False,
         )
         assert "skills linked" not in result.stdout
+        assert "instructions" not in result.stdout
+
+    def test_instruction_checks_skip_without_platform_paths(self, tmp_path: Path):
+        script = self.copy_with_contract(tmp_path)
+        module = self.load_script(script)
+        (tmp_path / "install.py").write_text("", encoding="utf-8")
+        (tmp_path / "AGENTS.md").write_text("canonical guidance\n", encoding="utf-8")
+        home = tmp_path / "home"
+        for dest, expected in module.installation_contract.instruction_adapters(
+            tmp_path, home
+        ):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(expected, encoding="utf-8")
+        report = module.Report()
+        module.check_instructions(report, tmp_path, home)
+        assert report.rows == []
 
 
 class TestInstallHintWithoutTheSibling:

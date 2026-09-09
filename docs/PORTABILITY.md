@@ -19,9 +19,9 @@ Use the most widely implemented interface that fits the asset:
 The canonical user-skill destination is `~/.agents/skills`. Codex,
 Gemini CLI, and GitHub Copilot discover that location. Claude Code
 currently uses `~/.claude/skills`, so its adapter links the same source
-directories there. The repository's current installer implements only
-the Claude destination; dual installation belongs to the installer phase
-of the portability work.
+directories there. The repository's installer writes both destinations,
+along with a Claude import stub and a generated Codex instruction
+snapshot from the same canonical guidance.
 
 Project-specific instructions and skills remain in their project. This
 repository owns only preferences and methods that hold across projects.
@@ -38,7 +38,7 @@ the portable core.
 | Project instructions       | Project-owned guidance          | `CLAUDE.md`                       | `AGENTS.md`                               | Prefer `AGENTS.md` when supported; otherwise add a thin host shim           |
 | User skills                | Agent Skills directories        | `~/.claude/skills`                | `~/.agents/skills`                        | Prefer `~/.agents/skills` when supported                                    |
 | Project skills             | Agent Skills directories        | `.claude/skills`                  | `.agents/skills`                          | Prefer `.agents/skills` when supported                                      |
-| Lifecycle automation       | Shared policy behind an adapter | `settings.json` hooks             | `hooks.json` or `config.toml` hooks       | Host hook/extension API, when one exists                                    |
+| Lifecycle automation       | Shared policy behind an adapter | `settings.json` hooks             | Partial: not installed in this phase      | Host hook/extension API, when one exists                                    |
 | Subagents and model choice | Semantic work classification    | Claude agent and model vocabulary | Codex agent and reasoning vocabulary      | Host capability map; never put product model names in the portable contract |
 | Session analytics          | Normalized report input         | Claude transcript reader          | Versioned Codex reader when stable enough | Provider reader or an explicit unsupported result                           |
 | Live integrations          | MCP                             | Supported                         | Supported                                 | MCP where available                                                         |

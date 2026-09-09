@@ -125,6 +125,7 @@ EXCLUDED_PATHS = (
     # One level, not two: `*/skills/*/*` let a flat `skills/foo.md` through.
     "*/skills/*",
     "*/.claude/*",
+    "*/.codex/*",
     "*/memory/*",
     "*/docs/superpowers/*",
     "*/scratch/*",

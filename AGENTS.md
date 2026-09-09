@@ -1,9 +1,8 @@
-# CLAUDE.md (master)
+# Global guidance
 
-Personal operational preferences that apply across all projects, loaded
-automatically by Claude Code via `~/.claude/CLAUDE.md` (this file,
-symlinked from `~/Documents/Projects/claude-config/CLAUDE.md`).
-Project-specific `CLAUDE.md` files add to, not repeat, this content.
+Personal operating preferences across projects. Host adapters load this
+canonical guidance; project-local instructions add to, rather than
+repeat, it.
 
 ## Core philosophy
 
@@ -123,7 +122,7 @@ changes there and not here.
 
 - **No hidden defaults** at call sites. Project-specific enforcement
   (e.g. a strict no-default-arguments rule for config dataclasses)
-  belongs in that project's own CLAUDE.md.
+  belongs in that project's own instruction file.
 - **Fix lint and type errors; do not suppress them.** A suppression
   stops the linter checking that line forever. Suppress only for a
   documented, narrow exception.

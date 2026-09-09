@@ -1,11 +1,11 @@
 # claude-config
 
-Personal, cross-project Claude Code configuration: a master `CLAUDE.md`
-of operational preferences (workflow habits, verification philosophy,
+Personal, cross-project agent configuration: canonical `AGENTS.md` of
+operational preferences (workflow habits, verification philosophy,
 design taste) and personal `skills/`, shared across every project via
-links into `~/.claude/`.
+links into each supported host's skill location.
 
-Project-specific `CLAUDE.md` files stay in their own repos and add only
+Project-local instruction files stay in their own repos and add only
 what's local to that project (build commands, architecture, domain
 conventions) -- they should not repeat what's here.
 
@@ -27,19 +27,21 @@ git clone <remote-url> ~/Documents/Projects/claude-config
 
 Both are thin shims over `install.py`; run that directly with
 `pixi run -e dev python install.py` if you prefer. One command,
-deliberately: the installer links the config, materializes the dev
-environment, and registers the hooks *in that order* -- registered hooks
-name the dev environment's python in their command, so registering
-before the environment exists writes hooks that cannot start. Requires
-`pixi` on PATH.
+deliberately: the installer writes the Claude and Codex instruction
+adapters, links skills for both hosts, materializes the dev environment,
+and registers Claude Code hooks *in that order*. Registered hooks name
+the dev environment's python in their command, so registering before the
+environment exists writes hooks that cannot start. Codex lifecycle hooks
+are not installed in this phase. Requires `pixi` on PATH.
 
 No elevation and no Developer Mode is required on Windows. Skills are
 linked with directory junctions rather than symlinks, since a junction
 needs no privilege (`os.symlink` fails there with `WinError 1314`
-without one), and `~/.claude/CLAUDE.md` is written as an `@import` stub
-that names this repo's copy rather than linked at all -- junctions
-cannot span to a file. Both are handled by `scripts/platform_paths.py`,
-the one place each platform difference this repo cares about is decided.
+without one). `~/.claude/CLAUDE.md` is an `@import` stub pointing to
+this repo's `AGENTS.md`, while `~/.codex/AGENTS.md` is a generated
+snapshot of it; junctions cannot span to a file. Both are handled by
+`scripts/platform_paths.py`, the one place each platform difference this
+repo cares about is decided.
 
 Re-running the installer is safe -- it replaces existing links, prunes
 links to skills this repo no longer has, and backs up anything real it
@@ -61,6 +63,11 @@ env reached through a symlink counts as local, which is what a git
 worktree sharing the parent checkout's `.pixi` has. Only a too-old
 interpreter stops the remaining checks -- the alternative was a copy of
 preflight reporting one failure and inspecting nothing.
+
+`pixi run preflight` also confirms that both instruction adapters match
+the canonical guidance and that skills are linked into both host
+destinations. Re-run the installer after updating this repository if it
+reports an adapter or link as stale.
 
 Hooks in `~/.claude/settings.json` must therefore name this repo's
 environment python explicitly, not `python3`. The installer writes that
@@ -91,27 +98,27 @@ pixi run all                        # format, lint, ascii, spell,
 
 ## Layout
 
-- `CLAUDE.md` -- imported by `~/.claude/CLAUDE.md`, loaded in every
-  Claude Code session. Not linked on any platform: `~/.claude/CLAUDE.md`
-  is written as a one-line
-  `@~/Documents/Projects/claude-config/CLAUDE.md` stub, which needs no
-  privilege anywhere and behaves identically everywhere, so there is no
-  second code path to keep in step.
+- `AGENTS.md` -- the canonical global guidance. `~/.claude/CLAUDE.md` is
+  a one-line `@` import stub targeting it, and `~/.codex/AGENTS.md` is a
+  generated snapshot marked with its source. Neither adapter needs a
+  file link or elevated privilege.
 - `docs/PORTABILITY.md` -- the boundary between the portable core and
   host-specific adapters, including the support matrix and the
   conservative Agent Skills profile enforced by `pixi run skills`.
-- `skills/<name>/` -- each linked to `~/.claude/skills/<name>/`: a
-  symlink on macOS/Linux, a directory junction (no elevation, no
-  Developer Mode) on Windows. `preflight` reports a skill this repo
-  carries that is not linked on this machine, and a link left behind by
-  one that was renamed or deleted -- machine state, like hook
-  registration, and the same manual step nothing verified. The installer
-  writes the missing links and prunes the stale ones.
+- `skills/<name>/` -- each linked to both `~/.claude/skills/<name>/` and
+  `~/.agents/skills/<name>/`: a symlink on macOS/Linux, a directory
+  junction (no elevation, no Developer Mode) on Windows. `preflight`
+  reports a skill this repo carries that is not linked on either host,
+  and a link left behind by one that was renamed or deleted -- machine
+  state, like hook registration, and the same manual step nothing
+  verified. The installer writes the missing links and prunes stale ones
+  in both destinations.
 - `skills/standards-and-spec-review/CODING_STANDARDS.md` -- the single
-  definition of the house coding rules. The master `CLAUDE.md` names
+  definition of the house coding rules. The canonical `AGENTS.md` names
   them as triggers and points here; nothing restates them.
-- `install.py` -- creates/repairs the links above and registers hooks;
-  the actual installer behind both shims below.
+- `install.py` -- creates/repairs both host adapters and skill links,
+  then registers the current Claude-only hooks; the actual installer
+  behind both shims below.
 - `install.sh` -- POSIX shim over `install.py`, for macOS and Linux.
 - `install.ps1` -- PowerShell shim over `install.py`, for Windows.
 - `scripts/platform_paths.py` -- where every platform difference the
@@ -120,6 +127,10 @@ pixi run all                        # format, lint, ascii, spell,
   junction vs symlink. A library module, not a script -- hooks
   deliberately do not import it, since they run standalone under
   whatever interpreter `~/.claude/settings.json` names.
+- `scripts/installation_contract.py` -- the shared canonical guidance,
+  generated adapter formats and host destination tuples used by the
+  installer and preflight. It is an import-only contract module, not a
+  command.
 - `hooks/` -- invoked by `~/.claude/settings.json`. Each hook declares
   its own event in a marker comment near the top
   (`# claude-hook: PostToolUse Write|Edit`) and the installer registers
@@ -205,10 +216,10 @@ pixi run all                        # format, lint, ascii, spell,
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
-- `hooks/promotion-check.py` -- fires when a `CLAUDE.md`, memory or
-  skill file is written *outside* this repo, asking whether the
-  preference is general enough to belong here instead. It resolves links
-  before matching, because the installer links this repo into
+- `hooks/promotion-check.py` -- fires when an `AGENTS.md`, `CLAUDE.md`,
+  memory or skill file is written *outside* this repo, asking whether
+  the preference is general enough to belong here instead. It resolves
+  links before matching, because the installer links this repo into
   `~/.claude`, so editing the config through its installed path would
   otherwise look like editing a foreign project and the hook would tell
   you to promote a file you are already editing here.
@@ -227,7 +238,7 @@ pixi run all                        # format, lint, ascii, spell,
   `mdformat`: the reference material is full of bare backslashes, and
   the formatter turns `\gate` into `\\gate`.
 - `hooks/audit-owed.py` -- on a commit touching `skills/`, `scripts/`,
-  `hooks/` or `CLAUDE.md`, records the asset in a gitignored
+  `hooks/` or `AGENTS.md`, records the asset in a gitignored
   `.audit-owed` and asks for *one* audit at branch end rather than one
   per commit -- an audit that fired on all eight commits of a branch
   would report the same findings eight times and get skimmed by the
@@ -242,7 +253,7 @@ pixi run all                        # format, lint, ascii, spell,
 - `hooks/agent-model.py` -- denies an `Agent` dispatch that omits
   `model` when the agent type is a catch-all (`general-purpose`,
   `claude`, or absent), because those inherit the session model and this
-  config runs Opus. CLAUDE.md already asks for the cheapest model that
+  config runs Opus. AGENTS.md already asks for the cheapest model that
   holds accuracy, but the harness default fights the rule: the only way
   to miss it is upward, and forgetting the field costs the most a
   dispatch can cost. Measured over 30 days, 19 of 163 dispatches omitted

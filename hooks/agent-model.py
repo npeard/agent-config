@@ -2,7 +2,7 @@
 # claude-hook: PreToolUse Agent
 """Require an explicit `model` on catch-all Agent dispatches.
 
-The master CLAUDE.md already asks for "the cheapest model that holds
+The master AGENTS.md already asks for "the cheapest model that holds
 accuracy", but the harness default fights the rule: omitting `model` makes a
 subagent inherit the parent's model, and this config runs Opus. So the rule
 can only ever be broken in the expensive direction, and forgetting the
@@ -15,7 +15,7 @@ baseline measurement, which is Haiku work. Nobody chose Opus there; the
 field was simply absent.
 
 This denies rather than advises, which is the point. An advisory is a second
-request to behave, and the first one is already in CLAUDE.md being ignored.
+request to behave, and the first one is already in AGENTS.md being ignored.
 Denying converts a silent default into a named choice at the cost of one
 round trip -- and "opus" remains a perfectly good answer, it just has to be
 typed. Tier 1 on the reflect ladder for exactly this reason: a hook does not
@@ -45,7 +45,7 @@ CATCH_ALL = frozenset({"", "general-purpose", "claude", "default"})
 REASON = (
     "Pass an explicit `model` to the Agent tool. Omitting it inherits this "
     "session's model (Opus), so the default is the most expensive option and "
-    "CLAUDE.md's 'cheapest model that holds accuracy' can only be missed "
+    "AGENTS.md's 'cheapest model that holds accuracy' can only be missed "
     "upward. Choose: `haiku` for mechanical work (scoped fixes, deletions, "
     "re-reviewing one diff, search sweeps), `sonnet` for implementation and "
     "review that needs judgement, `opus` for design-sensitive work. `opus` "

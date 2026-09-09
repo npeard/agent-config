@@ -11,7 +11,7 @@ import sys
 def canonical(path: str) -> str:
     """Resolved, forward-slashed, lowercased form used for all matching.
 
-    Symlinks are resolved because install.sh links ~/.claude/CLAUDE.md and
+    Symlinks are resolved because the installer writes ~/.claude/CLAUDE.md and
     ~/.claude/skills/<name> into the master repo. Editing the config through
     its installed path yields a path outside MASTER_REPO, so without
     realpath the self-guard misses and the hook tells you to promote a file
@@ -19,7 +19,7 @@ def canonical(path: str) -> str:
 
     The lowercasing is explicit rather than delegated to os.path.normcase,
     which only lowercases on Windows. Relying on it meant the lowercase
-    PATTERNS below could never match the real CLAUDE.md and SKILL.md
+    PATTERNS below could never match the real AGENTS.md, CLAUDE.md and SKILL.md
     filenames on macOS or Linux, so the hook silently never fired for
     exactly the two file kinds it exists to catch.
     """
@@ -27,7 +27,12 @@ def canonical(path: str) -> str:
 
 
 MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/claude-config"))
-PATTERNS = ("*/claude.md", "*/memory/*.md", "*/skills/*/skill.md")
+PATTERNS = (
+    "*/agents.md",
+    "*/claude.md",
+    "*/memory/*.md",
+    "*/skills/*/skill.md",
+)
 
 # Shell operators that send output into a file. The fd-prefixed forms (`2>`,
 # `1>>`) tokenize as a separate "2"/"1" word followed by the operator, so they
@@ -224,11 +229,11 @@ def resolve_destination(path: str, base: str) -> str:
 
 
 MESSAGE = (
-    "You just wrote a CLAUDE.md, memory, or skill file. Check: is this "
+    "You just wrote an AGENTS.md, CLAUDE.md, memory, or skill file. Check: is this "
     "preference or skill general engineering or workflow taste that holds "
     "across projects, rather than local domain or tooling detail? If "
     "general, also add it to ~/Documents/Projects/claude-config (master "
-    "CLAUDE.md or skills/) and commit there."
+    "AGENTS.md or skills/) and commit there."
 )
 
 

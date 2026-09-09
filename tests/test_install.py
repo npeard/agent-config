@@ -13,6 +13,10 @@ import json
 import subprocess
 from pathlib import Path
 
+import preflight
+import pytest
+from conftest import run_git
+
 REPO = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("install", REPO / "install.py")
 install = importlib.util.module_from_spec(spec)
@@ -25,30 +29,70 @@ def run(home: Path) -> int:
     return install.main(["--home", str(home), "--skip-env"])
 
 
+def skill_destinations(home: Path) -> tuple[Path, Path]:
+    return home / ".claude" / "skills", home / ".agents" / "skills"
+
+
 class TestFreshMachine:
-    def test_a_fresh_home_gets_a_claude_md_stub(self, tmp_path):
+    def test_a_fresh_home_gets_both_instruction_adapters(self, tmp_path):
         assert run(tmp_path) == 0
-        stub = tmp_path / ".claude" / "CLAUDE.md"
-        assert stub.is_file()
-        assert stub.read_text(encoding="utf-8").strip().startswith("@")
+        claude = tmp_path / ".claude" / "CLAUDE.md"
+        codex = tmp_path / ".codex" / "AGENTS.md"
+        source = REPO / "AGENTS.md"
+        assert claude.read_text(encoding="utf-8") == f"@{source.as_posix()}\n"
+        header, guidance = codex.read_text(encoding="utf-8").split("\n\n", 1)
+        assert header == (
+            f"<!-- Generated from {source.as_posix()}; "
+            "rerun this repository's installer to refresh. -->"
+        )
+        assert guidance == source.read_text(encoding="utf-8")
         # A stub, not a link: it needs no privilege on any platform.
-        assert not pp.is_link(stub)
+        assert not pp.is_link(claude)
 
-    def test_every_skill_is_linked_and_reads_through(self, tmp_path):
+    def test_instruction_adapters_are_idempotent(self, tmp_path):
         assert run(tmp_path) == 0
-        for src in sorted((REPO / "skills").iterdir()):
-            if not src.is_dir():
-                continue
-            dest = tmp_path / ".claude" / "skills" / src.name
-            assert dest.exists(), f"{src.name} not installed"
-            assert pp.verify_link(dest, REPO), f"{src.name} is a copy, not a link"
+        assert run(tmp_path) == 0
+        assert not list((tmp_path / ".claude").glob("CLAUDE.md.*.bak"))
+        assert not list((tmp_path / ".codex").glob("AGENTS.md.*.bak"))
 
-    def test_rerunning_is_safe(self, tmp_path):
+    def test_every_skill_is_linked_for_both_hosts(self, tmp_path):
+        assert run(tmp_path) == 0
+        for installed in skill_destinations(tmp_path):
+            for src in sorted((REPO / "skills").iterdir()):
+                if src.is_dir():
+                    assert pp.verify_link(installed / src.name, REPO)
+
+    def test_rerunning_writes_no_skill_backup_for_either_host(self, tmp_path):
         assert run(tmp_path) == 0
         assert run(tmp_path) == 0
-        for src in sorted((REPO / "skills").iterdir()):
-            if src.is_dir():
-                assert (tmp_path / ".claude" / "skills" / src.name).exists()
+        for installed in skill_destinations(tmp_path):
+            assert not list(installed.glob("*.bak"))
+
+
+@pytest.mark.parametrize("changed_guidance", [False, True])
+def test_main_checkout_adapters_are_current_in_a_linked_worktree(
+    git_repo, monkeypatch, changed_guidance
+):
+    (git_repo / "install.py").write_text("", encoding="utf-8")
+    (git_repo / "AGENTS.md").write_text("installed guidance\n", encoding="utf-8")
+    run_git(git_repo, "add", "install.py", "AGENTS.md")
+    run_git(git_repo, "commit", "-qm", "installation sources")
+    worktree = git_repo / "linked worktree"
+    run_git(git_repo, "worktree", "add", "-q", "-b", "feature", str(worktree))
+    home = git_repo / "home"
+    monkeypatch.setattr(install, "REPO", git_repo)
+    install.install_instructions(home)
+    if changed_guidance:
+        (worktree / "AGENTS.md").write_text(
+            "uninstalled branch edit\n", encoding="utf-8"
+        )
+    monkeypatch.chdir(worktree)
+    report = preflight.Report()
+    preflight.check_instructions(report, worktree, home)
+    assert [(status, label) for status, label, _ in report.rows] == [
+        (preflight.OK, "Claude instructions"),
+        (preflight.OK, "Codex instructions"),
+    ]
 
 
 class TestEnvironmentAndHookRegistration:
@@ -150,6 +194,33 @@ class TestEnvironmentAndHookRegistration:
 
 
 class TestBackups:
+    @pytest.mark.parametrize("relative", [".claude/CLAUDE.md", ".codex/AGENTS.md"])
+    def test_invalid_utf8_adapter_is_backed_up_and_repaired(self, tmp_path, relative):
+        dest = tmp_path / relative
+        dest.parent.mkdir(parents=True)
+        original = b"user data\xff\xfe\x00\r\n"
+        dest.write_bytes(original)
+        assert run(tmp_path) == 0
+        backups = list(dest.parent.glob(f"{dest.name}.*.bak"))
+        assert len(backups) == 1
+        assert backups[0].read_bytes() == original
+        assert "AGENTS.md" in dest.read_text(encoding="utf-8")
+        assert run(tmp_path) == 0
+        assert list(dest.parent.glob(f"{dest.name}.*.bak")) == backups
+
+    @pytest.mark.parametrize(
+        ("relative", "name"),
+        [(Path(".claude"), "CLAUDE.md"), (Path(".codex"), "AGENTS.md")],
+    )
+    def test_conflicting_instruction_file_is_backed_up(self, tmp_path, relative, name):
+        directory = tmp_path / relative
+        directory.mkdir()
+        (directory / name).write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        backups = list(directory.glob(f"{name}.*.bak"))
+        assert len(backups) == 1
+        assert backups[0].read_text(encoding="utf-8") == "mine"
+
     def test_an_existing_regular_file_is_backed_up(self, tmp_path):
         claude = tmp_path / ".claude"
         claude.mkdir()
@@ -184,8 +255,9 @@ class TestBackups:
         assert (backups[0] / "important.txt").read_text(encoding="utf-8") == "mine"
         assert (claude / "CLAUDE.md").is_file()
 
-    def test_a_real_directory_at_a_skill_path_is_backed_up(self, tmp_path):
-        skills = tmp_path / ".claude" / "skills"
+    @pytest.mark.parametrize("skills", [".claude/skills", ".agents/skills"])
+    def test_a_real_directory_at_a_skill_path_is_backed_up(self, tmp_path, skills):
+        skills = tmp_path / skills
         skills.mkdir(parents=True)
         name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
         (skills / name).mkdir()
@@ -199,27 +271,31 @@ class TestBackups:
     def test_a_correct_install_rerun_writes_no_skill_backup(self, tmp_path):
         assert run(tmp_path) == 0
         assert run(tmp_path) == 0
-        skills = tmp_path / ".claude" / "skills"
-        assert not list(skills.glob("*.bak"))
+        for skills in skill_destinations(tmp_path):
+            assert not list(skills.glob("*.bak"))
 
 
 class TestSkillLinks:
-    def test_a_link_to_a_removed_skill_is_pruned(self, tmp_path):
+    def test_a_stale_repo_link_is_pruned_from_both_hosts(self, tmp_path):
         assert run(tmp_path) == 0
-        skills = tmp_path / ".claude" / "skills"
         ghost = REPO / "skills" / "was-deleted"
         ghost.mkdir()
         try:
-            pp.link_dir(ghost, skills / "was-deleted")
+            for installed in skill_destinations(tmp_path):
+                pp.link_dir(ghost, installed / ghost.name)
         finally:
             ghost.rmdir()
         assert run(tmp_path) == 0
-        assert not (skills / "was-deleted").exists()
+        assert all(
+            not (installed / ghost.name).exists()
+            for installed in skill_destinations(tmp_path)
+        )
 
-    def test_a_foreign_link_is_left_alone(self, tmp_path):
+    @pytest.mark.parametrize("installed", [".claude/skills", ".agents/skills"])
+    def test_a_foreign_link_is_left_alone(self, tmp_path, installed):
         # Only links into this repo are ours to prune.
         assert run(tmp_path) == 0
-        skills = tmp_path / ".claude" / "skills"
+        skills = tmp_path / installed
         other = tmp_path / "other-tool"
         other.mkdir()
         pp.link_dir(other, skills / "foreign")
@@ -228,13 +304,16 @@ class TestSkillLinks:
 
 
 class TestCopyDetection:
-    def test_a_copy_left_by_a_previous_bad_install_is_replaced(self, tmp_path):
+    @pytest.mark.parametrize("installed", [".claude/skills", ".agents/skills"])
+    def test_a_copy_left_by_a_previous_bad_install_is_replaced(
+        self, tmp_path, installed
+    ):
         # Git Bash's `ln -s` deep-copies on a machine without Developer Mode,
         # so a previously "successful" install can leave copies behind. They
         # must be repaired, not accepted.
         import shutil
 
-        skills = tmp_path / ".claude" / "skills"
+        skills = tmp_path / installed
         skills.mkdir(parents=True)
         name = next(p.name for p in (REPO / "skills").iterdir() if p.is_dir())
         shutil.copytree(REPO / "skills" / name, skills / name)

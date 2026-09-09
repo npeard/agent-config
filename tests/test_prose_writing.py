@@ -110,6 +110,7 @@ class TestSilentOnEverythingElse:
             # Agent configuration is Markdown but is not prose work.
             f"{THESIS}/.claude/agents/reviewer.md",
             f"{THESIS}/.claude/commands/build.md",
+            f"{THESIS}/.codex/agent-settings.md",
             # A flat skills/*.md slipped through when the pattern required
             # two levels below skills/.
             f"{THESIS}/skills/flat.md",

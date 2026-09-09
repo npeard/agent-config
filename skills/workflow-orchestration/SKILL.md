@@ -14,7 +14,7 @@ to executing a single phase. Reading it costs you context and changes
 nothing about your job.
 </SUBAGENT-STOP>
 
-The numbered spine lives in the master `CLAUDE.md`. This skill carries
+The numbered spine lives in the master `AGENTS.md`. This skill carries
 the detail behind each step: which skill to invoke and why that one, how
 to brief a subagent, and when to stop.
 
@@ -85,7 +85,7 @@ explore. Two obligations beyond the skill's own text:
 The spec is a handoff artifact for subagents, so it is written for a
 reader with no conversation context. Use
 `superpowers:test-driven-development` to fix each phase's tests in the
-spec, and see the master `CLAUDE.md` on what not to test (no tests that
+spec, and see the master `AGENTS.md` on what not to test (no tests that
 merely assert a refactor happened; no superseded implementation kept
 alive as an oracle).
 

@@ -193,7 +193,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "c518ce43c95233b3b7f2bb4c7967b496aade24d950c5b57d39668640e45d38ee"
+asset_sha = "4e5a25f988a7c026e3ad4be1a1847aeaf89f62f1bef3451bc08679d8aeb93a1c"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -243,7 +243,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "7e5c28276d38775bd3e066c87aea7f07db4450dec864305f0b00e62f57429b27"
+asset_sha = "035dbe24754998652f0923c3e2b2285ce2d32ee29a98a8f53cca1ac36feb5635"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -336,7 +336,7 @@ principle = 5
 date = "2026-09-03"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "1401da72ed8e13a12042adb47ccc618574d6b33160e9283d555051c6d7cdeeaf"
+asset_sha = "6808928301ec52c48d7d1c7dc6deed275f406304026979c9626f0faca32fe4c5"
 note = """
 Reads every session transcript and prints a report a model will read, so it
 hits the same read/emit conjunction as friction.py. Fixed rather than
@@ -415,4 +415,21 @@ The PRICING table is the residual risk this cannot close by construction: a
 stale rate produces confidently wrong dollars. Answered by printing the
 rates and their verification date alongside every total, so the assumption
 travels with the number instead of living in a comment nobody re-reads.
+"""
+
+[[decision]]
+asset = "scripts/installation_contract.py"
+principle = 4
+date = "2026-09-08"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "8e7062ac227a50f580b3485204e033be1e6a58e54b12099422b1574081dfd6c1"
+note = """
+This module is an import-only contract shared by install.py and preflight.py:
+it defines canonical guidance, generated adapter formats and destination
+tuples. A command-line parser would advertise an entry point that does not
+exist and would not make its consuming interfaces easier to use.
+
+README.md names the module and explains its role, so the supported entry
+points remain discoverable without reading the tree.
 """

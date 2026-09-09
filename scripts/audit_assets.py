@@ -3,7 +3,7 @@
 
 Specific to claude-config, like register_hooks.py and unlike the other
 scripts here: it knows this repo's layout (skills/, scripts/, hooks/,
-CLAUDE.md) rather than describing a capability every project has, so it is
+AGENTS.md) rather than describing a capability every project has, so it is
 not meant to be copied elsewhere verbatim.
 
 Reports and never fixes. The fix for a principle violation is usually a
@@ -35,7 +35,7 @@ LEDGER = REPO_ROOT / "audit-ledger.toml"
 
 # Measured at the time of writing plus deliberately tight headroom. Raising
 # one of these should feel heavier than adding a sentence, which is the point.
-CLAUDE_MD_MAX_WORDS = 1250
+AGENTS_MD_MAX_WORDS = 1250
 SKILL_BODY_MAX_WORDS = 2000
 SKILL_DESCRIPTION_MAX_WORDS = 60
 
@@ -316,7 +316,7 @@ def required_references(path: Path, text: str) -> list[Path]:
     instruction rather than the instruction.
 
     A named file that is not in the skill directory is not charged. A skill
-    may point at the *project's* file of the same name, and CLAUDE.md has its
+    may point at the *project's* file of the same name, and AGENTS.md has its
     own ceiling already.
     """
     named = {m.group(1).lower() for m in REQUIRED_READ.finditer(unfenced(text))}
@@ -335,15 +335,15 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     """P3: spend context wisely."""
     out = []
     # Guarded like prose_files and pixi_tasks. Unguarded, `pixi run audit` on a
-    # tree where CLAUDE.md was renamed tracebacks instead of reporting the P4
+    # tree where AGENTS.md is absent tracebacks instead of reporting the P4
     # dangling references that rename produces -- the audit failing exactly
     # when it has something to say.
-    claude_md = root / "CLAUDE.md"
-    n = words(claude_md.read_text(encoding="utf-8")) if claude_md.is_file() else 0
-    if n > CLAUDE_MD_MAX_WORDS:
+    agents_md = root / "AGENTS.md"
+    n = words(agents_md.read_text(encoding="utf-8")) if agents_md.is_file() else 0
+    if n > AGENTS_MD_MAX_WORDS:
         out.append(
             Finding(
-                3, "CLAUDE.md", f"{n} words, over the {CLAUDE_MD_MAX_WORDS} ceiling"
+                3, "AGENTS.md", f"{n} words, over the {AGENTS_MD_MAX_WORDS} ceiling"
             )
         )
     for path, text in skill_texts(root):
@@ -524,7 +524,7 @@ def prose_files(root: Path = REPO_ROOT) -> list[Path]:
     not see.
     """
     candidates = [
-        root / "CLAUDE.md",
+        root / "AGENTS.md",
         root / "README.md",
         root / "audit-ledger.toml",
         root / "friction-ledger.toml",

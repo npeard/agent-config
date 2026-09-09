@@ -14,7 +14,7 @@ single section. Reading it costs you context and changes nothing about your
 job.
 </SUBAGENT-STOP>
 
-The numbered spine lives in the master `CLAUDE.md`, and it does not
+The numbered spine lives in the master `AGENTS.md`, and it does not
 change here. This skill carries what each step *means* when the
 deliverable is prose, and the gate policy in `workflow-orchestration`
 applies unchanged.

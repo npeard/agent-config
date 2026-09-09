@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 from audit_assets import (
-    CLAUDE_MD_MAX_WORDS,
+    AGENTS_MD_MAX_WORDS,
     REFERENCE_MAX_WORDS,
     SKILL_BODY_MAX_WORDS,
     SKILL_DESCRIPTION_MAX_WORDS,
@@ -53,13 +53,14 @@ def test_skills_exist():
     assert skill_files()
 
 
-def test_claude_md_within_budget():
-    path = REPO_ROOT / "CLAUDE.md"
+def test_agents_md_within_budget():
+    path = REPO_ROOT / "AGENTS.md"
     n = words(path.read_text())
-    assert n <= CLAUDE_MD_MAX_WORDS, (
-        f"CLAUDE.md is {n} words, over the {CLAUDE_MD_MAX_WORDS} ceiling. "
+    assert n <= AGENTS_MD_MAX_WORDS, (
+        f"AGENTS.md is {n} words, over the {AGENTS_MD_MAX_WORDS} ceiling. "
         f"It is read in every session and inherited by every subagent. {REMEDY}"
     )
+    assert not (REPO_ROOT / "CLAUDE.md").exists()
 
 
 @pytest.mark.parametrize("path", skill_files(), ids=lambda p: p.parent.name)
@@ -130,7 +131,7 @@ def test_ceilings_have_not_been_loosened():
 
     When the ceilings moved out of this file into scripts/audit_assets.py,
     this file's own promise -- that changing a number should feel heavier
-    than adding a sentence -- went with them: raising CLAUDE_MD_MAX_WORDS
+    than adding a sentence -- went with them: raising AGENTS_MD_MAX_WORDS
     from 1250 to 1400 turns every gate above green with no record of the old
     value, and scripts/thresholds.py could not see it either, because
     pairing required the substring "assert" (it now reads named limits too,
@@ -142,7 +143,7 @@ def test_ceilings_have_not_been_loosened():
     passes this untouched, loosening one cannot happen without editing a
     test. Do not "simplify" it by comparing against the imported names.
     """
-    assert CLAUDE_MD_MAX_WORDS <= 1250
+    assert AGENTS_MD_MAX_WORDS <= 1250
     assert SKILL_BODY_MAX_WORDS <= 2000
     assert SKILL_DESCRIPTION_MAX_WORDS <= 60
     assert REFERENCE_MAX_WORDS <= 2000
@@ -245,14 +246,14 @@ class TestDescriptionExtraction:
 
 
 class TestStandardsPointerIntegrity:
-    """CLAUDE.md's Coding standards preamble promises that each bullet is
+    """AGENTS.md's Coding standards preamble promises that each bullet is
     defined with an example in CODING_STANDARDS.md. It listed ten bullets
     against nine rules, so a reader following the pointer for the tenth
     found nothing -- a broken promise no other check would notice.
     """
 
     def bullets(self) -> list[str]:
-        text = (REPO_ROOT / "CLAUDE.md").read_text()
+        text = (REPO_ROOT / "AGENTS.md").read_text()
         section = text[text.index("## Coding standards") :]
         section = section[: section.index("\n## ", 3)]
         return re.findall(r"^- \*\*(.+?)\*\*", section, re.MULTILINE | re.DOTALL)
@@ -265,7 +266,7 @@ class TestStandardsPointerIntegrity:
 
     def test_every_bullet_has_a_defined_rule(self):
         assert len(self.bullets()) == len(self.rules()), (
-            f"CLAUDE.md lists {len(self.bullets())} standards bullets but "
+            f"AGENTS.md lists {len(self.bullets())} standards bullets but "
             f"CODING_STANDARDS.md defines {len(self.rules())} rules. The "
             "preamble promises each bullet is defined there."
         )

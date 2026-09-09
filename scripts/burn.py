@@ -44,7 +44,7 @@ outright would recover under 4% of what enters context.
 
 It would not eliminate them. Three of the nine were already bounded
 (`| tail -40`, `sed -n <range>`). The other six were a `cat` of a whole file
-read for its contents -- a CLAUDE.md, two scripts, a skill file. Denying the
+read for its contents -- an AGENTS.md, two scripts, a skill file. Denying the
 `cat` moves the same chars into a Read, and `head`-ing a file you are reading
 to understand loses the thing you read it for, so a check at the call site
 redirects the cost rather than removing it. What removes it is delegation, because a subagent's

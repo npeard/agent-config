@@ -72,6 +72,7 @@ class TestMatchesRealFilenames:
         [
             f"{OTHER}/CLAUDE.md",
             f"{OTHER}/claude.md",
+            f"{OTHER}/AGENTS.md",
             f"{OTHER}/nested/dir/CLAUDE.md",
             f"{OTHER}/skills/my-skill/SKILL.md",
             f"{OTHER}/skills/my-skill/skill.md",
@@ -103,13 +104,13 @@ class TestMasterRepoSelfGuard:
     @pytest.mark.parametrize(
         "path",
         [
-            f"{MASTER}/CLAUDE.md",
+            f"{MASTER}/AGENTS.md",
             f"{MASTER}/skills/quantikz/SKILL.md",
             # normpath must collapse the traversal before the prefix test,
             # which is the bug class fixed in 237c1d7.
-            f"{MASTER}/skills/../CLAUDE.md",
-            f"{MASTER}//CLAUDE.md",
-            f"{MASTER}/./CLAUDE.md",
+            f"{MASTER}/skills/../AGENTS.md",
+            f"{MASTER}//AGENTS.md",
+            f"{MASTER}/./AGENTS.md",
         ],
     )
     def test_silent_inside_master(self, path: str):
@@ -250,7 +251,7 @@ class TestBashWrites:
         [
             f"echo hi > {OTHER}/notes.md",
             f"sed -i '' 's/a/b/' {OTHER}/src/main.py",
-            f"echo hi > {MASTER}/CLAUDE.md",
+            f"echo hi > {MASTER}/AGENTS.md",
             f"sed -i '' 's/a/b/' {MASTER}/skills/quantikz/SKILL.md",
         ],
     )

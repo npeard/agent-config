@@ -52,7 +52,7 @@ properly rather than patching with a quick rule.
 
 Run `pixi run toolgaps`. It reports missing standard tooling (cause 1)
 and inventories claude-config's `scripts/`, `hooks/` and `skills/`
-(cause 2). Read the master `CLAUDE.md` for rules that already cover the
+(cause 2). Read the master `AGENTS.md` for rules that already cover the
 friction (cause 3).
 
 ### Then check for redundancy
@@ -90,7 +90,7 @@ friction made relevant.
 
 A hook does not gate on context. It fires regardless of what the model
 remembered, what got compacted away, which skill happened to be invoked,
-or how long the session ran. A rule in `CLAUDE.md` and a skill are both
+or how long the session ran. A rule in `AGENTS.md` and a skill are both
 *requests to behave*; a hook is a *fact about the system*. So a
 mechanical fix belongs in a hook even when writing the rule would be
 faster: the rule's compliance decays and the hook's does not.
@@ -101,7 +101,7 @@ faster: the rule's compliance decays and the hook's does not.
 | 1    | Hook                 | none                   | Autonomous, **tests required**                    |
 | 2    | Script or task       | none until run         | Autonomous, **tests required**                    |
 | 3    | Skill                | on demand              | Approval, then `brainstorming` + `writing-skills` |
-| 4    | Prose in `CLAUDE.md` | every session, forever | Approval                                          |
+| 4    | Prose in `AGENTS.md` | every session, forever | Approval                                          |
 
 Tier 0 is the expected outcome, not a failure. The ladder also points
 **downward**: a skill that turns out to be purely mechanical should
@@ -145,7 +145,7 @@ downward direction of the ladder needs.
 | ------------------------------------------------------------- | ----------------------------------------------------------- |
 | "Which tier should this be?"                                  | You skipped the cause. Name it first.                       |
 | "This session had friction, let me write a skill"             | One session is one incident. Check the bar.                 |
-| "I'll add a line to CLAUDE.md, it's only a line"              | Every future session reads it forever. Tier 4 is last.      |
+| "I'll add a line to AGENTS.md, it's only a line"              | Every future session reads it forever. Tier 4 is last.      |
 | "The rule exists but nobody follows it, so restate it louder" | Restating changes nothing. Make it mechanical or accept it. |
 | "Both of these tools are relevant"                            | Then check whether they are the same concept.               |
 | "These two feel similar, I'll merge them"                     | State the boundary first. If you can, they are distinct.    |
