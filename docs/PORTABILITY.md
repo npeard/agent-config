@@ -40,7 +40,7 @@ the portable core.
 | Project skills             | Agent Skills directories        | `.claude/skills`                  | `.agents/skills`                                                                  | Prefer `.agents/skills` when supported                                      |
 | Lifecycle automation       | Shared policy behind an adapter | `settings.json` hooks             | Five mapped hooks in `~/.codex/hooks.json`; configuration requires `/hooks` trust | Host hook/extension API, when one exists                                    |
 | Subagents and model choice | Semantic work classification    | Claude agent and model vocabulary | Codex agent and reasoning vocabulary                                              | Host capability map; never put product model names in the portable contract |
-| Session analytics          | Normalized report input         | Claude transcript reader          | Versioned Codex reader when stable enough                                         | Provider reader or an explicit unsupported result                           |
+| Session analytics          | Normalized report input         | Claude transcript and cost reader | Versioned Codex v1 friction reader; cost explicitly unsupported                   | Provider reader or an explicit unsupported result                           |
 | Live integrations          | MCP                             | Supported                         | Supported                                                                         | MCP where available                                                         |
 
 ## Codex lifecycle adapter
@@ -68,6 +68,18 @@ has its own agent and reasoning controls. Claude `Notification` and
 `AskUserQuestion` behavior is also intentionally unsupported, so the
 notification/question policy is limited to the mapped `Stop` event
 rather than guessed event or payload translations.
+
+## Codex session analytics
+
+`pixi run capture-codex -- <arguments>` is an explicit opt-in wrapper
+around `codex exec --json`. It stores each capture under
+`~/.agents/analytics/codex-exec/v1/`, whose version names the reader
+contract. This adapter captures only non-interactive `codex exec --json`
+runs and never reads or consumes interactive Codex session state.
+`pixi run friction -- --source codex` reads its command failures. The
+capture does not provide priced usage data, so
+`pixi run burn -- --source codex` returns an explicit unsupported result
+rather than calculating or estimating a cost.
 
 ## Agent Skills profile
 

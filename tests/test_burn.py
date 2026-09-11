@@ -363,6 +363,23 @@ class TestCli:
         assert "review_rounds_mean" in data
         assert data["cost_total"] >= 0
 
+    def test_codex_source_reports_unsupported_json(self, capsys):
+        """Without a priced Codex usage schema, a cost total would be made up."""
+        assert burn.main(["--source", "codex", "--json"]) == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["status"] == "unsupported"
+        assert payload["source"] == "codex"
+        assert "usage" in payload["reason"]
+
+    def test_codex_source_reports_unsupported_to_humans(self, capsys):
+        assert burn.main(["--source", "codex"]) == 0
+        assert "unsupported" in capsys.readouterr().out.lower()
+
+    def test_default_json_keeps_the_claude_summary_shape(self, capsys, monkeypatch):
+        monkeypatch.setattr(burn, "transcript_files", lambda project: [])
+        assert burn.main(["--json"]) == 0
+        assert json.loads(capsys.readouterr().out) == burn.summary({})
+
     def test_report_states_the_rates_it_used(self):
         """A stale PRICING table is the one way this is confidently wrong, so
         the assumption must travel with the number."""

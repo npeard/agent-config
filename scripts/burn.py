@@ -59,7 +59,7 @@ already-bounded `sed -n` forms; "the reads are all scoped already" looked
 obvious and was an artefact. The shape, not the anecdote, is the decision.
 
 Usage:
-    python scripts/burn.py [--json] [--project NAME] [--since DAYS]
+    python scripts/burn.py [--json] [--source claude|codex] [--project NAME] [--since DAYS]
                            [--all-time] [--sessions]
 """
 
@@ -883,6 +883,12 @@ def render(sessions: dict[str, Burn], since: str, show_sessions: bool) -> None:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="machine-readable summary")
+    parser.add_argument(
+        "--source",
+        choices=("claude", "codex"),
+        default="claude",
+        help="transcript source (default: claude)",
+    )
     parser.add_argument("--project", help="limit to one project directory")
     parser.add_argument(
         "--sessions", action="store_true", help="per-session breakdown table"
@@ -898,6 +904,18 @@ def main(argv: list[str]) -> int:
         "--all-time", action="store_true", help="ignore the recency window"
     )
     args = parser.parse_args(argv)
+
+    if args.source == "codex":
+        unsupported = {
+            "status": "unsupported",
+            "source": "codex",
+            "reason": "Codex captures do not provide priced usage data.",
+        }
+        if args.json:
+            print(json.dumps(unsupported))
+        else:
+            print(f"codex cost reporting unsupported: {unsupported['reason']}")
+        return 0
 
     since = cutoff_date(None if args.all_time else args.since)
     sessions = collect(transcript_files(args.project), since)

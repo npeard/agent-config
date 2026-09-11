@@ -18,6 +18,297 @@ import friction
 import pytest
 
 
+class TestCodexErrors:
+    def capture(self, path: Path, *records: object) -> None:
+        path.write_text("\n".join(json.dumps(record) for record in records) + "\n")
+
+    def test_failed_command_becomes_friction(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        self.capture(
+            path,
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": "zsh: command not found: pixi",
+                },
+                "timestamp": "2026-09-10T12:00:00Z",
+            },
+        )
+        assert list(friction.iter_codex_errors([path])) == [
+            ("capture-a", "2026-09-10T12:00:00Z", "zsh: command not found: pixi")
+        ]
+
+    def test_success_and_unknown_events_are_not_errors(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        self.capture(
+            path,
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 0,
+                    "aggregated_output": "all good",
+                },
+            },
+            {"type": "item.started", "item": {"type": "command_execution"}},
+            {
+                "type": "item.completed",
+                "item": {"type": "file_change", "exit_code": 1},
+            },
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": "1",
+                    "aggregated_output": "wrong type",
+                },
+            },
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": True,
+                    "aggregated_output": "wrong JSON type",
+                },
+            },
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": ["wrong output type"],
+                },
+            },
+        )
+        assert list(friction.iter_codex_errors([path])) == []
+
+    def test_malformed_line_does_not_hide_later_failure(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        path.write_text(
+            "not json\n"
+            + json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "command_execution",
+                        "exit_code": 2,
+                        "aggregated_output": "failed later",
+                    },
+                }
+            )
+            + "\n"
+        )
+        assert list(friction.iter_codex_errors([path])) == [
+            ("capture-a", "", "failed later")
+        ]
+
+    def test_json_scalars_and_arrays_do_not_hide_later_failure(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        self.capture(
+            path,
+            "a JSON scalar",
+            ["a JSON array"],
+            {
+                "type": "item.completed",
+                "timestamp": "2026-09-10T12:00:00Z",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": "failed later",
+                },
+            },
+        )
+        assert list(friction.iter_codex_errors([path])) == [
+            ("capture-a", "2026-09-10T12:00:00Z", "failed later")
+        ]
+
+    def test_output_with_a_json_line_separator_stays_one_incident(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        record = {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "exit_code": 1,
+                "aggregated_output": "first\u2028second",
+            },
+        }
+        path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+        assert list(friction.iter_codex_errors([path])) == [
+            ("capture-a", "", "first\u2028second")
+        ]
+
+    def test_non_string_timestamp_is_normalized_with_a_date_filter(
+        self, tmp_path: Path
+    ):
+        path = tmp_path / "capture-a.jsonl"
+        self.capture(
+            path,
+            {
+                "type": "item.completed",
+                "timestamp": 123,
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": "failed",
+                },
+            },
+        )
+        assert list(friction.iter_codex_errors([path], since="2026-09-10")) == [
+            ("capture-a", "", "failed")
+        ]
+
+    def test_date_filter_keeps_undated_events(self, tmp_path: Path):
+        path = tmp_path / "capture-a.jsonl"
+        self.capture(
+            path,
+            {
+                "type": "item.completed",
+                "timestamp": "2026-09-01T00:00:00Z",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": "old",
+                },
+            },
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "exit_code": 1,
+                    "aggregated_output": "undated",
+                },
+            },
+        )
+        assert list(friction.iter_codex_errors([path], since="2026-09-10")) == [
+            ("capture-a", "", "undated")
+        ]
+
+    def test_each_capture_filename_is_a_distinct_session(self, tmp_path: Path):
+        first = tmp_path / "capture-a.jsonl"
+        second = tmp_path / "capture-b.jsonl"
+        event = {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "exit_code": 1,
+                "aggregated_output": "failed",
+            },
+        }
+        self.capture(first, event)
+        self.capture(second, event)
+        assert [
+            session for session, _, _ in friction.iter_codex_errors([first, second])
+        ] == [
+            "capture-a",
+            "capture-b",
+        ]
+
+    def test_absent_capture_root_has_no_files(self, tmp_path: Path):
+        assert friction.codex_capture_files(tmp_path / "absent") == []
+
+
+class TestCodexSourceSelection:
+    def test_cli_defaults_to_claude_source(self, monkeypatch: pytest.MonkeyPatch):
+        seen: list[str] = []
+        monkeypatch.setattr(
+            friction, "transcript_files", lambda project: [Path("claude")]
+        )
+        monkeypatch.setattr(
+            friction,
+            "iter_errors",
+            lambda paths, since: seen.append("claude") or iter(()),
+        )
+        monkeypatch.setattr(
+            friction,
+            "iter_codex_errors",
+            lambda paths, since: seen.append("codex") or iter(()),
+            raising=False,
+        )
+        monkeypatch.setattr(friction, "read_ledger", lambda: ({}, None))
+        assert friction.main(["--all-time"]) == 0
+        assert seen == ["claude"]
+
+    def test_cli_can_select_codex_source(self, monkeypatch: pytest.MonkeyPatch):
+        seen: list[str] = []
+        monkeypatch.setattr(
+            friction, "codex_capture_files", lambda: [Path("codex")], raising=False
+        )
+        monkeypatch.setattr(
+            friction,
+            "iter_codex_errors",
+            lambda paths, since: seen.append("codex") or iter(()),
+            raising=False,
+        )
+        monkeypatch.setattr(friction, "read_ledger", lambda: ({}, None))
+        assert friction.main(["--source", "codex", "--all-time"]) == 0
+        assert seen == ["codex"]
+
+    def test_cli_all_combines_sources(self, monkeypatch: pytest.MonkeyPatch):
+        seen: list[str] = []
+        monkeypatch.setattr(
+            friction, "transcript_files", lambda project: [Path("claude")]
+        )
+        monkeypatch.setattr(friction, "codex_capture_files", lambda: [Path("codex")])
+        monkeypatch.setattr(
+            friction,
+            "iter_errors",
+            lambda paths, since: seen.append("claude") or iter(()),
+        )
+        monkeypatch.setattr(
+            friction,
+            "iter_codex_errors",
+            lambda paths, since: seen.append("codex") or iter(()),
+        )
+        monkeypatch.setattr(friction, "read_ledger", lambda: ({}, None))
+        assert friction.main(["--source", "all", "--all-time"]) == 0
+        assert seen == ["claude", "codex"]
+
+    def test_project_does_not_filter_codex_captures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        projects: list[str | None] = []
+        monkeypatch.setattr(
+            friction,
+            "transcript_files",
+            lambda project: projects.append(project) or [Path("claude")],
+        )
+        monkeypatch.setattr(friction, "codex_capture_files", list)
+        monkeypatch.setattr(friction, "read_ledger", lambda: ({}, None))
+        assert (
+            friction.main(["--source", "all", "--project", "only-this", "--all-time"])
+            == 0
+        )
+        assert projects == ["only-this"]
+
+    def test_codex_review_prints_a_captured_untrusted_example(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ):
+        for name in ("capture-a", "capture-b"):
+            path = tmp_path / f"{name}.jsonl"
+            records = [
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "command_execution",
+                        "exit_code": 1,
+                        "aggregated_output": 'zsh: command not found: pixi "quote"',
+                    },
+                }
+            ]
+            if name == "capture-a":
+                records.append(records[0])
+            path.write_text("\n".join(json.dumps(record) for record in records) + "\n")
+        monkeypatch.setattr(friction, "CODEX_CAPTURE_DIR", tmp_path)
+        monkeypatch.setattr(friction, "read_ledger", lambda: ({}, None))
+        assert friction.main(["--source", "codex", "--review", "--all-time"]) == 0
+        out = capsys.readouterr().out
+        assert "untrusted transcript excerpt" in out
+        assert 'zsh: command not found: pixi \\"quote\\"' in out
+        assert "(none captured)" not in out
+
+
 class TestClassify:
     @pytest.mark.parametrize(
         ("text", "expected"),

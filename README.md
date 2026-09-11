@@ -99,6 +99,20 @@ pixi run all                        # format, lint, ascii, spell,
                                     #   audit, test
 ```
 
+## Codex session analytics
+
+Codex capture is opt-in. Run `pixi run capture-codex -- <arguments>` to
+execute `codex exec --json` with those arguments and save its JSONL
+output under `~/.agents/analytics/codex-exec/v1/`. Analyze captured
+command failures with `pixi run friction -- --source codex`. This
+adapter captures only non-interactive `codex exec --json` runs and never
+reads or consumes interactive Codex session state.
+
+The v1 reader supports friction only. `pixi run burn -- --source codex`
+reports that Codex cost reporting is unsupported because the capture has
+no priced usage data; it never estimates a cost. Claude `burn` output
+and pricing remain separate and unchanged.
+
 ## Layout
 
 - `AGENTS.md` -- the canonical global guidance. `~/.claude/CLAUDE.md` is

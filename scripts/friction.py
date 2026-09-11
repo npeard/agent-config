@@ -26,9 +26,11 @@ import sys
 import tomllib
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from itertools import chain
 from pathlib import Path
 
 PROJECTS_DIR = Path.home() / ".claude" / "projects"
+CODEX_CAPTURE_DIR = Path.home() / ".agents" / "analytics" / "codex-exec" / "v1"
 
 # Where cross-project decisions live. Evidence is global -- every project's
 # transcripts -- so suppression has to be global too. Resolving the ledger
@@ -162,6 +164,14 @@ def transcript_files(project: str | None) -> list[Path]:
     return sorted(PROJECTS_DIR.glob("*/*.jsonl"))
 
 
+def codex_capture_files(root: Path | None = None) -> list[Path]:
+    """Explicit Codex exec JSONL captures, never interactive state."""
+    root = root or CODEX_CAPTURE_DIR
+    if not root.is_dir():
+        return []
+    return sorted(root.glob("*.jsonl"))
+
+
 def result_text(block: dict) -> str:
     content = block.get("content")
     if isinstance(content, list):
@@ -207,6 +217,50 @@ def iter_errors(paths: list[Path], since: str = ""):
                     )
 
 
+def iter_codex_errors(paths: list[Path], since: str = ""):
+    """Yield failures from documented explicit Codex exec captures."""
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").split("\n")
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            item = record.get("item")
+            if record.get("type") != "item.completed" or not isinstance(item, dict):
+                continue
+            exit_code = item.get("exit_code")
+            output = item.get("aggregated_output")
+            if (
+                item.get("type") != "command_execution"
+                or not isinstance(exit_code, int)
+                or isinstance(exit_code, bool)
+                or exit_code == 0
+                or not isinstance(output, str)
+            ):
+                continue
+            timestamp = record.get("timestamp")
+            timestamp = timestamp if isinstance(timestamp, str) else ""
+            if since and timestamp and timestamp[:10] < since:
+                continue
+            yield path.stem, timestamp, output
+
+
+def iter_selected_errors(
+    claude_paths: list[Path], codex_paths: list[Path], since: str = ""
+):
+    """Yield normalized errors from the selected transcript sources."""
+    return chain(
+        iter_errors(claude_paths, since) if claude_paths else (),
+        iter_codex_errors(codex_paths, since) if codex_paths else (),
+    )
+
+
 def classify(text: str) -> list[str]:
     """All classes matching this error text.
 
@@ -244,8 +298,12 @@ class Tally:
 
 
 def tally(paths: list[Path], since: str = "") -> dict[str, Tally]:
+    return tally_errors(iter_errors(paths, since))
+
+
+def tally_errors(errors) -> dict[str, Tally]:
     tallies: dict[str, Tally] = defaultdict(Tally)
-    for session, timestamp, text in iter_errors(paths, since):
+    for session, timestamp, text in errors:
         for name in classify(text):
             tallies[name].record(session, timestamp)
     return dict(tallies)
@@ -350,6 +408,7 @@ def review_bundle(
     ledger: dict[str, dict],
     paths: list[Path],
     since: str = "",
+    error_reader=iter_errors,
 ) -> None:
     """Everything a model needs to choose a tier, and nothing else."""
     actionable = [n for n, t in tallies.items() if is_actionable(n, t, ledger)]
@@ -357,7 +416,7 @@ def review_bundle(
         print("Nothing over the bar and undecided. No review needed.")
         return
     examples: dict[str, str] = {}
-    for _, _, text in iter_errors(paths, since):
+    for _, _, text in error_reader(paths, since):
         for name in classify(text):
             if name in actionable and name not in examples:
                 examples[name] = " ".join(text.split())[:400]
@@ -395,6 +454,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--review", action="store_true", help="bundle for a model")
     parser.add_argument("--project", help="limit to one project directory")
     parser.add_argument(
+        "--source",
+        choices=("claude", "codex", "all"),
+        default="claude",
+        help="transcript source (default: claude)",
+    )
+    parser.add_argument(
         "--since",
         type=int,
         default=DEFAULT_WINDOW_DAYS,
@@ -407,8 +472,11 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     since = cutoff_date(None if args.all_time else args.since)
 
-    paths = transcript_files(args.project)
-    tallies = tally(paths, since)
+    claude_paths = (
+        transcript_files(args.project) if args.source in ("claude", "all") else []
+    )
+    codex_paths = codex_capture_files() if args.source in ("codex", "all") else []
+    tallies = tally_errors(iter_selected_errors(claude_paths, codex_paths, since))
     ledger, warning = read_ledger()
 
     if args.json:
@@ -421,7 +489,13 @@ def main(argv: list[str]) -> int:
     if warning:
         print(f"warning: {warning}\n")
     if args.review:
-        review_bundle(tallies, ledger, paths, since)
+        review_bundle(
+            tallies,
+            ledger,
+            (claude_paths, codex_paths),
+            since,
+            lambda paths, since: iter_selected_errors(*paths, since),
+        )
     else:
         render(tallies, ledger, args.all, since)
     return 0
