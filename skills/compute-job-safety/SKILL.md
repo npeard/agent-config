@@ -10,6 +10,12 @@ Treat an interrupted compute job as potentially still running and its
 output as potentially partial. Do not relaunch or consume its results
 until that is resolved.
 
+| Signal                      | Safe interpretation                 | Required next action                                       |
+| --------------------------- | ----------------------------------- | ---------------------------------------------------------- |
+| Wrapper stopped             | Descendants may still run           | Check the owned PID, process group, or scheduler ID.       |
+| Output missing or smaller   | Partial write, not a smaller result | Validate logs/checkpoints before deleting or consuming it. |
+| Same output requested again | A concurrent writer may exist       | Refuse or inspect the known peer before relaunching.       |
+
 ## Before starting
 
 - Identify the job's ownership boundary: process group, PID file,

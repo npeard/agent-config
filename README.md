@@ -119,6 +119,10 @@ pixi run all                        # format, lint, ascii, spell,
 - `skills/standards-and-spec-review/CODING_STANDARDS.md` -- the single
   definition of the house coding rules. The canonical `AGENTS.md` names
   them as triggers and points here; nothing restates them.
+- `skills/compute-job-safety/` -- interruption and restart safety for
+  long-running GPU, cluster, batch, and simulation jobs. It keeps
+  process identity, cleanup, and output protection mechanisms in each
+  owning project rather than guessing at arbitrary running processes.
 - `install.py` -- creates/repairs both host adapters and skill links,
   then registers the current Claude Code and Codex lifecycle hooks; the
   actual installer behind both shims below.
