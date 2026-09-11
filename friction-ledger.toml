@@ -433,3 +433,66 @@ created, and it would fire on every `mkdir`, `touch` and redirect. Tier 4 was
 rejected because AGENTS.md is at its word ceiling and would be restating a
 tool description.
 """
+
+[[decision]]
+class = "phantom-line-ending-diff"
+date = "2026-09-11"
+cause = "working-as-designed"
+outcome = "tier-0"
+count_at_decision = 1
+note = """
+pixi.lock showed as modified through a whole branch with zero changed
+lines: core.autocrlf=true expects CRLF in the working tree, pixi writes the
+lockfile with LF on every platform. The cost was not the diff, it was that
+preflight's check_clean_tree counts changed files without asking whether
+any content changed, so it reported uncommitted work that did not exist --
+and I twice told the user the tree was clean when it was not.
+
+Cause 4. Git printed "LF will be replaced by CRLF" on nearly every commit
+for the entire branch. The signal was correct, specific, and ignored. A
+preflight check that re-detects what an accurate warning already says is a
+second copy of a working alarm, not a new capability.
+
+Fixed where it belongs, in the project: .gitattributes pins pixi.lock to
+LF. Scoped to that one file -- the other generated file there is written
+through Python text mode and already round-trips.
+
+Tier 0, and deliberately so despite the temptation: hardening
+check_clean_tree to separate content changes from line-ending phantoms is
+a real improvement to a check that currently gives a wrong answer, but I
+could not reproduce the triggering condition in two attempts. Writing a
+check on a mechanism I cannot demonstrate is how a check ends up misfiring
+or silently never firing. Revisit if it recurs in a second project, with
+the reproduction in hand.
+"""
+
+[[decision]]
+class = "typst-build-integration-knowledge"
+date = "2026-09-11"
+cause = "claude-config-gap"
+outcome = "tier-0"
+count_at_decision = 1
+note = """
+Building a Typst + Snakemake document pipeline surfaced a set of real,
+verified gotchas: Typst silently continues an overlong slide onto another
+page (no warning, exit 0); counting /Type /Page needs a (?!s) lookahead and
+nothing wider, because a page dict runs straight into /Parent; Snakemake's
+default wildcard regex matches "/" so an unconstrained {document} also
+matches "figures/<name>"; typst --root plus a leading "/" is what makes an
+image path resolve from a helper in lib/; smart punctuation turns source
+"--" into an en-dash, which an ASCII checker scanning only .py/.md will not
+see either way; Snakemake has no conda-forge win-64 build but the PyPI
+wheels run fine for local --cores execution.
+
+Genuinely a gap -- nothing in claude-config covers this. But one project is
+one project, and the material is build integration rather than Typst
+authoring: nothing here touches scripting, bibliographies, cross-references
+or complex tables, so a skill written now would overclaim its scope and
+then mislead whoever reads its description.
+
+Tier 0 for now. The knowledge is not lost: it lives as comments in
+smi/report/ (Snakefile, lib/theme.typ, scripts/check_slide_pages.py), which
+is working code a second project can copy from -- a better starting point
+than prose describing it. Build the asset when a second Typst project shows
+which parts actually generalize.
+"""
