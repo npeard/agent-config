@@ -32,16 +32,42 @@ repository owns only preferences and methods that hold across projects.
 policy is shared. A new host should require a new adapter, not a fork of
 the portable core.
 
-| Capability                 | Portable boundary               | Claude Code                       | Codex                                     | Other hosts                                                                 |
-| -------------------------- | ------------------------------- | --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| User instructions          | Canonical Markdown              | `~/.claude/CLAUDE.md`             | `~/.codex/AGENTS.md`                      | Install at the host's user-instruction location                             |
-| Project instructions       | Project-owned guidance          | `CLAUDE.md`                       | `AGENTS.md`                               | Prefer `AGENTS.md` when supported; otherwise add a thin host shim           |
-| User skills                | Agent Skills directories        | `~/.claude/skills`                | `~/.agents/skills`                        | Prefer `~/.agents/skills` when supported                                    |
-| Project skills             | Agent Skills directories        | `.claude/skills`                  | `.agents/skills`                          | Prefer `.agents/skills` when supported                                      |
-| Lifecycle automation       | Shared policy behind an adapter | `settings.json` hooks             | Partial: not installed in this phase      | Host hook/extension API, when one exists                                    |
-| Subagents and model choice | Semantic work classification    | Claude agent and model vocabulary | Codex agent and reasoning vocabulary      | Host capability map; never put product model names in the portable contract |
-| Session analytics          | Normalized report input         | Claude transcript reader          | Versioned Codex reader when stable enough | Provider reader or an explicit unsupported result                           |
-| Live integrations          | MCP                             | Supported                         | Supported                                 | MCP where available                                                         |
+| Capability                 | Portable boundary               | Claude Code                       | Codex                                                                             | Other hosts                                                                 |
+| -------------------------- | ------------------------------- | --------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| User instructions          | Canonical Markdown              | `~/.claude/CLAUDE.md`             | `~/.codex/AGENTS.md`                                                              | Install at the host's user-instruction location                             |
+| Project instructions       | Project-owned guidance          | `CLAUDE.md`                       | `AGENTS.md`                                                                       | Prefer `AGENTS.md` when supported; otherwise add a thin host shim           |
+| User skills                | Agent Skills directories        | `~/.claude/skills`                | `~/.agents/skills`                                                                | Prefer `~/.agents/skills` when supported                                    |
+| Project skills             | Agent Skills directories        | `.claude/skills`                  | `.agents/skills`                                                                  | Prefer `.agents/skills` when supported                                      |
+| Lifecycle automation       | Shared policy behind an adapter | `settings.json` hooks             | Five mapped hooks in `~/.codex/hooks.json`; configuration requires `/hooks` trust | Host hook/extension API, when one exists                                    |
+| Subagents and model choice | Semantic work classification    | Claude agent and model vocabulary | Codex agent and reasoning vocabulary                                              | Host capability map; never put product model names in the portable contract |
+| Session analytics          | Normalized report input         | Claude transcript reader          | Versioned Codex reader when stable enough                                         | Provider reader or an explicit unsupported result                           |
+| Live integrations          | MCP                             | Supported                         | Supported                                                                         | MCP where available                                                         |
+
+## Codex lifecycle adapter
+
+The installer runs `scripts/register_codex_hooks.py` after it
+materializes the dev environment. The registrar merges these five
+supported policies into `~/.codex/hooks.json` without replacing foreign
+handlers:
+
+| Policy                      | Codex event and matcher                    |
+| --------------------------- | ------------------------------------------ |
+| Task commands               | `SessionStart`                             |
+| Prose-writing advisory      | `PreToolUse` for `apply_patch` and `Bash`  |
+| Promotion advisory          | `PostToolUse` for `apply_patch` and `Bash` |
+| Audit owed reminder         | `PostToolUse` `Bash`                       |
+| Completed-work notification | `Stop`                                     |
+
+The installer configures these entries but does not trust them. Review
+their commands and explicitly trust them through Codex `/hooks`;
+`pixi run preflight` reports configuration and `/hooks` trust as
+separate states.
+
+The Claude-only `agent-model` denial is intentionally unsupported: Codex
+has its own agent and reasoning controls. Claude `Notification` and
+`AskUserQuestion` behavior is also intentionally unsupported, so the
+notification/question policy is limited to the mapped `Stop` event
+rather than guessed event or payload translations.
 
 ## Agent Skills profile
 

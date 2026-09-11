@@ -96,6 +96,23 @@ def payload(repo: Path, command: str = "git commit -m x") -> dict:
     return {"tool_input": {"command": command}, "cwd": str(repo)}
 
 
+def test_codex_bash_payload_emits_posttooluse(fake_master: Path, tmp_path: Path):
+    """Codex's post-Bash fields retain the existing audit-owed behavior."""
+    commit(fake_master, "hooks/x.py")
+    out = run_hook(
+        {
+            "cwd": str(fake_master),
+            "session_id": "codex-session",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m x"},
+            "tool_response": {},
+        },
+        tmp_path,
+    )
+    assert json.loads(out)["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+
+
 def fired(out: str) -> bool:
     if not out:
         return False

@@ -68,6 +68,21 @@ def write(path: str, session: str = "s1") -> dict:
     return {"session_id": session, "tool_input": {"file_path": path}}
 
 
+def test_codex_bash_payload_emits_pretooluse(tmp_path: Path):
+    """Codex's Bash-shaped payload reaches the existing prose advisory."""
+    out = run_hook(
+        {
+            "cwd": THESIS,
+            "session_id": "codex-session",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo x > chapter.tex"},
+        },
+        tmp_path,
+    )
+    assert json.loads(out)["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+
+
 class TestFiresOnProse:
     @pytest.mark.parametrize(
         "path",

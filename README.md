@@ -29,10 +29,13 @@ Both are thin shims over `install.py`; run that directly with
 `pixi run -e dev python install.py` if you prefer. One command,
 deliberately: the installer writes the Claude and Codex instruction
 adapters, links skills for both hosts, materializes the dev environment,
-and registers Claude Code hooks *in that order*. Registered hooks name
-the dev environment's python in their command, so registering before the
-environment exists writes hooks that cannot start. Codex lifecycle hooks
-are not installed in this phase. Requires `pixi` on PATH.
+and registers Claude Code and Codex lifecycle hooks *in that order*.
+Registered hooks name the dev environment's python in their command, so
+registering before the environment exists writes hooks that cannot
+start. The Codex registrar configures `~/.codex/hooks.json`; after
+installation, review each entry and explicitly trust it through Codex
+`/hooks`. Configuration is not trust, so `pixi run preflight` reports
+them separately. Requires `pixi` on PATH.
 
 No elevation and no Developer Mode is required on Windows. Skills are
 linked with directory junctions rather than symlinks, since a junction
@@ -117,8 +120,8 @@ pixi run all                        # format, lint, ascii, spell,
   definition of the house coding rules. The canonical `AGENTS.md` names
   them as triggers and points here; nothing restates them.
 - `install.py` -- creates/repairs both host adapters and skill links,
-  then registers the current Claude-only hooks; the actual installer
-  behind both shims below.
+  then registers the current Claude Code and Codex lifecycle hooks; the
+  actual installer behind both shims below.
 - `install.sh` -- POSIX shim over `install.py`, for macOS and Linux.
 - `install.ps1` -- PowerShell shim over `install.py`, for Windows.
 - `scripts/platform_paths.py` -- where every platform difference the
@@ -139,6 +142,10 @@ pixi run all                        # format, lint, ascii, spell,
   test fails if a hook omits its marker; `preflight` reports when this
   machine's registrations are out of date, since that is machine state
   rather than repo state and no test can gate it.
+- `scripts/register_codex_hooks.py` -- converges the five supported
+  policy mappings in `~/.codex/hooks.json` while preserving foreign
+  handlers. It configures hooks; review and trust them through Codex
+  `/hooks` before they run.
 - `scripts/burn.py` -- where a session's tokens actually went, as
   `pixi run burn`. The companion to `friction.py`, and the same shape:
   it reads the transcripts off disk, so observing costs no model

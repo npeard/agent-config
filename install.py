@@ -234,10 +234,14 @@ def main(argv=None) -> int:
         print("       registering hooks that cannot start.", file=sys.stderr)
         return 1
 
-    return subprocess.run(
-        [str(py), str(REPO / "scripts" / "register_hooks.py")],
-        check=False,
-    ).returncode
+    for registrar in ("register_hooks.py", "register_codex_hooks.py"):
+        result = subprocess.run(
+            [str(py), str(REPO / "scripts" / registrar)],
+            check=False,
+        )
+        if result.returncode != 0:
+            return result.returncode
+    return 0
 
 
 if __name__ == "__main__":

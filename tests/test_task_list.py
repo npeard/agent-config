@@ -34,6 +34,28 @@ def run(cwd: Path) -> str:
     return payload["hookSpecificOutput"]["additionalContext"]
 
 
+def test_codex_session_start_payload_emits_session_start(tmp_path: Path):
+    """A Codex lifecycle payload must retain the hook's declared event."""
+    (tmp_path / "pixi.toml").write_text('[tasks]\ntest = "pytest -q"\n')
+    result = subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=json.dumps(
+            {
+                "cwd": str(tmp_path),
+                "session_id": "codex-session",
+                "hook_event_name": "SessionStart",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert (
+        json.loads(result.stdout)["hookSpecificOutput"]["hookEventName"]
+        == "SessionStart"
+    )
+
+
 class TestSilence:
     def test_no_manifest_emits_nothing(self, tmp_path: Path):
         """A project with no runner should pay nothing, and an empty section

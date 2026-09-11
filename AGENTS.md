@@ -153,6 +153,17 @@ changes there and not here.
   phase, show the results plainly regardless of outcome, and pause for
   explicit approval before continuing to implementation.
 
+- **Stopping a background job does not stop what it spawned.** Killing a
+  shell wrapper leaves its children running detached. Harmless for a
+  read-only job; destructive for one that writes shared state, since a
+  script that truncates its output file before writing will, as an
+  orphan, delete committed data and then race the rerun for the same
+  path. After interrupting any long job, check for survivors by command
+  line before relaunching, and treat a shrunken or missing output file
+  as a partial write rather than a valid smaller result. Where a driver
+  script is worth keeping, have it refuse to start when a peer is
+  already alive and trap INT/TERM to kill its own child.
+
 ## Repo hygiene
 
 - Gitignore `docs/superpowers/` (and any local `scratch/`) in every

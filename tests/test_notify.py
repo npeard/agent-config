@@ -65,6 +65,28 @@ def feed(notify, monkeypatch, payload):
     notify.main()
 
 
+def test_codex_stop_payload_keeps_the_done_notification(notify):
+    """Codex's mapped Stop payload retains notify's existing disposition."""
+    assert (
+        notify.reason(
+            {
+                "cwd": "/w/thesis",
+                "session_id": "codex-session",
+                "hook_event_name": "Stop",
+            }
+        )
+        == "done"
+    )
+
+
+def test_portability_docs_mark_agent_and_interaction_hooks_unsupported():
+    """Codex must not be presented as supporting unmapped Claude-only policy."""
+    portability = (HOOK.parent.parent / "docs" / "PORTABILITY.md").read_text()
+    assert "agent-model" in portability
+    assert "notification/question" in portability
+    assert "unsupported" in portability.lower()
+
+
 # The bare names sound_argv() is asked to resolve across this file: every
 # SOUNDS value, plus the one an override test substitutes.
 MAC_SOUND_NAMES = ("Hero", "Glass", "Funk", "Submarine", "Sosumi", "Tink")

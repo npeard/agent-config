@@ -62,6 +62,21 @@ def write(path: str) -> dict:
     return {"tool_input": {"file_path": path}}
 
 
+def test_codex_bash_payload_emits_posttooluse():
+    """Codex's Bash-shaped payload reaches the existing promotion advisory."""
+    out = run_hook(
+        {
+            "cwd": OTHER,
+            "session_id": "codex-session",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo guidance > AGENTS.md"},
+            "tool_response": {},
+        }
+    )
+    assert json.loads(out)["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+
+
 class TestMatchesRealFilenames:
     """The patterns are lowercase but os.path.normcase only lowercases on
     Windows, so on macOS and Linux the hook silently never fired for the

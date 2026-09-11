@@ -608,6 +608,49 @@ def check_hooks(report: Report, root: Path) -> None:
     )
 
 
+def check_codex_hooks(report: Report, root: Path) -> None:
+    """Report Codex hook configuration and the separately persisted trust state."""
+    registrar = Path(__file__).resolve().parent / "register_codex_hooks.py"
+    if not registrar.is_file():
+        return
+    command = [sys.executable, str(registrar), "--check"]
+    try:
+        out = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        report.add(
+            WARN,
+            "Codex hooks configured",
+            "could not run register_codex_hooks.py",
+        )
+    else:
+        if out.returncode == 0:
+            report.add(
+                OK,
+                "Codex hooks configured",
+                out.stdout.strip().splitlines()[-1:][0]
+                if out.stdout.strip()
+                else "all current",
+            )
+        else:
+            report.add(
+                WARN,
+                "Codex hooks configured",
+                f"out of date ({' '.join(command)})",
+            )
+    report.add(
+        WARN,
+        "Codex hooks trusted",
+        "verify persisted host trust for this repository's /hooks directory",
+    )
+
+
 def _install_hint() -> str:
     """The installer command for this platform, for use in remediation hints.
 
@@ -807,6 +850,7 @@ def main(argv: list[str]) -> int:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
     check_hooks(report, root)
+    check_codex_hooks(report, root)
     check_instructions(report, root, Path.home())
     if installation_contract is not None:
         for label, installed in zip(

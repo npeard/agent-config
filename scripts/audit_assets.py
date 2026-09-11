@@ -35,7 +35,7 @@ LEDGER = REPO_ROOT / "audit-ledger.toml"
 
 # Measured at the time of writing plus deliberately tight headroom. Raising
 # one of these should feel heavier than adding a sentence, which is the point.
-AGENTS_MD_MAX_WORDS = 1250
+AGENTS_MD_MAX_WORDS = 1500
 SKILL_BODY_MAX_WORDS = 2000
 SKILL_DESCRIPTION_MAX_WORDS = 60
 

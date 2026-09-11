@@ -110,7 +110,6 @@ class TestEnvironmentAndHookRegistration:
     def run_with_stubbed_env(self, home: Path, monkeypatch) -> tuple[int, list[str]]:
         """(exit code, order the two steps ran in) for a full install."""
         order: list[str] = []
-        settings = home / ".claude" / "settings.json"
 
         def fake_materialize() -> int:
             order.append("env")
@@ -123,11 +122,23 @@ class TestEnvironmentAndHookRegistration:
             # module object, so this also sees link_dir's mklink calls on
             # Windows. Only the registration is redirected; everything else
             # is passed straight through.
-            if str(REPO / "scripts" / "register_hooks.py") not in argv:
+            registrars = {
+                str(REPO / "scripts" / "register_hooks.py"): "claude-register",
+                str(REPO / "scripts" / "register_codex_hooks.py"): "codex-register",
+            }
+            registrar = next(
+                (name for path, name in registrars.items() if path in argv), None
+            )
+            if registrar is None:
                 return real_run(argv, **kwargs)
             # Given --settings so it writes under the temp home; without it
             # the default is the real ~/.claude/settings.json.
-            order.append("register")
+            order.append(registrar)
+            settings = (
+                home / ".claude" / "settings.json"
+                if registrar == "claude-register"
+                else home / ".codex" / "hooks.json"
+            )
             return real_run([*argv, "--settings", str(settings)], **kwargs)
 
         monkeypatch.setattr(install, "materialize_env", fake_materialize)
@@ -145,7 +156,7 @@ class TestEnvironmentAndHookRegistration:
         success, which is what an earlier version did."""
         code, order = self.run_with_stubbed_env(tmp_path, monkeypatch)
         assert code == 0
-        assert order == ["env", "register"]
+        assert order == ["env", "claude-register", "codex-register"]
 
     def test_a_fresh_home_ends_up_with_hooks_pointing_into_this_repo(
         self, tmp_path, monkeypatch
@@ -170,6 +181,26 @@ class TestEnvironmentAndHookRegistration:
             # dead, so both halves are asserted, not just that a row is there.
             assert h["command"] == str(install.platform_paths.interpreter(REPO))
             assert any(str(REPO / "hooks") in arg for arg in h["args"])
+
+    def test_a_fresh_home_ends_up_with_codex_hooks_pointing_into_this_repo(
+        self, tmp_path, monkeypatch
+    ):
+        """A successful install used to configure only Claude, silently leaving
+        Codex without the lifecycle hooks this repository carries."""
+        code, _ = self.run_with_stubbed_env(tmp_path, monkeypatch)
+        assert code == 0
+        hooks = json.loads(
+            (tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        )
+        entries = [
+            handler
+            for groups in hooks.values()
+            for group in groups
+            for handler in group["hooks"]
+        ]
+        assert entries
+        for handler in entries:
+            assert str(REPO / "hooks") in handler["command"]
 
     def test_a_failed_env_stops_before_registering_anything(
         self, tmp_path, monkeypatch

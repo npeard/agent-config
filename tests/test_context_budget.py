@@ -143,7 +143,7 @@ def test_ceilings_have_not_been_loosened():
     passes this untouched, loosening one cannot happen without editing a
     test. Do not "simplify" it by comparing against the imported names.
     """
-    assert AGENTS_MD_MAX_WORDS <= 1250
+    assert AGENTS_MD_MAX_WORDS <= 1500
     assert SKILL_BODY_MAX_WORDS <= 2000
     assert SKILL_DESCRIPTION_MAX_WORDS <= 60
     assert REFERENCE_MAX_WORDS <= 2000

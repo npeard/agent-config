@@ -227,6 +227,43 @@ class TestHookInstalled:
         assert statuses(report, "pre-commit hook installed") == [FAIL]
 
 
+class TestCodexHooks:
+    def stub_registrar(
+        self, monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str
+    ) -> None:
+        def fake_run(argv, **kwargs):
+            assert argv == [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "register_codex_hooks.py"),
+                "--check",
+            ]
+            return subprocess.CompletedProcess(argv, returncode, stdout, "")
+
+        monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+
+    def test_stale_configuration_warns_with_registrar_remediation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Ignoring a nonzero check made a stale Codex adapter look current."""
+        self.stub_registrar(monkeypatch, 1, "Codex hook registration is out of date.\n")
+        report = preflight.Report()
+        preflight.check_codex_hooks(report, tmp_path)
+        assert statuses(report, "Codex hooks configured") == [WARN]
+        assert "register_codex_hooks.py" in details(report, "Codex hooks configured")
+        assert statuses(report, "Codex hooks trusted") == [WARN]
+        assert "/hooks" in details(report, "Codex hooks trusted")
+
+    def test_current_configuration_is_ok_but_trust_still_warns(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        self.stub_registrar(monkeypatch, 0, "Codex hooks already registered.\n")
+        report = preflight.Report()
+        preflight.check_codex_hooks(report, tmp_path)
+        assert statuses(report, "Codex hooks configured") == [OK]
+        assert statuses(report, "Codex hooks trusted") == [WARN]
+        assert "/hooks" in details(report, "Codex hooks trusted")
+
+
 class TestTests:
     def test_absent_runner_reports_instead_of_raising(
         self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
