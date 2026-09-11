@@ -524,3 +524,103 @@ as a claim about *this* tree, and it is right to. A ledger note that names a
 file this repo does not have is indistinguishable from one whose asset was
 deleted, which is the whole failure that check exists to catch.
 """
+
+[[decision]]
+class = "cross-project-scripts-not-wired-into-smi"
+source = "observed"
+date = "2026-09-11"
+cause = "asset-not-adopted"
+outcome = "tier-2"
+note = """
+The workflow-orchestration spine opens with `pixi run preflight` and closes
+with `pixi run friction` / `pixi run toolgaps`. None of the three exists as a
+task in the smi project, so step 0 and step 7 both failed with "command not
+found" and fell back to running the equivalents by hand. The scripts are here
+in claude-config and are tested; smi simply never adopted them.
+
+Cause 2, not cause 1: nothing is missing from the ecosystem, it is an
+installation gap in one project. The skill's own text anticipates this ("If
+the project has no such script, copy scripts/preflight.py from
+claude-config"), which is the tell -- a documented manual workaround for a
+gap that keeps recurring is a sign the adoption step should be mechanical.
+
+Deliberately NOT done inside the branch that surfaced it. Copying the three
+scripts plus the platform-paths module they share is a change to the
+project's task surface with its own tests to write, and the branch it
+appeared in was a physics reanalysis that was complete and green without
+them. Bundling it would have been scope creep into a deliverable under
+review.
+
+Tier 2 owed, not tier 0: the next task in that project starts by failing the
+same two steps. The work is to add the tasks and their shared dependency,
+with a test that each runs, rather than to restate the workaround.
+"""
+
+[[decision]]
+class = "orchestrator-measurement-wrong-twice"
+source = "observed"
+date = "2026-09-11"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+Two numbers I measured myself and wrote into a spec were wrong, and both were
+caught by the phase agents rather than by me. (1) A scrambled-theta control
+came out ~2x too low because my scratch script demeaned each window and then
+used that array's variance as the pooled denominator, stripping per-window DC
+from the total as well as the residual. (2) A peak fringe rate was quoted from
+N=60 when the quantity is a maximum over shots, so it rose from 7.8/9.7 kHz to
+9.4-13.0 kHz at N=1000.
+
+Cause 4. The per-phase fresh-reviewer structure exists precisely so a
+plausible-but-wrong number does not propagate, and it worked twice -- once
+from an implementer challenging its brief, once from a reviewer independently
+re-deriving a theoretical floor (R^2 -> 3/W on white noise) that adjudicated
+between the two candidate definitions. Both frictions cost one round trip and
+bought a correct number.
+
+The general lesson is already covered: the master rules require evidence
+before assertions and name the spec as fallible. Adding "the orchestrator's
+own measurements are also findings to verify" would restate what the review
+structure already enforces mechanically. Tier 0.
+
+Worth noting for pattern-watching: both errors were in *scratch* scripts,
+which get no review, no tests, and no formatter, and whose numbers then
+entered a spec with the authority of a measurement. If this recurs, the fix
+is not a rule but a habit -- adjudicate a scratch number against a closed
+form or a second implementation before it becomes a spec input.
+"""
+
+[[decision]]
+class = "quantitative-claim-with-no-committed-measurement"
+source = "observed"
+date = "2026-09-11"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+The mechanism behind a retraction -- "shots drift 1-2.7 fringes within a
+record" -- lived only as a sentence in two module docstrings, with no code
+that measured it. This is structurally the same failure as the headline being
+retracted, where "the model explains 9-38% of the variance" outlived the
+evidence for it: a number that no longer has a way to be re-derived.
+
+Cause 3, and the interesting part is the scoping. The rule DOES exist and is
+well put -- "if a claim needs a number the artifacts do not contain, the claim
+does not get made" -- but it lived as a comment in one Typst file, so it
+governed the report and not the Python docstrings feeding it. A rule scoped to
+the artifact it was written in does not travel to the place the number is
+born.
+
+Fixed in the project by making the claim measurable: measure_phase_drift now
+fits each window, unwraps the fitted phase, and reports drift in fringes plus
+the amplitude CV, with parametrized known-answer tests including the
+zero-drift case. It reproduced the asserted figure exactly, which is the point
+-- the number was right, it was the absence of a way to check it that was the
+defect.
+
+Tier 0 for an artifact. No checker can distinguish a measured number from an
+asserted one in prose, so this cannot be made mechanical, and the mapping says
+make-mechanical-or-accept. Accepting is well supported here: the Phase 4
+writing agent applied the rule unprompted and correctly, refusing to tabulate
+drift figures I had handed it because they were in no committed artifact, and
+saying so. The rule is already operative where it matters most.
+"""
