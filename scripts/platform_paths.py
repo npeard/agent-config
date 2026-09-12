@@ -19,15 +19,34 @@ from pathlib import Path
 WINDOWS = os.name == "nt"
 
 
+def dev_env(repo: Path) -> Path:
+    return Path(repo) / ".pixi" / "envs" / "dev"
+
+
+def windows_interpreter(repo: Path) -> Path:
+    """The dev interpreter as Windows lays it out, whatever host we run on."""
+    return dev_env(repo) / "python.exe"
+
+
+def posix_interpreter(repo: Path) -> Path:
+    """The dev interpreter as macOS/Linux lay it out, whatever host we run on."""
+    return dev_env(repo) / "bin" / "python"
+
+
 def interpreter(repo: Path) -> Path:
-    """Path to the dev environment's Python.
+    """Path to the dev environment's Python, for the host running now.
 
     pixi puts the interpreter at the env root on Windows and under bin/
     everywhere else. Hardcoding the POSIX form made `register_hooks.py`
     abort on every Windows run.
+
+    Use this when the answer is consumed by this process or written for this
+    machine. A config naming *both* layouts at once -- Codex hooks.json, which
+    carries a `command` and a `commandWindows` per handler -- must ask for the
+    two forms explicitly, because this function cannot see a platform it is
+    not running on and would otherwise write the same path into both fields.
     """
-    env = Path(repo) / ".pixi" / "envs" / "dev"
-    return env / "python.exe" if WINDOWS else env / "bin" / "python"
+    return windows_interpreter(repo) if WINDOWS else posix_interpreter(repo)
 
 
 def link_dir(src: Path, dest: Path) -> None:

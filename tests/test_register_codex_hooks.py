@@ -99,7 +99,7 @@ def test_apply_updates_and_prunes_only_owned_handlers(registrar, repo: Path):
     session_hooks = config["SessionStart"][0]["hooks"]
     assert {hook["command"] for hook in session_hooks} >= {"foreign-session-start"}
     assert any(
-        str(registrar.platform_paths.interpreter(repo)) in hook["command"]
+        str(registrar.platform_paths.posix_interpreter(repo)) in hook["command"]
         for hook in session_hooks
     )
     assert "retired-tool" not in [
@@ -110,22 +110,45 @@ def test_apply_updates_and_prunes_only_owned_handlers(registrar, repo: Path):
 def test_rendered_handlers_use_absolute_unix_and_windows_commands(
     registrar, repo: Path
 ):
-    """Would catch platform-specific commands that depend on the caller's cwd."""
+    """Would catch platform-specific commands that depend on the caller's cwd.
+
+    Each field is asserted against its own platform's layout, not against
+    `interpreter()`. The previous form compared both to the live host's
+    answer, so it passed while the two fields held the same path -- on Windows
+    it certified `command` as the POSIX one, and on Linux it certified
+    `commandWindows` as the POSIX one. Either way the config named an
+    interpreter that does not exist on the platform that would read it, and
+    the test agreed.
+    """
     config: dict[str, object] = {}
 
     registrar.apply(config, [registrar.declared_hooks(repo)[0]])
 
     handler = config["SessionStart"][0]["hooks"][0]
     script = (repo / "hooks" / "task-list.py").resolve()
-    assert (
-        handler["command"]
-        == f'"{registrar.platform_paths.interpreter(repo).resolve()}" "{script}"'
-    )
-    assert (
-        handler["commandWindows"]
-        == f'"{registrar.platform_paths.interpreter(repo).resolve()}" "{script}"'
-    )
+    posix = registrar.platform_paths.posix_interpreter(repo)
+    windows = registrar.platform_paths.windows_interpreter(repo)
+    assert handler["command"] == f'"{posix}" "{script}"'
+    assert handler["commandWindows"] == f'"{windows}" "{script}"'
     assert handler["timeout"] == 10
+
+
+def test_the_two_platform_commands_are_not_the_same_path(registrar, repo: Path):
+    """The regression that the assertion above used to permit.
+
+    Holds on either host: a single hooks.json entry describes both platforms,
+    so the fields must differ by layout (`bin/python` vs `python.exe`) rather
+    than both echoing whichever host generated the file.
+    """
+    config: dict[str, object] = {}
+
+    registrar.apply(config, [registrar.declared_hooks(repo)[0]])
+
+    handler = config["SessionStart"][0]["hooks"][0]
+    assert handler["command"] != handler["commandWindows"]
+    assert "python.exe" in handler["commandWindows"]
+    assert "python.exe" not in handler["command"]
+    assert "bin" in handler["command"]
 
 
 def test_main_creates_dated_backup_before_atomic_update(

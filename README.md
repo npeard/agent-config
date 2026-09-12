@@ -164,6 +164,16 @@ and pricing remain separate and unchanged.
   policy mappings in `~/.codex/hooks.json` while preserving foreign
   handlers. It configures hooks; review and trust them through Codex
   `/hooks` before they run.
+- `scripts/capture_codex_exec.py` -- opt-in capture of a
+  `codex exec --json` run, as `pixi run capture-codex -- <args>`. It
+  exists because the Claude readers below mine transcripts the harness
+  writes on its own, and Codex leaves no equivalent on disk: without a
+  capture step there is nothing for `friction.py` to read. It wraps only
+  non-interactive `codex exec` and never touches interactive session
+  state, and it stores each run under a versioned directory
+  (`~/.agents/analytics/codex-exec/v1/`) whose version names the reader
+  contract, so a format change is a new directory rather than a silently
+  misparsed one.
 - `scripts/burn.py` -- where a session's tokens actually went, as
   `pixi run burn`. The companion to `friction.py`, and the same shape:
   it reads the transcripts off disk, so observing costs no model

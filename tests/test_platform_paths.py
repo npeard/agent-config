@@ -37,6 +37,26 @@ class TestInterpreter:
         got = platform_paths.interpreter(Path("/repo"))
         assert ".pixi" in got.parts and "envs" in got.parts and "dev" in got.parts
 
+    def test_the_per_platform_forms_do_not_depend_on_the_running_host(self):
+        """Both are needed at once when writing a config that names the two
+        platforms in one entry, so neither may consult os.name."""
+        windows = platform_paths.windows_interpreter(Path("/repo"))
+        posix = platform_paths.posix_interpreter(Path("/repo"))
+        assert windows.name == "python.exe"
+        assert windows.parent.name == "dev"
+        assert posix.name == "python"
+        assert posix.parent.name == "bin"
+        assert windows != posix
+
+    def test_the_live_form_is_one_of_the_two_per_platform_forms(self):
+        """Keeps interpreter() a selection between the layouts above rather
+        than a third, independently drifting spelling of the same path."""
+        repo = Path("/repo")
+        assert platform_paths.interpreter(repo) in (
+            platform_paths.windows_interpreter(repo),
+            platform_paths.posix_interpreter(repo),
+        )
+
 
 class TestLinkDir:
     def test_a_link_reads_through_to_the_source(self, tmp_path):

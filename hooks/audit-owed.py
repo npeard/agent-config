@@ -17,12 +17,54 @@ job with different principles, and promotion-check.py already covers the
 "you wrote a skill somewhere else" case.
 """
 
+import contextlib
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
+
+@contextlib.contextmanager
+def exclusive(fd: int):
+    """Hold an exclusive lock on fd's first byte for the duration.
+
+    One byte at offset 0, not the whole file: msvcrt locks a byte range and
+    a range past EOF is legal, so offset 0 is the only region every writer
+    agrees on regardless of how long the marker currently is.
+
+    Failure to lock yields anyway rather than raising. A lock this cannot
+    take degrades to the previous behaviour -- a possibly-lost entry under
+    concurrency -- while raising would lose the entry every time, on a hook
+    whose whole job is not to forget. The marker is an advisory reminder, so
+    an unlocked write is worth more than no write.
+    """
+    locked = False
+    try:
+        if os.name == "nt":
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        locked = True
+    except OSError:
+        pass
+    try:
+        yield
+    finally:
+        if locked:
+            with contextlib.suppress(OSError):
+                if os.name == "nt":
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
 
 
 def master_repo() -> str:
@@ -249,23 +291,37 @@ def checkout_and_branch(cwd: str) -> tuple[str, str]:
     mapping back: it names the main checkout's .git for a worktree and the
     local one otherwise.
 
-    Both facts come from one `git rev-parse`, which is not tidiness. Two git
-    calls at four seconds fit inside the ten second timeout
-    register_hooks.py writes for every hook, and committed_paths() below
-    spends one of them; a third would put the hook over budget and Claude
-    Code would kill it before any of these graceful fallbacks could run.
+    Both facts come from one `git rev-parse`, which is not tidiness. Keeping
+    this to a single call is what leaves room for both calls to retry inside
+    the ten second timeout register_hooks.py writes for every hook; a third
+    would put the hook over budget and Claude Code would kill it before any
+    of these graceful fallbacks could run.
+
+    Tried twice, for exactly committed_paths()' reason: returning ("", "")
+    conflates "cwd is not in this repo" -- a real decline -- with "the
+    subprocess could not be spawned at all", and main() cannot tell them
+    apart because both reach the same `if not checkout` guard. The second
+    silently forgets a real obligation, which is the one failure this hook
+    exists to prevent. It was observed as an intermittent failure of
+    TestConcurrentWrites under load: one of eight hooks lost its entry, not
+    because the O_APPEND write raced, but because this call never happened.
     """
-    try:
-        out = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--git-common-dir", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-            # Three seconds, so that committed_paths below can retry once and
-            # the pair still fits the ten-second hook timeout.
-            timeout=3,
-        )
-    except (OSError, subprocess.SubprocessError):
+    argv = ["git", "-C", cwd, "rev-parse", "--git-common-dir", "--abbrev-ref", "HEAD"]
+    out = None
+    for attempt in (1, 2):
+        try:
+            # Two seconds, not three: this call and committed_paths below both
+            # retry now, so the worst case is four attempts and the pair must
+            # still fit the ten-second hook timeout.
+            out = subprocess.run(
+                argv, capture_output=True, text=True, check=True, timeout=2
+            )
+        except (OSError, subprocess.SubprocessError):
+            if attempt == 2:
+                return "", ""
+            continue
+        break
+    if out is None:
         return "", ""
     lines = out.stdout.splitlines()
     if len(lines) != 2:
@@ -297,9 +353,10 @@ def committed_paths(repo: str) -> list[str]:
     and it silently forgets a real obligation. One retry is enough for a
     transient failure and cheap for a permanent one.
 
-    Three seconds each, not four: with the rev-parse call above, a retry here
-    still fits inside the ten-second timeout register_hooks.py writes, and a
-    hook killed mid-run loses every graceful path below.
+    Two seconds each, not three: the rev-parse call above retries now too, so
+    the worst case is two attempts there plus two here, and all four must fit
+    inside the ten-second timeout register_hooks.py writes. A hook killed
+    mid-run loses every graceful path below.
     """
     argv = [
         "git",
@@ -319,7 +376,7 @@ def committed_paths(repo: str) -> list[str]:
     for attempt in (1, 2):
         try:
             out = subprocess.run(
-                argv, capture_output=True, text=True, check=True, timeout=3
+                argv, capture_output=True, text=True, check=True, timeout=2
             )
         except (OSError, subprocess.SubprocessError):
             if attempt == 2:
@@ -424,16 +481,34 @@ def main() -> None:
     # set, added its own, and wrote the whole file back over the other's. With
     # eight at once it kept one entry in eight, and truncate-on-open meant a
     # kill at the hook's 10s timeout left the file empty or torn mid-line --
-    # both observed. A single small O_APPEND write cannot interleave and
-    # cannot truncate, which is prose-writing.py's O_CREAT|O_EXCL idiom again:
-    # let the filesystem do the mutual exclusion rather than a read and a
-    # hope. Both readers de-duplicate and sort at the point of display, so
-    # nothing needed the file to be a sorted set on disk.
+    # both observed. Both readers de-duplicate and sort at the point of
+    # display, so nothing needed the file to be a sorted set on disk.
+    #
+    # O_APPEND alone is not enough, and the comment here used to say it was:
+    # "a single small O_APPEND write cannot interleave and cannot truncate".
+    # That holds on POSIX, where the kernel makes the seek-and-write one
+    # atomic operation. On Windows O_APPEND is emulated by the CRT as
+    # lseek(END) then write, so two writers can resolve the *same* end offset
+    # and the second overwrites the first -- the write returns the full byte
+    # count either way, so nothing in the failing process looks wrong.
+    # Measured at roughly one lost entry per fifteen runs of eight concurrent
+    # writers against a 50k-line marker, which is what made
+    # TestConcurrentWrites fail intermittently and look like a flaky test.
+    #
+    # So the append is taken under an exclusive lock on the marker's first
+    # byte. Locking is the one place a hook cannot stay portable by ignoring
+    # the platform: msvcrt and fcntl are both stdlib, so this keeps the
+    # standalone-and-stdlib-only rule that stops hooks importing
+    # scripts/platform_paths.py.
     body = "".join(f"{line}\n" for line in sorted(mine)).encode()
     try:
         fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
         try:
-            os.write(fd, body)
+            with exclusive(fd):
+                # Seek to the true end under the lock rather than trusting
+                # O_APPEND to find it, since that is the step being raced.
+                os.lseek(fd, 0, os.SEEK_END)
+                os.write(fd, body)
         finally:
             os.close(fd)
     except OSError:

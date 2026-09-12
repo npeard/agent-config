@@ -133,6 +133,17 @@ BENIGN = "benign-nonzero-exit"
 
 UNCLASSIFIED = "unclassified"
 
+# How a ledgered decision's friction was found, which determines which of the
+# ledger's rules apply to it. `transcript` is the default and the case this
+# script automates: the class name must be one CLASSES emits, and
+# `count_at_decision` drives the doubling rule that reopens it. `observed`
+# friction was found by doing the work rather than by mining sessions -- the
+# reflect skill's "take the friction from the branch just finished" -- so
+# nothing counts it and the doubling rule cannot apply.
+TRANSCRIPT = "transcript"
+OBSERVED = "observed"
+SOURCES = (TRANSCRIPT, OBSERVED)
+
 
 def ledger_path() -> Path:
     """The canonical ledger, preferring claude-config over this checkout."""
@@ -315,6 +326,15 @@ def read_ledger(path: Path | None = None) -> tuple[dict[str, dict], str | None]:
     The reason is returned rather than swallowed because silently reporting
     zero decisions looks identical to having made none -- the same class of
     bug as a check that cannot run reporting success. Callers surface it.
+
+    Only `source = "transcript"` decisions are returned, because this dict has
+    exactly one consumer -- `is_actionable`, deciding whether to re-propose a
+    mined class. An `observed` decision names friction found by doing the work
+    (a Git warning, a build gotcha) rather than by mining a transcript, so no
+    classifier emits its name and no counter can double it. Including one here
+    would put a key in the suppression dict that can never match a tally: inert
+    today, and a silent suppressor the day someone adds a classifier with the
+    same name, having never supplied the `count_at_decision` that reopens it.
     """
     path = path or ledger_path()
     if not path.is_file():
@@ -323,7 +343,11 @@ def read_ledger(path: Path | None = None) -> tuple[dict[str, dict], str | None]:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, OSError) as exc:
         return {}, f"ledger unreadable ({type(exc).__name__}); decisions ignored"
-    return {d["class"]: d for d in data.get("decision", []) if "class" in d}, None
+    return {
+        d["class"]: d
+        for d in data.get("decision", [])
+        if "class" in d and d.get("source", TRANSCRIPT) == TRANSCRIPT
+    }, None
 
 
 def load_ledger(path: Path | None = None) -> dict[str, dict]:

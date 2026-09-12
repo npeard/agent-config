@@ -481,6 +481,45 @@ class TestLedger:
         ledger = friction.load_ledger(p)
         assert ledger["sleep-blocked"]["count_at_decision"] == 4
 
+    def test_an_absent_source_is_read_as_transcript(self, tmp_path: Path):
+        """Every entry written before the field existed must keep its meaning;
+        defaulting the other way would silently unsuppress all of them."""
+        p = tmp_path / "friction-ledger.toml"
+        p.write_text(
+            '[[decision]]\nclass = "sleep-blocked"\n'
+            'outcome = "tier-0"\ncount_at_decision = 4\n'
+        )
+        assert "sleep-blocked" in friction.load_ledger(p)
+
+    def test_observed_decisions_are_not_returned_as_suppressions(self, tmp_path: Path):
+        """An observed entry records a decision but suppresses nothing. If it
+        reached this dict it would be an unreopenable key -- inert until a
+        classifier takes the same name, then permanent deafness, since it
+        carries no count for the doubling rule to read."""
+        p = tmp_path / "friction-ledger.toml"
+        p.write_text(
+            '[[decision]]\nclass = "sleep-blocked"\n'
+            'outcome = "tier-0"\ncount_at_decision = 4\n'
+            '[[decision]]\nclass = "phantom-line-ending-diff"\n'
+            'source = "observed"\noutcome = "tier-0"\n'
+        )
+        ledger = friction.load_ledger(p)
+        assert "sleep-blocked" in ledger
+        assert "phantom-line-ending-diff" not in ledger
+
+    def test_an_observed_class_stays_actionable(self, tmp_path: Path):
+        """The consequence of the exclusion above, stated as behaviour: a
+        mined class is not suppressed by an observed decision on its name."""
+        p = tmp_path / "friction-ledger.toml"
+        p.write_text(
+            '[[decision]]\nclass = "sleep-blocked"\n'
+            'source = "observed"\noutcome = "tier-0"\n'
+        )
+        tally = friction.Tally()
+        for i in range(friction.BAR_COUNT):
+            tally.record(f"s{i}", "2026-09-05T00:00:00Z")
+        assert friction.is_actionable("sleep-blocked", tally, friction.load_ledger(p))
+
 
 class TestResultText:
     def test_handles_string_and_block_forms(self):
@@ -523,8 +562,42 @@ class TestLedgerSchema:
     def test_every_entry_is_complete(self):
         for entry in self.entries():
             name = entry.get("class", "<unnamed>")
-            for field in ("class", "cause", "outcome", "count_at_decision", "date"):
+            for field in ("class", "cause", "outcome", "date"):
                 assert field in entry, f"{name} is missing {field}"
+
+    def test_every_source_is_known(self):
+        """An unrecognized source would pick up transcript's rules by default
+        and quietly skip the checks written for its own kind."""
+        for entry in self.entries():
+            source = entry.get("source", friction.TRANSCRIPT)
+            assert source in friction.SOURCES, (
+                f"{entry['class']} has source {source!r}, which is not one of "
+                f"{friction.SOURCES}"
+            )
+
+    def test_every_transcript_entry_carries_its_count(self):
+        """The doubling rule reopens a decision when its class gets materially
+        worse, and it reads `count_at_decision` to do it. A transcript entry
+        without one suppresses its class forever -- the failure this file's
+        docstring names, and the reason the field is required here but
+        forbidden below."""
+        for entry in self.entries():
+            if entry.get("source", friction.TRANSCRIPT) != friction.TRANSCRIPT:
+                continue
+            assert "count_at_decision" in entry, (
+                f"{entry['class']} is missing count_at_decision"
+            )
+
+    def test_no_observed_entry_invents_a_count(self):
+        """Nothing counts observed friction, so a count here would be a number
+        that means nothing -- and `is_actionable` would do arithmetic on it if
+        a classifier ever emitted the same name."""
+        for entry in self.entries():
+            if entry.get("source") != friction.OBSERVED:
+                continue
+            assert "count_at_decision" not in entry, (
+                f"{entry['class']} is observed but carries count_at_decision"
+            )
 
     def test_every_cause_is_in_the_taxonomy(self):
         for entry in self.entries():
@@ -533,12 +606,32 @@ class TestLedgerSchema:
                 "in the reflect skill's taxonomy"
             )
 
-    def test_every_class_is_one_the_classifier_can_produce(self):
-        """A decision about a class no classifier emits is dead weight, and
-        usually a typo that silently suppresses nothing."""
+    def test_every_transcript_class_is_one_the_classifier_can_produce(self):
+        """A transcript decision about a class no classifier emits is dead
+        weight, and usually a typo that silently suppresses nothing.
+
+        Scoped to transcript entries. An observed decision names friction
+        found by doing the work, so by construction no classifier emits its
+        name -- asserting otherwise would force every such entry to be either
+        mislabelled as a mined class or left out of the ledger entirely.
+        """
         known = {name for name, _ in friction.CLASSES}
         for entry in self.entries():
+            if entry.get("source", friction.TRANSCRIPT) != friction.TRANSCRIPT:
+                continue
             assert entry["class"] in known, f"unknown class {entry['class']!r}"
+
+    def test_observed_classes_do_not_shadow_a_mined_class(self):
+        """Two entries for one name would make which rules apply depend on
+        read order, and an observed entry carries no count to reopen with."""
+        known = {name for name, _ in friction.CLASSES}
+        for entry in self.entries():
+            if entry.get("source") != friction.OBSERVED:
+                continue
+            assert entry["class"] not in known, (
+                f"{entry['class']} is recorded as observed but the classifier "
+                "emits that name; record it as a transcript decision instead"
+            )
 
 
 def transcript(path: Path, records: list[tuple[str, str, str]]) -> None:

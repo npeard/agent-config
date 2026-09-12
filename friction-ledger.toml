@@ -17,6 +17,27 @@
 #
 # `tier-0` means no artifact was created, which is the expected outcome most
 # of the time.
+#
+# `source` names how the friction was found, and selects which of the rules
+# above apply. It defaults to `transcript` when absent, so every entry written
+# before the field existed keeps its original meaning.
+#
+#   transcript -- mined by `pixi run friction`. The class must be one the
+#     classifier emits, and `count_at_decision` is required, because the
+#     doubling rule above is what reopens it.
+#
+#   observed -- found by doing the work: a warning read, a build gotcha hit.
+#     The reflect skill takes friction from the branch just finished, not only
+#     from mined sessions, and that friction has no class name in CLASSES and
+#     no counter to double. So `count_at_decision` is *omitted* rather than
+#     invented: writing 1 there would state a count nothing measured, and
+#     reopening at 2 would be arithmetic on a number that means nothing.
+#     Such an entry records a decision; it suppresses nothing, and
+#     `read_ledger` deliberately does not return it.
+#
+# The distinction is enforced in tests rather than by convention, because both
+# variants look like a healthy entry and the failure -- a typo'd transcript
+# class that silently suppresses nothing -- is invisible.
 
 [[decision]]
 class = "codespell-finding"
@@ -436,10 +457,10 @@ tool description.
 
 [[decision]]
 class = "phantom-line-ending-diff"
+source = "observed"
 date = "2026-09-11"
 cause = "working-as-designed"
 outcome = "tier-0"
-count_at_decision = 1
 note = """
 pixi.lock showed as modified through a whole branch with zero changed
 lines: core.autocrlf=true expects CRLF in the working tree, pixi writes the
@@ -468,10 +489,10 @@ the reproduction in hand.
 
 [[decision]]
 class = "typst-build-integration-knowledge"
+source = "observed"
 date = "2026-09-11"
 cause = "claude-config-gap"
 outcome = "tier-0"
-count_at_decision = 1
 note = """
 Building a Typst + Snakemake document pipeline surfaced a set of real,
 verified gotchas: Typst silently continues an overlong slide onto another
@@ -490,9 +511,16 @@ authoring: nothing here touches scripting, bibliographies, cross-references
 or complex tables, so a skill written now would overclaim its scope and
 then mislead whoever reads its description.
 
-Tier 0 for now. The knowledge is not lost: it lives as comments in
-smi/report/ (Snakefile, lib/theme.typ, scripts/check_slide_pages.py), which
-is working code a second project can copy from -- a better starting point
-than prose describing it. Build the asset when a second Typst project shows
-which parts actually generalize.
+Tier 0 for now. The knowledge is not lost: it lives as comments in the smi
+project's report directory -- its Snakefile, its Typst theme module, and its
+slide-page checker under that project's own scripts directory -- which is
+working code a second project can copy from, a better starting point than
+prose describing it. Build the asset when a second Typst project shows which
+parts actually generalize.
+
+Paths there are described rather than spelled, because they belong to another
+repository: the audit's dead-reference check reads a bare "scripts/<name>.py"
+as a claim about *this* tree, and it is right to. A ledger note that names a
+file this repo does not have is indistinguishable from one whose asset was
+deleted, which is the whole failure that check exists to catch.
 """

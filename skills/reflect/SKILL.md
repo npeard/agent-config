@@ -132,10 +132,14 @@ downward direction of the ladder needs.
 5. Take the tier the cause implies. Before any tier-4 proposal, check
    the budget: if there is no room, name what comes out or choose a
    lower tier. "Raise the ceiling" is not an answer.
-6. Record every decision in `friction-ledger.toml` with `cause`,
-   `outcome` and `count_at_decision`. A decision missing the count
-   suppresses its class forever, which is how this goes blind while
-   looking healthy.
+6. Record every decision in `friction-ledger.toml` with `cause` and
+   `outcome`. A mined class also needs `count_at_decision`: the doubling
+   rule reads it to reopen the class, so a decision missing it
+   suppresses that class forever, which is how this goes blind while
+   looking healthy. Friction taken from the branch just finished -- step
+   1's second half -- instead carries `source = "observed"` and no
+   count, because nothing counted it: a number there would be invented,
+   and the doubling rule would have nothing to double.
 7. Report what you decided and what you rejected. A pass that changes
    nothing is a successful pass.
 

@@ -593,9 +593,23 @@ class TestConcurrentWrites:
     The marker was a read-modify-write: read the set, union, then
     `open(marker, "w")`. Whichever process wrote last wrote over the other's
     entry, and truncate-on-open meant a kill at the hook's 10s timeout left an
-    empty file behind. Deterministic once the write is a single append, since
-    an append cannot interleave and cannot truncate -- so this test can only
-    fail against an implementation that reintroduces the race.
+    empty file behind. A single O_APPEND write cannot interleave and cannot
+    truncate, which is what fixed that.
+
+    This docstring used to claim the concurrent case was therefore
+    deterministic and "can only fail against an implementation that
+    reintroduces the race". That was false, and worth recording as a
+    constraint on the code rather than on the note: eight real processes also
+    contend for process slots, so a hook could lose its entry without the
+    write racing at all -- `checkout_and_branch` failed to spawn git, returned
+    ("", "") and declined, which main() cannot distinguish from a cwd outside
+    the repo. Both git calls now retry, and TestTransientSpawnFailure pins
+    each one structurally.
+
+    So this test is load-sensitive by construction and is not the gate for
+    either mechanism. Keep it as the end-to-end check that eight concurrent
+    hooks converge; read a failure here as a spawn-path regression first, and
+    look to the structural tests to say which.
     """
 
     def test_existing_lines_are_preserved_verbatim(self, fake_master, tmp_path):
@@ -719,12 +733,118 @@ class TestTransientSpawnFailure:
         assert hook.committed_paths(str(git_repo)) == []
         assert len(calls) == 2, "retried exactly once, not indefinitely"
 
+    def test_the_append_is_taken_under_a_lock(self):
+        """Structural, because the race it closes is one in fifteen.
+
+        O_APPEND is atomic on POSIX and emulated as lseek(END)+write by the
+        Windows CRT, so two writers can resolve the same end offset and one
+        overwrites the other -- returning the full byte count, so the losing
+        process sees nothing wrong. A timed reproduction would be exactly the
+        flaky gate this repo's standards forbid, so the assertion is that the
+        write still happens inside `exclusive`.
+        """
+        source = HOOK.read_text()
+        body = source[source.index("body = ") :]
+        write = body.index("os.write(fd, body)")
+        guard = body.index("with exclusive(fd):")
+        assert guard < write, "the append must happen inside exclusive()"
+        assert "os.lseek(fd, 0, os.SEEK_END)" in body[guard:write], (
+            "seek to the end under the lock; O_APPEND's own seek is the raced step"
+        )
+
+    def test_an_unlockable_marker_still_records(self, monkeypatch, tmp_path):
+        """Degrade to an unlocked append rather than dropping the entry.
+
+        A lock this cannot take is a possibly-lost entry under concurrency;
+        raising would be a certainly-lost entry every time, on a hook whose
+        whole job is not to forget.
+        """
+        hook = self.load_hook()
+        target = tmp_path / "m.txt"
+        target.write_text("seed\n")
+
+        def refuse(*args, **kwargs):
+            raise OSError(13, "Permission denied")
+
+        if os.name == "nt":
+            monkeypatch.setattr(hook.msvcrt, "locking", refuse)
+        else:
+            monkeypatch.setattr(hook.fcntl, "flock", refuse)
+
+        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            with hook.exclusive(fd):
+                os.lseek(fd, 0, os.SEEK_END)
+                os.write(fd, b"added\n")
+        finally:
+            os.close(fd)
+        assert target.read_text() == "seed\nadded\n"
+
+    def test_a_transient_rev_parse_failure_is_retried(self, monkeypatch, git_repo):
+        """The same conflation as committed_paths, one call earlier and worse.
+
+        ("", "") means both "cwd is not in this repo" and "could not spawn
+        git", and main() reaches the same `if not checkout` guard for either,
+        so a transient failure here silently drops the obligation before the
+        asset scan ever runs. Found as the cause of TestConcurrentWrites
+        failing intermittently under load.
+        """
+        hook = self.load_hook()
+        real = hook.subprocess.run
+        calls = []
+
+        def flaky(argv, **kwargs):
+            calls.append(argv)
+            if len(calls) == 1:
+                raise OSError(35, "Resource temporarily unavailable")
+            return real(argv, **kwargs)
+
+        monkeypatch.setattr(hook.subprocess, "run", flaky)
+        checkout, branch = hook.checkout_and_branch(str(git_repo))
+        assert checkout == str(git_repo)
+        assert branch == "main"
+        assert len(calls) == 2
+
+    def test_a_permanent_rev_parse_failure_still_declines(self, monkeypatch, git_repo):
+        hook = self.load_hook()
+        calls = []
+
+        def always(argv, **kwargs):
+            calls.append(argv)
+            raise OSError(35, "Resource temporarily unavailable")
+
+        monkeypatch.setattr(hook.subprocess, "run", always)
+        assert hook.checkout_and_branch(str(git_repo)) == ("", "")
+        assert len(calls) == 2, "retried exactly once, not indefinitely"
+
+    def test_a_non_repo_cwd_is_not_retried_into_a_false_positive(self, tmp_path):
+        """The retry must not turn a real decline into a claim. git exits
+        non-zero outside a repo, which is a SubprocessError indistinguishable
+        from a spawn failure -- so both attempts run and the answer is still
+        ("", ""), rather than the retry being read as success.
+
+        Takes no `git_repo` fixture: that one runs `git init` in `tmp_path`,
+        which would make this directory a subdirectory of a real repo and the
+        expected answer a valid checkout.
+        """
+        hook = self.load_hook()
+        loose = tmp_path / "not-a-repo"
+        loose.mkdir()
+        assert hook.checkout_and_branch(str(loose)) == ("", "")
+
     def test_the_retry_budget_fits_the_registered_hook_timeout(self):
         """register_hooks.py writes timeout: 10 for every hook. A killed hook
-        loses every graceful path in this file, so the worst case -- one
-        rev-parse plus two diff-tree attempts -- must stay under it."""
+        loses every graceful path in this file, so the worst case must stay
+        under it.
+
+        Both git calls retry once, so the worst case is two attempts at each
+        timeout rather than one rev-parse plus two diff-trees. The formula is
+        derived from every timeout in the file instead of naming the two, so
+        adding a third call fails this test rather than silently overrunning
+        the budget.
+        """
         source = HOOK.read_text()
         timeouts = [int(n) for n in re.findall(r"timeout=(\d+)", source)]
         assert timeouts, "no subprocess timeouts found"
-        worst_case = timeouts[0] + 2 * timeouts[-1]
+        worst_case = 2 * sum(timeouts)
         assert worst_case < 10, f"worst case {worst_case}s exceeds the 10s budget"

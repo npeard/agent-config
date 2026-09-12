@@ -56,11 +56,18 @@ def declared_hooks(repo: Path) -> tuple[HookSpec, ...]:
 
 
 def command_for(repo: Path, filename: str) -> tuple[str, str]:
-    """Return quoted, absolute Unix and Windows command values for a hook."""
+    """Return quoted, absolute Unix and Windows command values for a hook.
+
+    Both layouts are asked for by name rather than taken from
+    `platform_paths.interpreter`, which answers for the host running now: a
+    single hooks.json entry describes both platforms at once, so deriving one
+    field from the live host wrote that host's path into both and left the
+    other platform's command pointing at an interpreter that is not there.
+    """
     repo = Path(repo).resolve()
     script = (repo / "hooks" / filename).resolve()
-    unix = platform_paths.interpreter(repo).resolve()
-    windows = repo / ".pixi" / "envs" / "dev" / "python.exe"
+    unix = platform_paths.posix_interpreter(repo)
+    windows = platform_paths.windows_interpreter(repo)
     return f'"{unix}" "{script}"', f'"{windows}" "{script}"'
 
 
