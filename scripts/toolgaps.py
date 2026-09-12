@@ -57,7 +57,17 @@ CAPABILITIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "linter",
         ("ruff", "flake8", "pylint", "eslint", "clippy", "golangci", "shellcheck"),
     ),
-    ("type checker", ("mypy", "pyright", "basedpyright", "tsc", "typescript", "flow")),
+    (
+        "type checker",
+        # "ty" is what these projects actually use. It is safe as a bare needle
+        # because `matches` anchors alphanumerics on word boundaries, so it
+        # cannot match "typescript" or "mypy" -- verified against smi, doqs and
+        # this repo. Omitting it reported a phantom gap on every ty project
+        # while this repo's own run looked healthy off a stray "mypy.ini"
+        # inside a ruff hook's `files:` regex: wrong in both directions at
+        # once, and invisible because the repo anyone runs it in passed.
+        ("ty", "mypy", "pyright", "basedpyright", "tsc", "typescript", "flow"),
+    ),
     ("spell check", ("codespell", "cspell", "typos")),
     (
         "dependency lock",

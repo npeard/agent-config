@@ -158,3 +158,51 @@ class TestNoAssetsFlag:
         toolgaps.main(["--json"])
         payload = _json.loads(capsys.readouterr().out)
         assert isinstance(payload["assets"], dict)
+
+    def test_detects_ty_as_a_type_checker(self, tmp_path: Path):
+        """`ty` is the type checker these projects use, declared as a hook id
+        or a bare dependency pin. It was missing from the needle list, so every
+        ty project reported a phantom type-checker gap.
+        """
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.pixi.feature.dev.dependencies]\nty = "*"\n'
+        )
+        assert dict(toolgaps.gaps(tmp_path))["type checker"] == "ty"
+
+    def test_detects_ty_declared_only_as_a_precommit_hook(self, tmp_path: Path):
+        (tmp_path / ".pre-commit-config.yaml").write_text(
+            "repos:\n  - repo: local\n    hooks:\n      - id: ty\n"
+            "        entry: pixi run -e dev ty check\n"
+        )
+        assert dict(toolgaps.gaps(tmp_path))["type checker"] == "ty"
+
+    @pytest.mark.parametrize("decoy", ["typescript", "mypy", "security", "typing"])
+    def test_ty_does_not_match_words_containing_it(self, tmp_path: Path, decoy: str):
+        """The bare needle is only safe because `matches` anchors on word
+        boundaries. If that anchoring regresses, "ty" silently reports a type
+        checker for any project mentioning "typing" -- a false pass, which is
+        worse than the false gap it replaced.
+        """
+        (tmp_path / "notes.md").write_text(f"we care about {decoy} here\n")
+        assert "ty" not in dict(toolgaps.gaps(tmp_path))["type checker"].split(", ")
+
+    def test_a_config_name_inside_a_regex_still_counts_as_evidence(
+        self, tmp_path: Path
+    ):
+        """Documents a known limit rather than asserting a fix.
+
+        A `files:` regex listing mypy.ini among many config names is a ruff
+        hook's filter, not a mypy install, but substring search over declaration
+        files cannot tell the two apart -- separating them needs parsing per
+        file format, which costs more than the wrong answer does.
+
+        It is recorded because it is how this repo passed its own type-checker
+        check while the `ty` needle was missing: a false pass concealed a false
+        gap, so nobody looked. The mitigation is the `ty` needle being present,
+        not this heuristic getting smarter.
+        """
+        (tmp_path / ".pre-commit-config.yaml").write_text(
+            "repos:\n  - repo: local\n    hooks:\n      - id: ruff\n"
+            r"        files: '(/mypy\.ini|/setup\.cfg)$'" + "\n"
+        )
+        assert dict(toolgaps.gaps(tmp_path))["type checker"] == "mypy"
