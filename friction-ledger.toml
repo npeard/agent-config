@@ -624,3 +624,362 @@ writing agent applied the rule unprompted and correctly, refusing to tabulate
 drift figures I had handed it because they were in no committed artifact, and
 saying so. The rule is already operative where it matters most.
 """
+
+[[decision]]
+class = "notebook-results-baked-into-markdown"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+A baseline run reproduced all three notebook failures NOTES.md described.
+Asked to build a sweep notebook and "write up what you found", a fresh agent
+wrote a Python generator that emitted nbformat JSON (then deleted the
+generator), executed via nbconvert, re-read the file with json to get the
+results, and edited markdown cells afterwards to paste measured infidelities
+into prose. It called no notebook_* tool. 823 tool calls, 278k tokens.
+
+Tier 3, skills/notebooks. Justified over tier 0-2 because the failure is a
+judgement about what belongs in prose, which no hook can see, and because
+the tool-precedence half needs a discovery procedure rather than a check.
+
+Written under superpowers:writing-skills, whose Iron Law is no skill without
+a failing test first; the baseline above is that test. brainstorming was not
+re-run per skill -- the session was one brainstorming pass whose approved
+spec had already classified this item and fixed its tier.
+
+GREEN on the same task: cells via NotebookEdit, zero measured numbers in
+markdown, zero stored outputs, and it found the MCP server by running the
+skill's probe recipe. 37 tool calls, 82k tokens.
+
+The rule is "prose describes the method, never the run" rather than "no
+numeric tables", because the baseline's own hedge -- "the reported cell
+outputs above are from the full MAX_EPOCHS = 60 sweep, not the reduced
+smoke-test configuration" -- is a durable claim about one execution
+containing no numbers at all, and the narrow rule would have passed it.
+"""
+
+[[decision]]
+class = "equation-provenance-unstated"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+A baseline run added three equations to a physics paper and verified none of
+them. Asked afterwards how it knew each was correct, it answered "I did not
+re-derive BCH from scratch", "I did not re-verify this manipulation from
+first principles, I trusted the paper's prior derivation", and "I did not
+re-derive this fidelity formula; I am asserting it is standard". Each answer
+was defensible. None was volunteered, and the rendered prose read as a
+confident derivation.
+
+Tier 3, skills/math, written under superpowers:writing-skills against the
+baseline above. The four-status register (derived / numerical / definition /
+assumption) is close to the taxonomy that agent produced spontaneously when
+pressed, which is some evidence the shape is right.
+
+GREEN on the same task: searched the paper before writing, found the
+derivation already present verbatim in an unrelated appendix, extracted it
+rather than writing a second one, stated a status per equation unprompted,
+and reported "the obligation for derived is a committed check -- I did not
+discharge this" without being asked. 12 tool calls against 23.
+
+Not adopted: "no equation without a verification mechanism". Unreachable --
+roughly 15-20% of this paper's equations are definitions or modeling choices
+with nothing to check. The reachable version is that an *unclassified*
+equation is the defect.
+"""
+
+[[decision]]
+class = "typst-authoring-knowledge"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+Reopening the 2026-09-11 typst-build-integration-knowledge decision, whose
+stated condition was "build the asset when a second Typst project shows
+which parts actually generalize". Triple-correlation is that second project,
+so the condition was met and the question was asked again.
+
+Tier 3, skills/typst -- reversing a tier-0 call made earlier the same day
+and recorded here before it was checked.
+
+That call rested on a baseline against smi, which has no bibliography, no
+chevron/vv/bra-ket helpers, no supplement suppression, and pattern-string
+numbering at a single level. It could not have reproduced the frictions it
+was read as evidence against; all of them live in triple-correlation. The
+re-run there hit a real one immediately -- a sub-equation pair rendering
+(S51)/(S51b) instead of (S51a)/(S51b), invisible at exit 0.
+
+Treating a passing test as evidence when the test could not fail is the
+same error as reading an empty config file as proof no server exists. Both
+happened in this session, which is why the AGENTS.md rule about probing
+before concluding absence is worded about conclusions rather than configs.
+
+What did land is not skill-shaped: writing-orchestration's step 5 verify bar
+still said "chktex quiet", which names a tool Typst has no equivalent of.
+Replaced with the asymmetry that matters -- Typst exits 0 on an unresolved
+citation and on page overflow -- so a Typst project needs a build gate and
+"it compiled" is not evidence.
+
+Still open, and not this repo's work: smi/report and
+triple-correlation/report are near-verbatim duplicates -- identical Snakefile
+header comment, identical theme palette and font stacks, a word-for-word
+identical comment above their figpath helpers, identical pixi task tables.
+That is rule 12 in those projects' own infrastructure, and the refactor
+belongs there; recorded here so a third Typst project does not copy the
+duplication a third time.
+
+The authoring gotchas the research turned up are kept here rather than
+discarded, because tier 0 means no *asset* and not no *record*, and a
+verified gotcha is cheap to write down and expensive to rediscover:
+numbering must be a function, not a pattern string -- `#set heading(numbering:
+"S1.1")` compiles and headings look right while references silently drop the
+prefix, and each counter resets individually; `vec()` is a column vector, not
+an arrow accent, and fails silently; `angle.l` does not exist, the chevrons
+are `chevron.l/r`, and there is no bra/ket builtin; a bare `i` in math is an
+identifier that merges with an adjacent letter; `set ref(supplement: none)`
+is needed when the source already writes the noun, or every reference reads
+"Section Section 2"; an unresolved citation renders as a visible marker and
+still exits 0; `align`/`subequations`/`multline` have no equivalent -- one
+`$...$` block with a line-break backslash and `&` alignment; subequations split into
+separately labelled equations; font warnings fire per unresolvable family, so
+trim the stack to what is installed.
+"""
+
+[[decision]]
+class = "context-budget-stricter-than-modeled-practice"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-2"
+note = """
+The single-band word ceilings were calibrated against this repo at the time
+of writing and never against the assets they imitate. Measured: Anthropic's
+shipped superpowers skills run 344-4823 words (median 1059), so three of
+fourteen would breach the old 2000 body ceiling, and their own
+writing-skills reference is 5803 words against a 2000 reference ceiling.
+
+Counter-measurement, and the reason this is not a plain raise: this repo's
+median SKILL.md was 1294 against superpowers' 1059. They hold a lower median
+under a higher ceiling. So the fail band moved to match them and the warn
+band kept the old numbers, where it reports the cost without refusing the
+asset and asks the three questions this skill owns.
+
+Tier 2, scripts/audit_assets.py. This reverses the "raise the ceiling is not
+an answer" red flag, which is why the reversal is recorded here and in the
+ratchet test's docstring rather than applied silently. The fail bands keep
+the "should feel heavier than adding a sentence" property; the warn band now
+carries the discipline.
+
+Note the earlier windows-path-quoting entry rejected tier 4 partly because
+"AGENTS.md is at its word ceiling". That reasoning is now stale, but its
+other half -- it would have restated a tool description -- is sufficient on
+its own, so the decision stands.
+"""
+
+[[decision]]
+class = "unattended-improvement-loop-ungated"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-2"
+note = """
+The instruments for an unattended improvement pass all existed -- friction
+mines every project for zero model context, reflect carries the cause ladder,
+the two ledgers stage decisions, burn prices sessions -- with no gate deciding
+whether tonight is worth a session at all.
+
+Tier 2, scripts/nightly.py. Runs friction, audit --strict and toolgaps, and
+exits without staging anything unless one crossed a bar it already owned.
+When one did, it writes a brief and stops; a model reads it in a fresh
+session and proposes a diff a human merges or discards.
+
+The gate is the artifact because the loop cannot grade itself. SkillOpt
+(arXiv 2605.23904) measured an ungated version of this on SearchQA falling
+0.554 -> 0.026 over five nights while its gated twin lost nothing. No
+numeric grader is available here, so the substitute is the human checkpoint.
+
+Not adopted: SkillOpt's optimizer needs a labeled task set and verifier that
+do not exist, and SkillOpt-Sleep is preview software whose docs say outbound
+prompts are not guaranteed secret-free, on a box holding unpublished
+research. It would also duplicate friction.py and reflect while being worse
+at the judgement step.
+
+Its first real run earned it: --strict caught three P4 findings in this
+branch's own work, all three new assets missing from README's Layout section.
+"""
+
+[[decision]]
+class = "retraction-persisted-in-deliverable"
+source = "observed"
+date = "2026-09-15"
+cause = "rule-not-enforced"
+outcome = "tier-4"
+note = """
+smi/report/slides.typ carries a whole slide titled "Retraction: the model was
+not the problem, the fit was", and baseline.typ carries the same framing in
+four more places. A reader of that deck never held the 9-38% claim, so the
+slide spends a unit of attention teaching a wrong thing and then unteaching
+it.
+
+Tier 4 rather than a hook, because no check can see whether prose narrates a
+superseded belief. Landed as CODING_STANDARDS rule 11, with an AGENTS.md
+trigger.
+
+The reason it needed a second home is the diagnosis: the spec *ordered* it.
+smi's michelson-units-audit-spec.md has a section headed "Specific claims to
+retract or rewrite", so the agent was following its brief correctly. The
+orchestrator-facing half is in writing-orchestration -- specify "replace
+claim X with Y", never "add a retraction of X" -- because the brief is what
+produced the artifact.
+"""
+
+[[decision]]
+class = "dry-read-as-text-not-intent"
+source = "observed"
+date = "2026-09-15"
+cause = "rule-not-enforced"
+outcome = "tier-4"
+note = """
+smi/smi/analysis/baseline_fit.py solves one least-squares problem three ways
+-- lstsq on the design matrix, lstsq per window, and batched normal equations
+-- and line 468 comments "Same (a, b) -> phase convention as
+fit_phase_amplitude". A comment that a convention must match across
+implementations is a request for a human to do a compiler's job, and it is
+what silently breaks when one side changes. doqs also has _analytic_tau_k
+byte-duplicated across two modules.
+
+Tier 4 as CODING_STANDARDS rule 12, sharpening the existing "Duplicated Code"
+smell rather than adding a parallel concept: rule 12 is the strict superset
+(same intent, different text) and the fallback-lens preamble already says to
+prefer a concrete rule when one applies.
+
+Graded by layer, which is the part that needed writing down: strict in core
+code, relaxed in notebooks and examples. Without that boundary, rule 12 plus
+the notebooks skill would contradict each other on inline parameters.
+"""
+
+[[decision]]
+class = "absence-of-declaration-read-as-absence-of-capability"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-4"
+note = """
+Twice in one session a research pass searched where an answer should have
+been, found nothing, and reported absence as proof of non-existence. A
+notebook MCP server was reported not to exist because every mcpServers block
+was empty -- it was live on a dynamic port, published by a VS Code extension,
+in no config file. Typst was reported to have "no slide concept" because core
+has no slide primitive -- touying has shipped slide overflow detection since
+2026-04-02.
+
+Tier 4 despite the ladder's bias against prose: no hook can fire on a
+conclusion, and this applies to every session regardless of which skill is
+loaded. Forty words in AGENTS.md's verification section.
+
+Both errors were caught by the user, not by any check, which is the argument
+for the rule rather than against it.
+"""
+
+[[decision]]
+class = "comments-explaining-discarded-approaches"
+source = "observed"
+date = "2026-09-15"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+NOTES.md reported that code comments explain why a previous method was
+discarded rather than why the current one is right. Partly confirmed and not
+worth an artifact.
+
+Real instances exist -- triple-correlation/plots/PaperFigures.py has a
+function body replaced by a note about retrieving code from a previous
+commit, and doqs has a systemic dialect of six-plus sites explaining
+themselves by reference to "the period the Floqtimizer constructor used to
+apply implicitly". But the majority of past-tense comments surveyed are
+legitimate bounds or justify a present abstraction, and several are
+exemplary "why not the obvious alternative" writing.
+
+AGENTS.md and CODING_STANDARDS rule 8 already say comments record the why.
+Restating it louder changes nothing -- this skill's own red flag. Rule 11
+covers the durable-artifact half, which is the part with damage. The doqs
+dialect is project-local and belongs in that repo's instructions.
+"""
+
+[[decision]]
+class = "over-explanation-in-chat-and-reports"
+source = "observed"
+date = "2026-09-15"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+NOTES.md reported that the orchestrating agent over-explains in session chat
+and written reports. Measured against transcripts and artifacts, and not
+substantiated as stated.
+
+Assistant message length: median 171 characters over 862 messages in one
+project, 249 over 169 in another; only 5.2% exceed 1800 characters. The
+dispersion paper's prose is dense and causally ordered, and the nine SDD
+task reports are long because they enumerate verifications, which is the
+point of the artifact.
+
+What the evidence does show is a different target: agent-authored repo
+meta-documentation. dispersion-engineering's CLAUDE.md is 347 lines and its
+README 344, for a repo whose source is one 776-line .tex plus three checker
+scripts. doqs carries four top-level READMEs plus a CLAUDE.md.
+
+Tier 0. A doc-size check is a candidate but it is a different claim about a
+different artifact, and inventing a chat-style rule from an unsupported
+premise would be the worst outcome. Recorded so the original framing is not
+re-proposed.
+"""
+
+[[decision]]
+class = "passing-check-read-as-evidence"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+Twice in one session a check that could not have produced the opposite
+result was reported as a finding, and the user caught both.
+
+First: eight empty mcpServers blocks read as "no Jupyter MCP server exists".
+The server was live on a dynamic port, published by a VS Code extension,
+registered in no config file -- so the searched place could never have
+contained it.
+
+Second: a Typst baseline passed and was read as "these frictions no longer
+reproduce". It ran against smi, which has no bibliography, no bra-ket
+notation and no prefixed multi-level numbering. The re-run on
+triple-correlation, which has all three, hit a silent failure immediately.
+
+Split diagnosis rather than one cause, because the fixes differ.
+
+The first is cause 3, rule-not-enforced, and gets tier 0. AGENTS.md's
+"absence of a declaration is not absence of a capability" already covers
+it, correctly worded, and was violated four hours after being written by
+its own author. Restating it louder is this skill's own red flag; prose
+compliance decaying is what the tier ladder already predicts, not new
+evidence that the rule is wrong.
+
+The second is cause 7 and lands in this skill, because nothing covered it.
+superpowers:writing-skills says to watch the baseline fail before writing,
+but never says what a *passing* baseline means -- and it has two opposite
+meanings: the behaviour holds, or the scenario had no power to fail. Tier 0
+decisions rest on exactly that evidence, so the question belongs where the
+tier is chosen.
+
+The fix is one testable question, not an exhortation to be careful: name
+what the scenario would have had to contain in order to fail, before
+reading the result. For the Typst case that sentence is one line long and
+would have caught it.
+
+No hook can reach either. Hooks fire on tool calls and session events; the
+defect is an inference drawn from a result, which no PreToolUse payload
+contains.
+"""

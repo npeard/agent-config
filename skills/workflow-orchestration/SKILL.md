@@ -179,7 +179,11 @@ Order matters here, and the obvious order is wrong:
 4. `standards-and-spec-review` in `branch` mode over the whole branch --
    house rules and spec fulfillment across phases, which per-phase
    review cannot see. Skip axes covered per phase only if every phase
-   was reviewed.
+   was reviewed. **Dispatch its two axes as parallel subagents** --
+   Standards and Spec read the same diff and never need each other's
+   output, so running them in sequence adds a whole review's wall clock
+   for nothing. That skill sanctions this in `branch` mode only; `phase`
+   mode is a leaf and still spawns nothing.
 5. `simplify` -- reuse, simplification, efficiency. This one *applies*
    its own edits rather than reporting them, so it cannot be gated by
    the filter above; read its diff and revert brevity that costs
@@ -203,6 +207,13 @@ Escalate instead when the same finding recurs after two fix attempts
 (thrash, not progress), a finding implies the spec was wrong (a design
 bifurcation), or three full rounds have completed. Report the state
 plainly rather than looping silently.
+
+**A capacity error is not a round.** An HTTP 529 or a timeout means the
+review never ran: retry it with backoff rather than counting it, and do
+not conclude the loop is thrashing. Four consecutive `/code-review`
+invocations on one PR, all 529s, are the worst "multi-round review" in
+this repo's history and contained no findings at all -- so a rounds
+count that includes them measures the provider, not the work.
 
 ### 7. Integrate -- `superpowers:finishing-a-development-branch`
 

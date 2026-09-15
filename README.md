@@ -92,6 +92,8 @@ pixi run skills                     # validate portable Agent Skills metadata
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
 pixi run audit                      # agent-asset principle breaches
+                                    #   (--strict fails on warnings too)
+pixi run nightly                    # gate an unattended improvement pass
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
@@ -137,6 +139,19 @@ and pricing remain separate and unchanged.
   long-running GPU, cluster, batch, and simulation jobs. It keeps
   process identity, cleanup, and output protection mechanisms in each
   owning project rather than guessing at arbitrary running processes.
+- `skills/notebooks/` -- which tool to reach for on a `.ipynb`, how to
+  find the notebook MCP server that no config file lists, and why a
+  measured result belongs in cell output rather than markdown prose. The
+  baseline that motivated it cost 823 tool calls for one notebook.
+- `skills/math/` -- state each equation's provenance unprompted, know
+  what a CAS can and cannot verify about it, and derive once rather than
+  twice at two rigour levels.
+- `skills/typst/` -- the Typst traps that compile at exit 0 and render
+  wrong: numbering patterns that break references, silent overflow,
+  `vec` where an arrow was meant, subequations. Split loud failures
+  (which the compiler already teaches) from silent ones (which need a
+  rule), and states what to verify in the render rather than the exit
+  code. Claims are marked verified-on-0.15.1 or reported.
 - `install.py` -- creates/repairs both host adapters and skill links,
   then registers the current Claude Code and Codex lifecycle hooks; the
   actual installer behind both shims below.
@@ -201,10 +216,32 @@ and pricing remain separate and unchanged.
   needs. The first run's answer, recorded in the docstring, was that it
   would not: the largest reads wanted the file contents they fetched, so
   a check there redirects the cost instead of removing it.
+- `scripts/nightly.py` -- the gate on an unattended improvement pass, as
+  `pixi run nightly`. It runs `friction`, `audit --strict` and
+  `toolgaps`, none of which spend model context, and exits without
+  staging anything unless one crossed a bar it already owned. When one
+  did, it writes `.nightly-brief` naming what and stops: a model reads
+  that brief in a fresh session, runs `reflect`, and proposes a diff on
+  a branch that a human merges or discards. It will not stage a second
+  brief while the first is unread, and it fails loudly rather than
+  reading a crashed instrument as silence. The gate is the artifact --
+  asked what was frustrating, a model always answers, and SkillOpt
+  measured an ungated version of this loop falling from 0.554 to 0.026
+  over five nights while its gated twin lost nothing.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
   what makes the improvement loop converge rather than nag.
+- Each context budget has two bands. Crossing the lower one prints a
+  warning, exits 0, and asks the three questions the `reflect` skill
+  owns -- is this duplicated prose or duplicated intent, does it add
+  context or reinforce decaying behaviour or neither, does it belong in
+  a lower tier. Crossing the upper one fails. Warnings are deliberately
+  not ledgerable: an exception suppresses a finding until the asset
+  changes, which is right for a decision made once and wrong for a
+  question whose answer changes as the asset grows. `--strict` promotes
+  warnings to failures, for an unsupervised run that has no human to
+  ask.
 - `audit-ledger.toml` -- accepted exceptions to the five agent-asset
   principles, keyed on asset *and* principle. Where `friction-ledger`
   reopens a class when its count doubles, an entry here carries the

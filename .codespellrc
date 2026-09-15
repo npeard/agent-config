@@ -1,5 +1,8 @@
 [codespell]
-ignore-words-list = ket
+# All three are real markup tokens, not misspellings: `ket` is the Dirac-notation
+# helper name, `braket` is Dirac bra-ket notation, `multline` is the amsmath
+# environment.
+ignore-words-list = ket,braket,multline
 # `codespell .` walks everything, unlike the pre-commit hook which is handed
 # tracked files only -- so the aggregate task would otherwise fail on
 # gitignored session scaffolding and on vendored text in the Pixi env.

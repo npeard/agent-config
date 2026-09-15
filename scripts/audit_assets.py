@@ -33,10 +33,27 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEDGER = REPO_ROOT / "audit-ledger.toml"
 
-# Measured at the time of writing plus deliberately tight headroom. Raising
-# one of these should feel heavier than adding a sentence, which is the point.
-AGENTS_MD_MAX_WORDS = 1500
-SKILL_BODY_MAX_WORDS = 2000
+# Two bands per budget. The lower one warns and does not fail; the upper one
+# fails. Until 2026-09-15 there was one band and it failed, on the reasoning
+# that raising a ceiling "should feel heavier than adding a sentence" -- and
+# that is still true of the *fail* band, which is why one still exists.
+#
+# What changed is calibration against the practice these assets imitate.
+# Anthropic's shipped superpowers skills run 344-4823 words (median 1059), so
+# three of fourteen would have breached the old 2000 body ceiling, and their
+# own writing-skills reference is 5803 words -- 290% of the old reference
+# ceiling. A gate stricter than the work it models rejects good assets.
+#
+# The countervailing measurement, kept here because it is the reason the warn
+# band exists at all: this repo's median SKILL.md was 1294 words against
+# superpowers' 1059. They hold a *lower* median under a *higher* ceiling. So
+# the fail band moves to match them and the warn band stays at the old
+# numbers, where it reports the cost without refusing the asset. If the median
+# climbs after this, the warn band is being ignored and the raise was wrong.
+AGENTS_MD_WARN_WORDS = 1500
+AGENTS_MD_MAX_WORDS = 2000
+SKILL_BODY_WARN_WORDS = 2000
+SKILL_BODY_MAX_WORDS = 4800
 SKILL_DESCRIPTION_MAX_WORDS = 60
 
 # A reference file loads on demand, which is what makes it the cheap tier --
@@ -44,10 +61,11 @@ SKILL_DESCRIPTION_MAX_WORDS = 60
 # cost into an invisible one, and that was the *sanctioned* way to get under
 # the body ceiling. Verified before this existed: a 17-word SKILL.md beside a
 # 50,006-word catalog.md produced no finding.
-# The same number as the body, because a file the reader is told to read costs
-# what a body costs. The tier is cheaper for being conditional, not for being
-# unbounded.
-REFERENCE_MAX_WORDS = 2000
+# The same numbers as the body, because a file the reader is told to read
+# costs what a body costs. The tier is cheaper for being conditional, not for
+# being unbounded.
+REFERENCE_WARN_WORDS = 2000
+REFERENCE_MAX_WORDS = 5800
 
 # What one invocation actually costs: the body plus every reference an
 # imperative step tells the reader to read. Measured this way, three of the
@@ -63,6 +81,7 @@ REFERENCE_MAX_WORDS = 2000
 # exempt an asset: a skill may cost one body and one full reference per
 # invocation, and needing more than that means a second catalog should be
 # loading on demand instead.
+SKILL_EFFECTIVE_WARN_WORDS = SKILL_BODY_WARN_WORDS + REFERENCE_WARN_WORDS
 SKILL_EFFECTIVE_MAX_WORDS = SKILL_BODY_MAX_WORDS + REFERENCE_MAX_WORDS
 
 # An imperative step naming a markdown file: "Read `patterns.md`", "read
@@ -86,6 +105,17 @@ class Finding:
     principle: int
     asset: str
     detail: str
+    # A warning reports a cost without refusing the asset: it prints, and it
+    # does not contribute to the exit code. Defaulted so every existing
+    # construction stays a failure -- a check that became advisory by
+    # accident is worse than no check.
+    #
+    # Deliberately not ledgered. The ledger suppresses a finding until the
+    # asset changes, which is right for a judgement that was made once; a
+    # warning is re-asked every run on purpose, because the question it puts
+    # ("is this duplicated, does it earn its cost, should it be a new asset")
+    # has a different answer as the asset grows.
+    warning: bool = False
 
     @property
     def key(self) -> str:
@@ -331,6 +361,45 @@ def effective_words(path: Path, text: str) -> int:
     )
 
 
+# What the warn band asks. Not "trim this": the useful question is whether the
+# words are duplicated, and "useless" is not mechanically definable, so this
+# routes the judgement to the skill that owns the cause taxonomy and the tier
+# ladder rather than deciding it in a checker.
+WARN_PROMPT = (
+    "not a failure -- review before adding more: (1) is this duplicated prose "
+    "or duplicated intent with an existing asset, in which case consolidate "
+    "via the reflect skill's redundancy check rather than adding; (2) does it "
+    "add context or reinforce behaviour that decays without it, or neither; "
+    "(3) does it belong in a new skill, a reference file, a hook or a script "
+    "instead of here"
+)
+
+
+def budget(
+    asset: str, n: int, warn: int, fail: int, principle: int, detail: str
+) -> list[Finding]:
+    """The finding a measured asset owes its budget, if any.
+
+    One function for all four budgets so the two-band comparison is written
+    once: four copies of `if n > fail: ... elif n > warn: ...` is four places
+    for the bands to drift apart, and a budget silently checked against the
+    wrong band is the failure this whole check exists to prevent.
+    """
+    if n > fail:
+        return [Finding(principle, asset, f"{detail}, over the {fail} ceiling")]
+    if n > warn:
+        return [
+            Finding(
+                principle,
+                asset,
+                f"{detail}, over the {warn} warn threshold ({fail} fails); "
+                f"{WARN_PROMPT}",
+                warning=True,
+            )
+        ]
+    return []
+
+
 def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     """P3: spend context wisely."""
     out = []
@@ -340,22 +409,19 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
     # when it has something to say.
     agents_md = root / "AGENTS.md"
     n = words(agents_md.read_text(encoding="utf-8")) if agents_md.is_file() else 0
-    if n > AGENTS_MD_MAX_WORDS:
-        out.append(
-            Finding(
-                3, "AGENTS.md", f"{n} words, over the {AGENTS_MD_MAX_WORDS} ceiling"
-            )
-        )
+    out += budget(
+        "AGENTS.md", n, AGENTS_MD_WARN_WORDS, AGENTS_MD_MAX_WORDS, 3, f"{n} words"
+    )
     for path, text in skill_texts(root):
         n = words(text)
-        if n > SKILL_BODY_MAX_WORDS:
-            out.append(
-                Finding(
-                    3,
-                    rel(path, root),
-                    f"body {n} words, over the {SKILL_BODY_MAX_WORDS} ceiling",
-                )
-            )
+        out += budget(
+            rel(path, root),
+            n,
+            SKILL_BODY_WARN_WORDS,
+            SKILL_BODY_MAX_WORDS,
+            3,
+            f"body {n} words",
+        )
         value = description(text)
         if value and words(value) > SKILL_DESCRIPTION_MAX_WORDS:
             out.append(
@@ -369,30 +435,28 @@ def check_budgets(root: Path = REPO_ROOT) -> list[Finding]:
             )
         for ref in reference_files(path.parent):
             n = words(ref.read_text(encoding="utf-8"))
-            if n > REFERENCE_MAX_WORDS:
-                out.append(
-                    Finding(
-                        3,
-                        rel(ref, root),
-                        f"reference {n} words, over the {REFERENCE_MAX_WORDS} "
-                        "ceiling; an on-demand file is the cheap tier, not a "
-                        "free one",
-                    )
-                )
+            out += budget(
+                rel(ref, root),
+                n,
+                REFERENCE_WARN_WORDS,
+                REFERENCE_MAX_WORDS,
+                3,
+                f"reference {n} words (an on-demand file is the cheap tier, "
+                "not a free one)",
+            )
         required = required_references(path, text)
         total = effective_words(path, text)
-        if total > SKILL_EFFECTIVE_MAX_WORDS:
-            named = ", ".join(ref.name for ref in required)
-            out.append(
-                Finding(
-                    3,
-                    rel(path.parent, root),
-                    f"{total} words per invocation (SKILL.md plus {named}, "
-                    "which its own steps say to read), over the "
-                    f"{SKILL_EFFECTIVE_MAX_WORDS} ceiling; make a reference "
-                    "genuinely conditional or split it",
-                )
-            )
+        named = ", ".join(ref.name for ref in required)
+        out += budget(
+            rel(path.parent, root),
+            total,
+            SKILL_EFFECTIVE_WARN_WORDS,
+            SKILL_EFFECTIVE_MAX_WORDS,
+            3,
+            f"{total} words per invocation (SKILL.md plus {named}, which its "
+            "own steps say to read; make a reference genuinely conditional or "
+            "split it)",
+        )
     return out
 
 
@@ -761,10 +825,28 @@ CHECKS = (
 
 
 def audit(root: Path = REPO_ROOT) -> list[Finding]:
+    """Every finding, failures and warnings together.
+
+    Callers that gate on the result must split them -- `partition` does it in
+    one place, and every caller uses that rather than re-deriving the
+    predicate. Returning only failures here was the obvious alternative and is
+    wrong: the config-audit skill reads this to see the whole picture, and a
+    warning invisible to the audit's own reader is a warning that cannot be
+    acted on.
+    """
     found: list[Finding] = []
     for check in CHECKS:
         found.extend(check(root))
     return sorted(found, key=lambda f: (f.principle, f.asset))
+
+
+def partition(
+    findings: list[Finding], strict: bool = False
+) -> tuple[list[Finding], list[Finding]]:
+    """(failures, warnings). `strict` promotes every warning to a failure."""
+    if strict:
+        return list(findings), []
+    return [f for f in findings if not f.warning], [f for f in findings if f.warning]
 
 
 def render(findings: list[Finding]) -> None:
@@ -772,6 +854,22 @@ def render(findings: list[Finding]) -> None:
         print("No principle violations.")
         return
     print(f"{len(findings)} finding(s):\n")
+    for f in findings:
+        print(f"  P{f.principle}  {f.asset}")
+        print(f"        {f.detail}")
+
+
+def render_warnings(findings: list[Finding]) -> None:
+    """Warnings print under their own heading and after the failures.
+
+    Separated in the output as well as in the exit code, because a warning
+    listed among failures reads as one -- and a reader who learns that some
+    lines under "finding(s)" do not fail the run stops trusting the ones that
+    do.
+    """
+    if not findings:
+        return
+    print(f"\n{len(findings)} warning(s) -- these do not fail the audit:\n")
     for f in findings:
         print(f"  P{f.principle}  {f.asset}")
         print(f"        {f.detail}")
@@ -1219,6 +1317,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="ASSET",
         help="print an asset's content hash, for writing a ledger entry",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail on warnings too, for an unsupervised run",
+    )
     args = parser.parse_args(argv)
 
     if args.owed:
@@ -1252,15 +1355,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     findings = audit()
+    # Warnings never reach triage: they are not ledgerable (see Finding), and
+    # asset_sha lookups for them would be work with nothing to decide.
+    # --strict promotes them instead, which is how the nightly reflect loop
+    # keeps the old hard behaviour: a soft band is a prompt to a human in the
+    # room, and an unsupervised agent does not have one.
+    failures, warnings = partition(findings, strict=args.strict)
     if args.no_ledger:
-        live, awaiting, suppressed = findings, [], []
+        live, awaiting, suppressed = failures, [], []
     else:
-        live, awaiting, suppressed = triage(findings, load_ledger())
+        live, awaiting, suppressed = triage(failures, load_ledger())
     if args.json:
         print(
             json.dumps(
                 {
                     "findings": [asdict(f) for f in live],
+                    "warnings": [asdict(f) for f in warnings],
                     "awaiting_regrant": [asdict(f) for f in awaiting],
                     "suppressed": [asdict(f) for f in suppressed],
                 },
@@ -1269,6 +1379,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         render(live)
+        render_warnings(warnings)
         if awaiting:
             print(
                 f"\n{len(awaiting)} ledgered exception(s) awaiting re-grant, on "
