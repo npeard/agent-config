@@ -124,6 +124,26 @@ Tier 0 is the expected outcome, not a failure. The ladder also points
 **downward**: a skill that turns out to be purely mechanical should
 become a hook or script and then be deleted.
 
+### A passing baseline is not yet evidence
+
+Tier 0 is often justified by running the scenario and watching it *not*
+fail. That has two possible meanings and they are opposite: the
+behaviour genuinely holds, or the scenario could not have exercised the
+failure. Before accepting the first, **name what the scenario would have
+had to contain in order to fail, and confirm it contained it.** One
+sentence, written before reading the result.
+
+This is the check that would have caught a real tier-0 error here: a
+Typst baseline passed and was read as "these frictions no longer
+reproduce", but it ran against the one project with no bibliography, no
+bra-ket notation and no prefixed multi-level numbering -- none of the
+things the frictions were about. A test with no power to fail proves
+nothing either way, and its silence is indistinguishable from success.
+
+The same shape appears when a search comes back empty: an absent
+declaration only rules out what the searched place could have contained.
+`AGENTS.md` carries that half as a rule; this is the version for tests.
+
 "Tests required" is not optional at tiers 1-2. An untested hook is how
 `promotion-check` silently never fired for months.
 
@@ -176,3 +196,4 @@ downward direction of the ladder needs.
 | "I'll write the new skill now"                                | `brainstorming` then `writing-skills`. Never freehand.      |
 | "Nothing crossed the bar, so I have nothing to report"        | Correct. Say so and stop.                                   |
 | "Tier 0 means I found nothing"                                | Tier 0 is the most common correct answer.                   |
+| "The baseline passed, so no artifact is needed"               | Could that scenario have failed? Name what it needed.       |

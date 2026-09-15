@@ -937,3 +937,49 @@ different artifact, and inventing a chat-style rule from an unsupported
 premise would be the worst outcome. Recorded so the original framing is not
 re-proposed.
 """
+
+[[decision]]
+class = "passing-check-read-as-evidence"
+source = "observed"
+date = "2026-09-15"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+Twice in one session a check that could not have produced the opposite
+result was reported as a finding, and the user caught both.
+
+First: eight empty mcpServers blocks read as "no Jupyter MCP server exists".
+The server was live on a dynamic port, published by a VS Code extension,
+registered in no config file -- so the searched place could never have
+contained it.
+
+Second: a Typst baseline passed and was read as "these frictions no longer
+reproduce". It ran against smi, which has no bibliography, no bra-ket
+notation and no prefixed multi-level numbering. The re-run on
+triple-correlation, which has all three, hit a silent failure immediately.
+
+Split diagnosis rather than one cause, because the fixes differ.
+
+The first is cause 3, rule-not-enforced, and gets tier 0. AGENTS.md's
+"absence of a declaration is not absence of a capability" already covers
+it, correctly worded, and was violated four hours after being written by
+its own author. Restating it louder is this skill's own red flag; prose
+compliance decaying is what the tier ladder already predicts, not new
+evidence that the rule is wrong.
+
+The second is cause 7 and lands in this skill, because nothing covered it.
+superpowers:writing-skills says to watch the baseline fail before writing,
+but never says what a *passing* baseline means -- and it has two opposite
+meanings: the behaviour holds, or the scenario had no power to fail. Tier 0
+decisions rest on exactly that evidence, so the question belongs where the
+tier is chosen.
+
+The fix is one testable question, not an exhortation to be careful: name
+what the scenario would have had to contain in order to fail, before
+reading the result. For the Typst case that sentence is one line long and
+would have caught it.
+
+No hook can reach either. Hooks fire on tool calls and session events; the
+defect is an inference drawn from a result, which no PreToolUse payload
+contains.
+"""
