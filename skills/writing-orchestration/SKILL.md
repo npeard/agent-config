@@ -65,7 +65,7 @@ so, re-classify. Nothing downgrades mid-task.
 | 2 Specify    | Interfaces and the tests that fix them           | An outline at paragraph granularity: each section's claim, its evidence, and its transition             |
 | 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                               |
 | 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; the reviewer reads that section and the outline, not the whole document            |
-| 5 Verify     | Run the command, read the output                 | Builds clean, no undefined `\ref` or `\cite`, `chktex` quiet, inside the page budget                    |
+| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst      |
 | 6 Review     | code-review, then standards-and-spec-review      | The three axes below, then `humanizer`, then re-verify the build                                        |
 | 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                               |
 
@@ -76,6 +76,20 @@ brief that causes the defect: an agent told to "retract the 9-38% claim"
 correctly produces a retraction slide, and the reader of that deck never
 held the claim. The superseded version belongs in the commit message and
 the chat. `CODING_STANDARDS.md` rule 11 carries the author-facing half.
+
+**Typst fails quietly where LaTeX fails loudly**, so step 5 needs a
+different bar. An undefined LaTeX `\ref` is a warning you can grep; an
+unresolved Typst citation renders as a visible marker and still exits 0,
+and content that outgrows a page just continues onto the next one with
+no diagnostic at all. There is no `chktex` equivalent and no
+warnings-as-errors flag. So a Typst project needs a build gate rather
+than an eyeball -- a page-count or overflow check the build runs -- and
+"it compiled" is not evidence. Where a project has that gate, trust it
+and say what it reported; where it does not, that gate is the first
+thing to add. Copy the conventions already in the document: a repo with
+a working theme has already decided the table idiom and the ASCII rule,
+and matching them is both cheaper and more consistent than deriving
+markup from LaTeX habits.
 
 **A markup conversion is a distinct task shape.** Porting a document
 between markup languages -- LaTeX to Typst, Markdown to LaTeX -- is not
