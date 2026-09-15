@@ -17,6 +17,13 @@
 #
 # `cause` comes from the reflect skill's taxonomy; `outcome` from its tier
 # ladder. `tier-0` -- no artifact created -- is the expected outcome.
+#
+# The claude-config -> agent-config rename (2026-09-15) expired three P5
+# entries by changing their bytes, which is the rule working as intended.
+# Each was re-granted after diffing the asset: friction.py and
+# prose-writing.py changed only the repo name, and audit-owed.py also gained
+# an AGENT_CONFIG_REPO/CLAUDE_CONFIG_REPO fallback, which does not touch the
+# read/emit boundary any of the three notes reason about.
 
 [[decision]]
 asset = "scripts/friction.py"
@@ -24,7 +31,7 @@ principle = 5
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "f25aa4532abcabff36c7e27df04c21ec4ccb2de2a398e3c509e023b55d74bd87"
+asset_sha = "6431dfc56904fb37e8264db195d572e6be68415e674adb4ae1ff4401e031e033"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
@@ -224,7 +231,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "4e5a25f988a7c026e3ad4be1a1847aeaf89f62f1bef3451bc08679d8aeb93a1c"
+asset_sha = "ff04f0de38e8d8bd2605533dfa221087c5455afe994acb6310e2d1fc4ce2c47b"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -274,7 +281,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "1950b380234e0b55c63bc2df2eb2bde4e4c3932aaa38bea4dd00ef87d260b717"
+asset_sha = "4d837d632d56ba1047efad9adcad30e237494bd95b897220b42594f48024e071"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
