@@ -54,8 +54,8 @@ def tokenize(request):
     return MODULES[request.param].tokenize
 
 
-WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\claude-config\AGENTS.md"
-POSIX_PATH = "/home/npeard/Documents/Projects/claude-config/AGENTS.md"
+WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\agent-config\AGENTS.md"
+POSIX_PATH = "/home/npeard/Documents/Projects/agent-config/AGENTS.md"
 
 
 def test_native_windows_path_survives_as_one_token(tokenize):

@@ -253,7 +253,7 @@ do not conflict and could run in parallel.
 
 ### Repository layout
 
-Recommendation: pathway A belongs in `claude-config`, since a
+Recommendation: pathway A belongs in `agent-config`, since a
 summarization skill plus a hook plus `burn.py` measurement is agent
 configuration in exactly this repository's sense. Pathway C belongs in a
 separate repository for the reasons above.

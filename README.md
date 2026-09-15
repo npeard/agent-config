@@ -1,4 +1,4 @@
-# claude-config
+# agent-config
 
 Personal, cross-project agent configuration: canonical `AGENTS.md` of
 operational preferences (workflow habits, verification philosophy,
@@ -14,15 +14,15 @@ conventions) -- they should not repeat what's here.
 macOS and Linux:
 
 ```
-git clone <remote-url> ~/Documents/Projects/claude-config
-~/Documents/Projects/claude-config/install.sh
+git clone <remote-url> ~/Documents/Projects/agent-config
+~/Documents/Projects/agent-config/install.sh
 ```
 
 Windows (PowerShell):
 
 ```
-git clone <remote-url> ~/Documents/Projects/claude-config
-~\Documents\Projects\claude-config\install.ps1
+git clone <remote-url> ~/Documents/Projects/agent-config
+~\Documents\Projects\agent-config\install.ps1
 ```
 
 Both are thin shims over `install.py`; run that directly with
@@ -283,8 +283,9 @@ and pricing remain separate and unchanged.
   `pixi run audit --clear-owed` is what ends it -- by stamping each
   obligation with the hash it was discharged against rather than
   deleting it, so an audit run too early re-opens by itself when the
-  asset next changes. `CLAUDE_CONFIG_REPO` overrides the install path
-  for a clone kept elsewhere.
+  asset next changes. `AGENT_CONFIG_REPO` overrides the install path for
+  a clone kept elsewhere (`CLAUDE_CONFIG_REPO` is still honored, so an
+  override predating the rename keeps working).
 - `hooks/agent-model.py` -- denies an `Agent` dispatch that omits
   `model` when the agent type is a catch-all (`general-purpose`,
   `claude`, or absent), because those inherit the session model and this

@@ -63,7 +63,7 @@ uncertainty, then state the assumption you made and continue.
 when starting fresh work; add `--check-updates` weekly rather than every
 session, since it costs a network round trip per hook repo. If the
 project has no such script, copy `scripts/preflight.py` from
-`claude-config`.
+`agent-config`.
 
 ### 1. Understand -- `superpowers:brainstorming`
 
@@ -222,7 +222,7 @@ the corrections that happened are still recallable. It is bar-gated, so
 most passes end with nothing to change -- which is a successful pass,
 not a wasted one.
 
-**And `config-audit` if the branch touched claude-config's own assets**
+**And `config-audit` if the branch touched agent-config's own assets**
 -- `.audit-owed` records that. A different question from `reflect`: not
 why something went wrong, but whether the system still earns its cost.
 

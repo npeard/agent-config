@@ -80,7 +80,7 @@ def canonical(path: str) -> str:
     return resolve(path).lower()
 
 
-MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/claude-config"))
+MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/agent-config"))
 SUFFIXES = (".tex", ".bib", ".md", ".txt", ".rst")
 
 # Files that are prose-shaped but are bookkeeping or configuration. OUTLINE.md
@@ -359,7 +359,7 @@ def relevant(path: str) -> bool:
     if not path.endswith(SUFFIXES):
         return False
     # The trailing slash matters: a bare prefix test would also swallow a
-    # sibling directory like "claude-config-other".
+    # sibling directory like "agent-config-other".
     if path.startswith(MASTER_REPO + "/"):
         return False
     # Asked of the platform rather than pattern-matched, because the temp

@@ -178,7 +178,7 @@ outcome = "tier-0"
 count_at_decision = 8
 note = """
 Genuine cause-1 friction, but not this repo's. Every occurrence is a PDF
-extraction binary (`pdftotext`, `mutool`) that claude-config has no use for;
+extraction binary (`pdftotext`, `mutool`) that agent-config has no use for;
 the tool belongs in whichever project reads PDFs, added to that project's own
 environment. Recording it here so it is not re-proposed against this repo,
 where installing poppler would be dependency weight nothing uses.
@@ -491,7 +491,7 @@ the reproduction in hand.
 class = "typst-build-integration-knowledge"
 source = "observed"
 date = "2026-09-11"
-cause = "claude-config-gap"
+cause = "agent-config-gap"
 outcome = "tier-0"
 note = """
 Building a Typst + Snakemake document pipeline surfaced a set of real,
@@ -505,7 +505,7 @@ image path resolve from a helper in lib/; smart punctuation turns source
 see either way; Snakemake has no conda-forge win-64 build but the PyPI
 wheels run fine for local --cores execution.
 
-Genuinely a gap -- nothing in claude-config covers this. But one project is
+Genuinely a gap -- nothing in agent-config covers this. But one project is
 one project, and the material is build integration rather than Typst
 authoring: nothing here touches scripting, bibliographies, cross-references
 or complex tables, so a skill written now would overclaim its scope and
@@ -536,12 +536,12 @@ The workflow-orchestration spine opens with `pixi run preflight` and closes
 with `pixi run friction` / `pixi run toolgaps`. None of the three exists as a
 task in the smi project, so step 0 and step 7 both failed with "command not
 found" and fell back to running the equivalents by hand. The scripts are here
-in claude-config and are tested; smi simply never adopted them.
+in agent-config and are tested; smi simply never adopted them.
 
 Cause 2, not cause 1: nothing is missing from the ecosystem, it is an
 installation gap in one project. The skill's own text anticipates this ("If
 the project has no such script, copy scripts/preflight.py from
-claude-config"), which is the tell -- a documented manual workaround for a
+agent-config"), which is the tell -- a documented manual workaround for a
 gap that keeps recurring is a sign the adoption step should be mechanical.
 
 Deliberately NOT done inside the branch that surfaced it. Copying the three

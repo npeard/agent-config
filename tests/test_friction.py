@@ -548,7 +548,7 @@ class TestLedgerSchema:
         "working-as-designed",
         "harness-constraint",
         "underspecified-task",
-        "claude-config-gap",
+        "agent-config-gap",
     }
 
     def entries(self) -> list[dict]:
@@ -714,13 +714,13 @@ class TestLedgerLocation:
     ):
         canonical = tmp_path / "friction-ledger.toml"
         canonical.write_text("")
-        monkeypatch.setattr(friction, "CLAUDE_CONFIG", tmp_path)
+        monkeypatch.setattr(friction, "AGENT_CONFIG", tmp_path)
         assert friction.ledger_path() == canonical
 
     def test_falls_back_to_this_checkout(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.setattr(friction, "CLAUDE_CONFIG", tmp_path / "absent")
+        monkeypatch.setattr(friction, "AGENT_CONFIG", tmp_path / "absent")
         assert friction.ledger_path().name == "friction-ledger.toml"
 
 

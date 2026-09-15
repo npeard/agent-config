@@ -28,16 +28,16 @@ arbitrariness from tier choice.
 | #   | Cause                 | Meaning                                                                          | Action                                          |
 | --- | --------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- |
 | 1   | `missing-tooling`     | The project lacks a standard tool, so nothing was ever going to catch this class | Adopt the idiomatic tool (tier 1-2)             |
-| 2   | `asset-not-adopted`   | claude-config already has a tested fix, just not installed here                  | Copy or adapt it (tier 2)                       |
+| 2   | `asset-not-adopted`   | agent-config already has a tested fix, just not installed here                   | Copy or adapt it (tier 2)                       |
 | 3   | `rule-not-enforced`   | A documented rule exists and was not followed                                    | Make it mechanical (tier 1), or accept (tier 0) |
 | 4   | `working-as-designed` | A tool caught something; one round trip bought a guarantee                       | Nothing (tier 0)                                |
 | 5   | `harness-constraint`  | The environment refuses, and says so where it happens                            | Nothing (tier 0)                                |
 | 6   | `underspecified-task` | Rework from ambiguity, not tooling. Downstream of a spec that never decided      | Fix the spec stage, not the code                |
-| 7   | `claude-config-gap`   | None of the above; the config genuinely does not cover this                      | Brainstorm a new feature (tier 3-4, gated)      |
+| 7   | `agent-config-gap`    | None of the above; the config genuinely does not cover this                      | Brainstorm a new feature (tier 3-4, gated)      |
 
 Check them in order. Cheap and mechanically-checkable causes come first;
-`claude-config-gap` is last so it is only reached after ruling out that
-a solution already exists.
+`agent-config-gap` is last so it is only reached after ruling out that a
+solution already exists.
 
 **Cause 6 is the one no script can reach** and the one most often
 mislabelled as a tooling problem. The tell is rework no tool could have
@@ -51,8 +51,8 @@ properly rather than patching with a quick rule.
 ## Diagnosing: look at what already exists
 
 Run `pixi run toolgaps`. It reports missing standard tooling (cause 1)
-and inventories claude-config's `scripts/`, `hooks/` and `skills/`
-(cause 2). Read the master `AGENTS.md` for rules that already cover the
+and inventories agent-config's `scripts/`, `hooks/` and `skills/` (cause
+2). Read the master `AGENTS.md` for rules that already cover the
 friction (cause 3).
 
 ### Then check for redundancy

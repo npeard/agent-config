@@ -442,7 +442,7 @@ class TestSpacedRepoPath:
     fixed for this; this is the same hazard on the read path.
     """
 
-    SPACED = Path("/Users/me/My Projects/claude-config")
+    SPACED = Path("/Users/me/My Projects/agent-config")
 
     @pytest.fixture(autouse=True)
     def _spaced_repo(self, monkeypatch: pytest.MonkeyPatch):

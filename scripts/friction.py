@@ -37,7 +37,7 @@ CODEX_CAPTURE_DIR = Path.home() / ".agents" / "analytics" / "codex-exec" / "v1"
 # relative to this file instead would give a copy of this script in another
 # project no ledger at all, and it would re-propose classes already decided
 # here while reading the very same evidence.
-CLAUDE_CONFIG = Path.home() / "Documents" / "Projects" / "claude-config"
+AGENT_CONFIG = Path.home() / "Documents" / "Projects" / "agent-config"
 
 # Only friction from the recent past is actionable. Lifetime counts mean a
 # class that crossed the bar once stays over it forever, so a fixed problem
@@ -146,8 +146,8 @@ SOURCES = (TRANSCRIPT, OBSERVED)
 
 
 def ledger_path() -> Path:
-    """The canonical ledger, preferring claude-config over this checkout."""
-    canonical = CLAUDE_CONFIG / "friction-ledger.toml"
+    """The canonical ledger, preferring agent-config over this checkout."""
+    canonical = AGENT_CONFIG / "friction-ledger.toml"
     if canonical.is_file():
         return canonical
     return Path(__file__).resolve().parent.parent / "friction-ledger.toml"

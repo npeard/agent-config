@@ -34,7 +34,7 @@ from pathlib import Path
 
 # Where cross-project tooling lives, by this setup's convention. Absent on a
 # machine that has not cloned it, which is not an error.
-CLAUDE_CONFIG = Path.home() / "Documents" / "Projects" / "claude-config"
+AGENT_CONFIG = Path.home() / "Documents" / "Projects" / "agent-config"
 
 # Capability -> substrings that evidence it. Matched against a blob built
 # from filenames, pre-commit hook ids, and task/dependency names, so one
@@ -178,7 +178,7 @@ def gaps(root: Path) -> list[tuple[str, str]]:
     return out
 
 
-def assets(config: Path = CLAUDE_CONFIG) -> dict[str, list[str]]:
+def assets(config: Path = AGENT_CONFIG) -> dict[str, list[str]]:
     """Reusable tooling already available to copy or adapt.
 
     This is what makes "an asset already solves this, it just is not
@@ -220,7 +220,7 @@ def render(root: Path, show_assets: bool) -> None:
     inventory = assets()
     if not inventory:
         return
-    print("\nAvailable in claude-config to copy or adapt:")
+    print("\nAvailable in agent-config to copy or adapt:")
     for label, names in inventory.items():
         print(f"  {label:8} {', '.join(names)}")
     print("Prefer adapting one of these over writing something new; if more")
@@ -231,7 +231,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="machine-readable")
     parser.add_argument(
-        "--no-assets", action="store_true", help="skip the claude-config inventory"
+        "--no-assets", action="store_true", help="skip the agent-config inventory"
     )
     args = parser.parse_args(argv)
 
@@ -244,7 +244,7 @@ def main(argv: list[str]) -> int:
                     "present": {n: f for n, f in rows if f},
                     "gaps": [n for n, f in rows if not f],
                     # Honour --no-assets here too: a caller passing it is
-                    # asking us not to touch claude-config at all.
+                    # asking us not to touch agent-config at all.
                     "assets": {} if args.no_assets else assets(),
                 }
             )

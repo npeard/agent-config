@@ -5,7 +5,7 @@ optional payload on stdout -- like the other hook tests here.
 
 Unlike promotion-check.py this hook reads git state and writes a marker file, so
 the tests give it a temporary tree. It resolves its root per call in
-master_repo(), and run_hook drives it through CLAUDE_CONFIG_REPO; one test
+master_repo(), and run_hook drives it through AGENT_CONFIG_REPO; one test
 deliberately unsets that to exercise the expanduser default, so the documented
 install path cannot rot.
 """
@@ -27,7 +27,7 @@ HOOK = REPO_ROOT / "hooks" / "audit-owed.py"
 MARKER = ".audit-owed"
 # What os.path.expanduser reads for "~" on this platform. Only the one test
 # that exercises the un-overridden default needs it; everywhere else
-# CLAUDE_CONFIG_REPO names the fixture outright, which is why the hook has no
+# AGENT_CONFIG_REPO names the fixture outright, which is why the hook has no
 # second override to keep in step.
 HOME_VAR = "USERPROFILE" if os.name == "nt" else "HOME"
 
@@ -35,7 +35,7 @@ HOME_VAR = "USERPROFILE" if os.name == "nt" else "HOME"
 @pytest.fixture
 def fake_master(tmp_path: Path, git_repo_factory) -> Path:
     """A repo at the path the hook computes from a patched HOME."""
-    repo = tmp_path / "Documents" / "Projects" / "claude-config"
+    repo = tmp_path / "Documents" / "Projects" / "agent-config"
     repo.parent.mkdir(parents=True)
     git_repo_factory(repo)
     return repo
@@ -73,13 +73,13 @@ def commit(repo: Path, relative: str, body: str = "x\n") -> None:
 
 
 def run_hook(payload, home: Path, repo: Path | None = None) -> str:
-    # CLAUDE_CONFIG_REPO names the fixture outright rather than steering the
+    # AGENT_CONFIG_REPO names the fixture outright rather than steering the
     # hook through a patched home. The hook resolves "~" with expanduser,
     # whose variable differs by platform, so a home patch would be one more
     # thing to keep in step for no gain.
     env = {**os.environ}
-    env["CLAUDE_CONFIG_REPO"] = str(
-        repo if repo else home / "Documents/Projects/claude-config"
+    env["AGENT_CONFIG_REPO"] = str(
+        repo if repo else home / "Documents/Projects/agent-config"
     )
     result = subprocess.run(
         [sys.executable, str(HOOK)],
@@ -166,10 +166,10 @@ class TestFiring:
     def test_a_sibling_directory_is_not_the_master_repo(
         self, fake_master, tmp_path, git_repo_factory
     ):
-        """A bare prefix test would swallow claude-config-other."""
+        """A bare prefix test would swallow agent-config-other."""
         commit(fake_master, "scripts/x.py")
         sibling = git_repo_factory(
-            tmp_path / "Documents" / "Projects" / "claude-config-other"
+            tmp_path / "Documents" / "Projects" / "agent-config-other"
         )
         commit(sibling, "scripts/y.py")
         assert run_hook(payload(sibling), tmp_path) == ""
@@ -300,7 +300,7 @@ class TestWiring:
         """
         commit(fake_master, "scripts/x.py")
         env = {**os.environ, HOME_VAR: str(tmp_path)}
-        env.pop("CLAUDE_CONFIG_REPO", None)
+        env.pop("AGENT_CONFIG_REPO", None)
         result = subprocess.run(
             [sys.executable, str(HOOK)],
             input=json.dumps(payload(fake_master)),
@@ -328,7 +328,7 @@ class TestWiring:
         """
         commit(fake_master, "scripts/x.py")
         env = {**os.environ, HOME_VAR: str(tmp_path), "HOME": "/c/nonexistent"}
-        env.pop("CLAUDE_CONFIG_REPO", None)
+        env.pop("AGENT_CONFIG_REPO", None)
         result = subprocess.run(
             [sys.executable, str(HOOK)],
             input=json.dumps(payload(fake_master)),
@@ -403,7 +403,7 @@ class TestCommitShapes:
 
     def test_a_root_commit_is_seen(self, tmp_path):
         """A parentless commit reports no paths without --root."""
-        repo = tmp_path / "Documents" / "Projects" / "claude-config"
+        repo = tmp_path / "Documents" / "Projects" / "agent-config"
         repo.mkdir(parents=True)
         run_git(repo, "init", "-q", "-b", "main", ".")
         run_git(repo, "config", "user.email", "t@e.invalid")
@@ -426,7 +426,7 @@ class TestLegacyMarker:
         assert fired(out)
         context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         assert context.count("scripts/x.py") == 1
-        assert "1 claude-config asset(s)" in context
+        assert "1 agent-config asset(s)" in context
 
     def test_an_unscoped_line_still_counts_as_owed(self, fake_master, tmp_path):
         """The safe reading of an obligation with no recorded owner is that it
@@ -653,7 +653,7 @@ class TestConcurrentWrites:
             "".join(f"old/{n}\tskills/s{n}/SKILL.md\n" for n in range(50_000))
         )
 
-        env = {**os.environ, "CLAUDE_CONFIG_REPO": str(fake_master)}
+        env = {**os.environ, "AGENT_CONFIG_REPO": str(fake_master)}
         # Started before any stdin is written, so all eight are already past
         # interpreter startup and blocked on the read when the payloads land.
         # Handing each its payload at spawn time would stagger them by the

@@ -70,10 +70,11 @@ def exclusive(fd: int):
 def master_repo() -> str:
     """Where this config lives, resolved.
 
-    CLAUDE_CONFIG_REPO wins when set. The default is the path the README's
-    install instructions use, but hardcoding only that makes the hook dead
-    for anyone who cloned elsewhere -- and CLAUDE_CONFIG_REPO is also how the
-    tests point it at a fixture, which is why it is the only override.
+    AGENT_CONFIG_REPO wins when set, with CLAUDE_CONFIG_REPO honored after
+    it so an existing override keeps working across the rename. The default
+    is the path the README's install instructions use, but hardcoding only
+    that makes the hook dead for anyone who cloned elsewhere -- and the
+    override is also how the tests point it at a fixture.
 
     "~" is left to os.path.expanduser, which prefers USERPROFILE on Windows.
     Substituting HOME ahead of it was tried and reverted: Git Bash and MSYS2
@@ -82,12 +83,16 @@ def master_repo() -> str:
     master_repo() name a directory that does not exist -- so the hook
     silently never fires, the exact failure it is supposed to avoid.
 
-    expanduser wraps the whole expression rather than only the default: a
-    CLAUDE_CONFIG_REPO of "~/Documents/Projects/claude-config" -- the form
+    expanduser wraps the whole expression rather than only the default: an
+    AGENT_CONFIG_REPO of "~/Documents/Projects/agent-config" -- the form
     the README's own install path invites -- would otherwise resolve to a
     literal "~" directory and the hook would silently never fire.
     """
-    path = os.environ.get("CLAUDE_CONFIG_REPO") or "~/Documents/Projects/claude-config"
+    path = (
+        os.environ.get("AGENT_CONFIG_REPO")
+        or os.environ.get("CLAUDE_CONFIG_REPO")
+        or "~/Documents/Projects/agent-config"
+    )
     return os.path.realpath(os.path.expanduser(path))
 
 
@@ -436,7 +441,7 @@ def main() -> None:
     # a sibling worktree of this repo is recognized as this repo. A cwd that is
     # not a git repo at all yields "" and declines: no commit happened there.
     # The trailing separator stops a bare prefix test from also swallowing a
-    # sibling directory like "claude-config-other", or a worktree named one.
+    # sibling directory like "agent-config-other", or a worktree named one.
     checkout, branch = checkout_and_branch(resolved)
     if not checkout:
         return
@@ -544,7 +549,7 @@ def main() -> None:
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "additionalContext": (
-                        f"This branch has changed {len(owed)} claude-config "
+                        f"This branch has changed {len(owed)} agent-config "
                         f"asset(s) ({listed}{more}). Before integrating, run "
                         "`pixi run audit` and invoke the config-audit skill "
                         "once -- not once per commit, then "

@@ -109,7 +109,7 @@ def _command_paths(command):
     """Every substring of a legacy joined command that could be a script path.
 
     Not `.split()`: a joined command is one shell string, so a path inside it
-    may contain spaces -- "/Users/me/My Projects/claude-config/hooks/
+    may contain spaces -- "/Users/me/My Projects/agent-config/hooks/
     notify.py" splits into three fragments, none of them a path, and the hook
     then reads as unregistered. That is the same space hazard the
     command+args form was introduced to end, seen from the read side, and it

@@ -35,7 +35,7 @@ def write_skill(
 
 @pytest.fixture
 def fake_root(tmp_path: Path) -> Path:
-    """A minimal repo shaped like claude-config, with nothing wrong in it."""
+    """A minimal repo shaped like agent-config, with nothing wrong in it."""
     (tmp_path / "skills").mkdir()
     (tmp_path / "scripts").mkdir()
     (tmp_path / "hooks").mkdir()

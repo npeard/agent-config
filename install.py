@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Install claude-config's host adapters. Safe to re-run, on any platform.
+"""Install agent-config's host adapters. Safe to re-run, on any platform.
 
 Ported from install.sh, which could not run outside a POSIX shell and whose
 `ln -s` silently deep-copied on Windows -- printing "Linked ..." for a copy

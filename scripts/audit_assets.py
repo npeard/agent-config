@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Audit this repo's own assets against the five agent-asset principles.
 
-Specific to claude-config, like register_hooks.py and unlike the other
+Specific to agent-config, like register_hooks.py and unlike the other
 scripts here: it knows this repo's layout (skills/, scripts/, hooks/,
 AGENTS.md) rather than describing a capability every project has, so it is
 not meant to be copied elsewhere verbatim.

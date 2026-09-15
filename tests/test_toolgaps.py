@@ -146,7 +146,7 @@ class TestRepoRoot:
 class TestNoAssetsFlag:
     def test_honoured_in_json_output(self, capsys: pytest.CaptureFixture):
         """A caller passing --no-assets is asking us not to touch the
-        claude-config directory; the json path ignored it."""
+        agent-config directory; the json path ignored it."""
         import json as _json
 
         toolgaps.main(["--json", "--no-assets"])

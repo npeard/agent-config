@@ -26,7 +26,7 @@ HOOK = Path(__file__).resolve().parent.parent / "hooks" / "prose-writing.py"
 # on any other machine and every self-guard case would fail while the hook was
 # behaving correctly.
 PROJECTS = Path.home() / "Documents" / "Projects"
-MASTER = str(PROJECTS / "claude-config")
+MASTER = str(PROJECTS / "agent-config")
 THESIS = str(PROJECTS / "stanford-thesis")
 PAPER = str(PROJECTS / "dispersion-engineering")
 
@@ -158,7 +158,7 @@ class TestSilentOnEverythingElse:
 
 
 class TestMasterRepoSelfGuard:
-    """Writing a skill in claude-config is config work, not prose work, and
+    """Writing a skill in agent-config is config work, not prose work, and
     promotion-check.py already speaks there. Two advisories on one write is
     how a hook teaches people to ignore hooks."""
 
@@ -177,7 +177,7 @@ class TestMasterRepoSelfGuard:
         assert not fired(write(path), tmp_path), path
 
     def test_sibling_with_shared_prefix_still_fires(self, tmp_path: Path):
-        """`claude-config-other` is not inside `claude-config`; a plain
+        """`agent-config-other` is not inside `agent-config`; a plain
         startswith without the separator would swallow it."""
         assert fired(write(f"{MASTER}-other/main.tex"), tmp_path)
 

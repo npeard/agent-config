@@ -25,7 +25,7 @@ HOOK = Path(__file__).resolve().parent.parent / "hooks" / "promotion-check.py"
 # README documents -- and every self-guard case would fail while the hook was
 # behaving correctly.
 PROJECTS = Path.home() / "Documents" / "Projects"
-MASTER = str(PROJECTS / "claude-config")
+MASTER = str(PROJECTS / "agent-config")
 OTHER = str(PROJECTS / "other-project")
 
 
@@ -132,7 +132,7 @@ class TestMasterRepoSelfGuard:
         assert not fired(write(path)), path
 
     def test_sibling_with_shared_prefix_still_fires(self):
-        """`claude-config-other` is not inside `claude-config`; a plain
+        """`agent-config-other` is not inside `agent-config`; a plain
         startswith without the separator would swallow it."""
         assert fired(write(f"{MASTER}-other/CLAUDE.md"))
 
@@ -169,7 +169,7 @@ class TestInstalledSymlinkPaths:
         would notice. link_dir is the installer's own primitive -- a junction
         on Windows, a symlink elsewhere -- and needs elevation on neither.
         """
-        master = tmp_path / "Documents" / "Projects" / "claude-config"
+        master = tmp_path / "Documents" / "Projects" / "agent-config"
         (master / "skills" / "quantikz").mkdir(parents=True)
         (master / "skills" / "quantikz" / "SKILL.md").write_text("x", encoding="utf-8")
         installed = tmp_path / ".claude" / "skills"
@@ -180,7 +180,7 @@ class TestInstalledSymlinkPaths:
     def test_still_fires_for_a_link_outside_the_master_repo(self, tmp_path: Path):
         """The other half of the same contract: resolving links must not turn
         into resolving them away, or the hook goes silent for everything."""
-        master = tmp_path / "Documents" / "Projects" / "claude-config"
+        master = tmp_path / "Documents" / "Projects" / "agent-config"
         master.mkdir(parents=True)
         elsewhere = tmp_path / "other-project" / "skills" / "quantikz"
         elsewhere.mkdir(parents=True)

@@ -109,8 +109,7 @@ question whose "ship as-is" answer is viable: take it, raise it at step
 - **Promote general taste to this repo.** If a preference, skill, script
   or hook would hold across projects rather than being tied to one
   project's domain or tooling, it belongs in
-  `~/Documents/Projects/claude-config`, not only in project-local
-  memory.
+  `~/Documents/Projects/agent-config`, not only in project-local memory.
 
 ## Coding standards
 
@@ -144,8 +143,8 @@ changes there and not here.
 - **Build new tools when a correction recurs.** If you keep re-fixing
   the same class of error, add the check to the project's CD workflow.
   Generic tools worth reusing across projects live in
-  `~/Documents/Projects/claude-config/scripts/` -- copy from there
-  rather than rewriting one that has already been built.
+  `~/Documents/Projects/agent-config/scripts/` -- copy from there rather
+  than rewriting one that has already been built.
 
 ## Verification & perf philosophy
 

@@ -26,7 +26,7 @@ def canonical(path: str) -> str:
     return os.path.realpath(os.path.normpath(path)).replace(os.sep, "/").lower()
 
 
-MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/claude-config"))
+MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/agent-config"))
 PATTERNS = (
     "*/agents.md",
     "*/claude.md",
@@ -232,7 +232,7 @@ MESSAGE = (
     "You just wrote an AGENTS.md, CLAUDE.md, memory, or skill file. Check: is this "
     "preference or skill general engineering or workflow taste that holds "
     "across projects, rather than local domain or tooling detail? If "
-    "general, also add it to ~/Documents/Projects/claude-config (master "
+    "general, also add it to ~/Documents/Projects/agent-config (master "
     "AGENTS.md or skills/) and commit there."
 )
 
@@ -244,7 +244,7 @@ def promotable(file_path: str) -> bool:
     # forward slashes, so a raw startswith/fnmatch silently never matches.
     path = canonical(file_path)
     # The trailing slash matters: a bare prefix test would also swallow a
-    # sibling directory like "claude-config-other".
+    # sibling directory like "agent-config-other".
     if path.startswith(MASTER_REPO + "/"):
         return False
     # fnmatchcase, not fnmatch: both sides are already lowercased above, so
