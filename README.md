@@ -146,6 +146,12 @@ and pricing remain separate and unchanged.
 - `skills/math/` -- state each equation's provenance unprompted, know
   what a CAS can and cannot verify about it, and derive once rather than
   twice at two rigour levels.
+- `skills/typst/` -- the Typst traps that compile at exit 0 and render
+  wrong: numbering patterns that break references, silent overflow,
+  `vec` where an arrow was meant, subequations. Split loud failures
+  (which the compiler already teaches) from silent ones (which need a
+  rule), and states what to verify in the render rather than the exit
+  code. Claims are marked verified-on-0.15.1 or reported.
 - `install.py` -- creates/repairs both host adapters and skill links,
   then registers the current Claude Code and Codex lifecycle hooks; the
   actual installer behind both shims below.
