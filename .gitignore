@@ -4,3 +4,5 @@ __pycache__/
 .audit-owed
 .pixi
 .superpowers/
+.nightly-brief
+.nightly-log

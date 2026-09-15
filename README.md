@@ -93,6 +93,7 @@ pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
 pixi run audit                      # agent-asset principle breaches
                                     #   (--strict fails on warnings too)
+pixi run nightly                    # gate an unattended improvement pass
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
@@ -138,6 +139,13 @@ and pricing remain separate and unchanged.
   long-running GPU, cluster, batch, and simulation jobs. It keeps
   process identity, cleanup, and output protection mechanisms in each
   owning project rather than guessing at arbitrary running processes.
+- `skills/notebooks/` -- which tool to reach for on a `.ipynb`, how to
+  find the notebook MCP server that no config file lists, and why a
+  measured result belongs in cell output rather than markdown prose. The
+  baseline that motivated it cost 823 tool calls for one notebook.
+- `skills/math/` -- state each equation's provenance unprompted, know
+  what a CAS can and cannot verify about it, and derive once rather than
+  twice at two rigour levels.
 - `install.py` -- creates/repairs both host adapters and skill links,
   then registers the current Claude Code and Codex lifecycle hooks; the
   actual installer behind both shims below.
@@ -202,6 +210,18 @@ and pricing remain separate and unchanged.
   needs. The first run's answer, recorded in the docstring, was that it
   would not: the largest reads wanted the file contents they fetched, so
   a check there redirects the cost instead of removing it.
+- `scripts/nightly.py` -- the gate on an unattended improvement pass, as
+  `pixi run nightly`. It runs `friction`, `audit --strict` and
+  `toolgaps`, none of which spend model context, and exits without
+  staging anything unless one crossed a bar it already owned. When one
+  did, it writes `.nightly-brief` naming what and stops: a model reads
+  that brief in a fresh session, runs `reflect`, and proposes a diff on
+  a branch that a human merges or discards. It will not stage a second
+  brief while the first is unread, and it fails loudly rather than
+  reading a crashed instrument as silence. The gate is the artifact --
+  asked what was frustrating, a model always answers, and SkillOpt
+  measured an ungated version of this loop falling from 0.554 to 0.026
+  over five nights while its gated twin lost nothing.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
