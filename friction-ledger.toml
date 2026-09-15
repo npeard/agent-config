@@ -695,26 +695,28 @@ equation is the defect.
 class = "typst-authoring-knowledge"
 source = "observed"
 date = "2026-09-15"
-cause = "working-as-designed"
-outcome = "tier-0"
+cause = "agent-config-gap"
+outcome = "tier-3"
 note = """
 Reopening the 2026-09-11 typst-build-integration-knowledge decision, whose
 stated condition was "build the asset when a second Typst project shows
 which parts actually generalize". Triple-correlation is that second project,
 so the condition was met and the question was asked again.
 
-Still tier 0, now on stronger evidence. A baseline run added a slide and a
-subsection with an equation and a table to smi's report: first attempt
-compiled clean, zero warnings, the page-count gate passed, and it verified
-one-page fit two independent ways. It met none of the 14 researched
-frictions, and said why -- it copied the table idiom, the math delimiters
-and the ASCII convention from adjacent markup rather than deriving them from
-LaTeX habits.
+Tier 3, skills/typst -- reversing a tier-0 call made earlier the same day
+and recorded here before it was checked.
 
-That is the earlier note's own argument, confirmed by test: the knowledge
-lives as working code a second project copies from, which is a better
-starting point than prose describing it. The frictions were discovered
-*building* the infrastructure and do not reproduce once it exists.
+That call rested on a baseline against smi, which has no bibliography, no
+chevron/vv/bra-ket helpers, no supplement suppression, and pattern-string
+numbering at a single level. It could not have reproduced the frictions it
+was read as evidence against; all of them live in triple-correlation. The
+re-run there hit a real one immediately -- a sub-equation pair rendering
+(S51)/(S51b) instead of (S51a)/(S51b), invisible at exit 0.
+
+Treating a passing test as evidence when the test could not fail is the
+same error as reading an empty config file as proof no server exists. Both
+happened in this session, which is why the AGENTS.md rule about probing
+before concluding absence is worded about conclusions rather than configs.
 
 What did land is not skill-shaped: writing-orchestration's step 5 verify bar
 still said "chktex quiet", which names a tool Typst has no equivalent of.
