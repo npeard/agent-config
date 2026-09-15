@@ -380,10 +380,22 @@ class TestCli:
         assert burn.main(["--json"]) == 0
         assert json.loads(capsys.readouterr().out) == burn.summary({})
 
-    def test_report_states_the_rates_it_used(self):
+    def test_report_states_the_rates_it_used(self, capsys, monkeypatch, tmp_path):
         """A stale PRICING table is the one way this is confidently wrong, so
-        the assumption must travel with the number."""
-        assert "rates per Mtok" in self.run("--since", "1")
+        the assumption must travel with the number.
+
+        Driven through a synthetic transcript rather than whatever this machine
+        happens to hold. Reading the real directory made the assertion depend
+        on the developer having used Claude recently: it passed locally and
+        failed on every CI runner, where `burn` correctly reports that there is
+        nothing to price. A test that cannot run on a clean checkout is testing
+        the machine.
+        """
+        path = tmp_path / "-proj" / "s.jsonl"
+        write_transcript(path, [turn(out=1000)])
+        monkeypatch.setattr(burn, "transcript_files", lambda project: [(path, False)])
+        assert burn.main([]) == 0
+        assert "rates per Mtok" in capsys.readouterr().out
 
     def test_exit_status_is_zero_because_this_is_a_report(self):
         subprocess.run(
