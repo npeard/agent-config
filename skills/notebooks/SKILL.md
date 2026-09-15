@@ -69,10 +69,30 @@ curl -s -X POST http://127.0.0.1:<port>/mcp \
        "clientInfo":{"name":"probe","version":"1"}}}'
 ```
 
-A `serverInfo.name` of `notebook-mcp-server` confirms it. If nothing
-answers, the extension is not running: **ask the user to start it**
-rather than falling back to raw JSON. VS Code owns its lifecycle, so
-there is nothing for you to launch.
+A `serverInfo.name` of `notebook-mcp-server` confirms it. Three
+outcomes, and the middle one is the common one:
+
+- **`notebook_*` tools available.** Use them.
+- **The port answers but no `notebook_*` tool is in your tool index.**
+  The extension registered against a different VS Code window than the
+  one backing this session. Report that specifically -- "the server is
+  live on port N but not wired to this session" -- because "no MCP
+  server" would send the user looking for the wrong problem. Fall back
+  to `NotebookEdit` for cells, and say the smoke test could not run.
+- **Nothing answers.** The extension is not running: ask the user to
+  start it. VS Code owns its lifecycle; there is nothing for you to
+  launch.
+
+Never fall back to raw JSON in any of the three. `NotebookEdit` needs an
+existing file, so a brand-new notebook does need a minimal nbformat
+envelope (`cells: []` plus kernelspec) written once -- that is the one
+sanctioned exception, and every cell after it goes through the tools.
+
+Without an execution tool you cannot smoke-test. **Say so plainly and
+leave the notebook un-executed** rather than asserting results you did
+not see. `mcp__ide__executeCode` only reaches a notebook already open as
+an editor tab, so it returns "No active notebook editor found" for a
+file you just created.
 
 ## Markdown prose describes the method, never the run
 
