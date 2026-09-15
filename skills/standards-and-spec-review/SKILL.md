@@ -43,9 +43,9 @@ inside a subagent, and review cost would stop being linear in phases.
    branch. Record `git log <fixed-point>..HEAD --oneline`. Stop if the
    diff is empty; say so rather than reviewing nothing.
 2. **Load the standards.** Read `CODING_STANDARDS.md` next to this file
-   -- the ten house rules with examples, and the classic smell set as a
-   fallback lens. Then layer the project's own `CODING_STANDARDS.md` or
-   `CLAUDE.md` on top; project rules win where they disagree. Both
+   -- the twelve house rules with examples, and the classic smell set as
+   a fallback lens. Then layer the project's own `CODING_STANDARDS.md`
+   or `CLAUDE.md` on top; project rules win where they disagree. Both
    binding rules for applying them live in that file, including the one
    that saves the most attention: skip whatever tooling already
    enforces.

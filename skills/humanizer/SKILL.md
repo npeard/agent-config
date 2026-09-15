@@ -12,6 +12,14 @@ description: |-
 Rewrite AI-sounding text so it reads like the writer, not a chatbot. Do
 not change what it says or make up details.
 
+**Do not run on a markup conversion.** When prose is being ported
+between markup languages -- LaTeX to Typst, Markdown to LaTeX -- and the
+text is already published or already reviewed, rewriting it during the
+port is a defect, not an improvement. The port's contract is that only
+the markup changed, so a reviewer diffing the two renderings must see
+only markup. Prose *newly drafted* inside a converted document is in
+scope as usual; text carried across unchanged is not.
+
 The patterns below come from Wikipedia's
 ["Signs of AI writing"](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing),
 maintained by WikiProject AI Cleanup.

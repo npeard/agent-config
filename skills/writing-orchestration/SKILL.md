@@ -69,6 +69,22 @@ so, re-classify. Nothing downgrades mid-task.
 | 6 Review     | code-review, then standards-and-spec-review      | The three axes below, then `humanizer`, then re-verify the build                                        |
 | 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                               |
 
+**A revision replaces the claim it revises.** When a phase overturns an
+earlier conclusion, the spec says *replace claim X with Y* -- never *add
+a retraction of X*. This is the orchestrator's rule because it is the
+brief that causes the defect: an agent told to "retract the 9-38% claim"
+correctly produces a retraction slide, and the reader of that deck never
+held the claim. The superseded version belongs in the commit message and
+the chat. `CODING_STANDARDS.md` rule 11 carries the author-facing half.
+
+**A markup conversion is a distinct task shape.** Porting a document
+between markup languages -- LaTeX to Typst, Markdown to LaTeX -- is not
+drafting. Its contract is that only the markup changed, so the three
+review axes below do not apply to text carried across, and `humanizer`
+must not run on it. Verify a conversion by diffing the two *renderings*,
+not by re-judging the prose. Newly drafted sections inside a converted
+document are ordinary prose and take the full step 6.
+
 Step 2 is where prose most often goes wrong. An outline that lists
 section *topics* has decided nothing; one that states each section's
 claim and the evidence for it has done the actual thinking, and drafting

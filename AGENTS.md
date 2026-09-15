@@ -145,12 +145,23 @@ changes there and not here.
   Generic tools worth reusing across projects live in
   `~/Documents/Projects/agent-config/scripts/` -- copy from there rather
   than rewriting one that has already been built.
+- **A correction replaces the claim it corrects** -- no retraction kept
+  in a deliverable. This binds the spec stage, where it starts.
+- **DRY forbids duplicated intent**, not only duplicated lines.
 
 ## Verification & perf philosophy
 
 - **De-risk speculative performance work first.** Run a validation
   phase, show the results plainly regardless of outcome, and pause for
   explicit approval before continuing to implementation.
+
+- **Absence of a declaration is not absence of a capability.** Before
+  reporting that a tool, server, package or feature does not exist,
+  probe the live system -- query the endpoint, list the registry, run
+  the command -- and say which check you ran, so "not found" is
+  falsifiable. Config files, docs and core APIs all under-report: a
+  server can be listening on a port no config names, and a feature
+  missing from a core library can be shipped by a package.
 
 - **Stopping a background job does not stop what it spawned.** Killing a
   shell wrapper leaves its children running detached. Harmless for a

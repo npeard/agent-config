@@ -164,11 +164,74 @@ than rewriting one that has already been built and tested; if more than
 one looks relevant, check whether they duplicate a concept before
 adopting both.
 
+## 11. A correction replaces the claim it corrects
+
+A deliverable states the current understanding. It does not narrate the
+route there. Code, comments, reports, slides, notebooks -- all are read
+by someone who never held the earlier belief, and spending their
+attention on a retracted claim teaches them a wrong thing first and then
+unteaches it.
+
+```python
+# Flag
+# We previously computed this with a global fit, which explained only
+# 9-38% of the variance. That conclusion was an artifact of the fit, not
+# the model, so we now window it.
+resid = windowed_residual(trace)
+
+# Prefer: state why the current method is the right one
+# Windowed because a shot's fringe phase drifts 1-2.7 fringes within one
+# record, which no single global phase can absorb.
+resid = windowed_residual(trace)
+```
+
+The previous conclusion belongs in the session chat, the commit message,
+and the PR description -- all addressed to someone who was there. A
+"Retraction" section in a report, or a retraction slide in a deck, is
+the clearest form of the error: it is a whole unit of attention spent on
+a claim the reader never had.
+
+This binds the spec stage too, which is where it usually originates:
+specify *replace claim X with Y*, never *add a retraction of X*. An
+agent that writes a retraction slide is often following its brief
+correctly.
+
+Carve-out: a bug reproducer or a regression test legitimately records a
+wrong past value, because the wrongness is the subject. Naming the
+superseded value is then the point, not residue.
+
+## 12. DRY forbids duplicated intent, not just duplicated lines
+
+Two functions computing one quantity by different methods are a
+violation even with no shared text. The tell is a comment asserting that
+two implementations agree.
+
+```python
+# Flag: three routes to one least-squares fit, kept in step by hand
+def fit_phase(theta, y): ...          # lstsq on [cos, sin, 1]
+def windowed_residual(theta, y): ...  # same design matrix, per window
+def measure_drift(theta, y):          # same fit, normal equations
+    # Same (a, b) -> phase convention as fit_phase.
+    ...
+
+# Prefer: one solver, three callers
+def fit_phase(theta, y, /, *, weights=None): ...
+```
+
+A comment that a convention must match across implementations is a
+request for a human to do a compiler's job, and it is the thing that
+silently breaks when one side changes.
+
+Graded by layer. Strict in core library code. Relaxed in notebooks,
+examples and one-off scripts, which are transient by design and whose
+readability for a human experimenter outranks factoring -- see the
+notebooks skill for that carve-out.
+
 ## Fallback lens: the classic smells
 
-Weaker signals than the ten rules above -- prefer a concrete rule when
-one applies. All are judgement calls; distinguish a hard violation from
-a matter of taste, and say which you are reporting. From Fowler,
+Weaker signals than the twelve rules above -- prefer a concrete rule
+when one applies. All are judgement calls; distinguish a hard violation
+from a matter of taste, and say which you are reporting. From Fowler,
 *Refactoring*, ch. 3.
 
 | Smell                                         | Definition                                                             | Usual remedy                                          |
