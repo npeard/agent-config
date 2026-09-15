@@ -86,6 +86,23 @@ something still earning its place -- so a failing budget test is a
 reason to run this check across every asset, not just the ones one
 friction made relevant.
 
+**The warn band routes here.** Each budget in `audit_assets.py` has two
+bands: crossing the lower one prints a warning and does not fail, and
+`pixi run audit` asks three questions when it does. They are this
+skill's questions, which is why the checker asks rather than decides --
+"useless prose" is not mechanically definable:
+
+1. Is it duplicated prose, or duplicated *intent*, with an existing
+   asset? Run the redundancy check above and consolidate.
+2. Does it add context, or reinforce behaviour that decays without it?
+   Neither means it is waste.
+3. Does it belong in a lower tier -- a reference file, a hook, a script
+   -- or a new skill, rather than more prose here?
+
+A warning is re-asked every run on purpose and is not ledgerable: the
+answer changes as the asset grows. Crossing the warn band is a prompt to
+review, never permission to keep going to the fail band.
+
 ## Prescribing: why hooks outrank skills and prose
 
 A hook does not gate on context. It fires regardless of what the model
@@ -131,7 +148,9 @@ downward direction of the ladder needs.
 4. If several assets look relevant, run the redundancy check.
 5. Take the tier the cause implies. Before any tier-4 proposal, check
    the budget: if there is no room, name what comes out or choose a
-   lower tier. "Raise the ceiling" is not an answer.
+   lower tier. "Raise the ceiling" is not an answer -- the fail bands
+   were set against Anthropic's shipped practice, not against what this
+   change happens to need.
 6. Record every decision in `friction-ledger.toml` with `cause` and
    `outcome`. A mined class also needs `count_at_decision`: the doubling
    rule reads it to reopen the class, so a decision missing it
@@ -153,7 +172,7 @@ downward direction of the ladder needs.
 | "The rule exists but nobody follows it, so restate it louder" | Restating changes nothing. Make it mechanical or accept it. |
 | "Both of these tools are relevant"                            | Then check whether they are the same concept.               |
 | "These two feel similar, I'll merge them"                     | State the boundary first. If you can, they are distinct.    |
-| "I'll raise the word ceiling to fit this"                     | The ceiling is the mechanism. Evict instead.                |
+| "I'll raise the word ceiling to fit this"                     | Warn band crossed is not permission. Evict or relocate.     |
 | "I'll write the new skill now"                                | `brainstorming` then `writing-skills`. Never freehand.      |
 | "Nothing crossed the bar, so I have nothing to report"        | Correct. Say so and stop.                                   |
 | "Tier 0 means I found nothing"                                | Tier 0 is the most common correct answer.                   |

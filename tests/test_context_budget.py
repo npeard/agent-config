@@ -29,10 +29,14 @@ from pathlib import Path
 import pytest
 from audit_assets import (
     AGENTS_MD_MAX_WORDS,
+    AGENTS_MD_WARN_WORDS,
     REFERENCE_MAX_WORDS,
+    REFERENCE_WARN_WORDS,
     SKILL_BODY_MAX_WORDS,
+    SKILL_BODY_WARN_WORDS,
     SKILL_DESCRIPTION_MAX_WORDS,
     SKILL_EFFECTIVE_MAX_WORDS,
+    SKILL_EFFECTIVE_WARN_WORDS,
     description,
     effective_words,
     reference_files,
@@ -46,6 +50,12 @@ REMEDY = (
     "Evict content or move it to a lower tier (reference file, script, hook) "
     "rather than raising this ceiling; see the reflect skill."
 )
+
+# These tests gate on the *fail* band, not the warn band. Gating on warn would
+# make the warn band a failure and undo the point of having two, so crossing
+# warn is reported by `pixi run audit` -- which prints the three questions and
+# exits 0 -- and only the fail band stops the build. The warn band's own
+# ratchet is test_warn_bands_have_not_been_loosened.
 
 
 def test_skills_exist():
@@ -142,12 +152,33 @@ def test_ceilings_have_not_been_loosened():
     policy, and the duplication is the mechanism: tightening a ceiling
     passes this untouched, loosening one cannot happen without editing a
     test. Do not "simplify" it by comparing against the imported names.
+
+    The fail bands were raised on 2026-09-15 (1500->2000, 2000->4800,
+    2000->5800) against Anthropic's shipped superpowers skills, which run to
+    4823 words with a 5803-word reference -- a gate stricter than the work it
+    models rejects good assets. The ratchet did its job: that change could not
+    land without editing this test, which is the record it is meant to force.
+    The *warn* bands below hold the old numbers, and they are what now carries
+    the "feel heavier than adding a sentence" promise.
     """
-    assert AGENTS_MD_MAX_WORDS <= 1500
-    assert SKILL_BODY_MAX_WORDS <= 2000
+    assert AGENTS_MD_MAX_WORDS <= 2000
+    assert SKILL_BODY_MAX_WORDS <= 4800
     assert SKILL_DESCRIPTION_MAX_WORDS <= 60
-    assert REFERENCE_MAX_WORDS <= 2000
-    assert SKILL_EFFECTIVE_MAX_WORDS <= 4000
+    assert REFERENCE_MAX_WORDS <= 5800
+    assert SKILL_EFFECTIVE_MAX_WORDS <= 10600
+
+
+def test_warn_bands_have_not_been_loosened():
+    """The warn bands are the mechanism now, so they get the same ratchet.
+
+    Without this, raising the fail band and then quietly raising the warn band
+    to match would restore the single-band behaviour with no record -- which is
+    precisely the creep the fail-band ratchet was written to stop.
+    """
+    assert AGENTS_MD_WARN_WORDS <= 1500
+    assert SKILL_BODY_WARN_WORDS <= 2000
+    assert REFERENCE_WARN_WORDS <= 2000
+    assert SKILL_EFFECTIVE_WARN_WORDS <= 4000
 
 
 class TestHumanizerPatternCount:

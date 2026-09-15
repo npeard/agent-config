@@ -108,6 +108,84 @@ class TestBudgets:
         assert audit_assets.check_budgets(fake_root) == []
 
 
+class TestBudgetBands:
+    """Every budget warns before it fails, and the two bands are distinct.
+
+    A single-band test cannot tell a warning from a failure, which is the
+    whole distinction this adds: the warn band reports a cost and the fail
+    band refuses the asset. Each budget is checked at both boundaries because
+    four budgets sharing one comparison helper is four chances for a pair to
+    be wired to the wrong constant.
+    """
+
+    BANDS = (
+        ("AGENTS_MD_WARN_WORDS", "AGENTS_MD_MAX_WORDS"),
+        ("SKILL_BODY_WARN_WORDS", "SKILL_BODY_MAX_WORDS"),
+        ("REFERENCE_WARN_WORDS", "REFERENCE_MAX_WORDS"),
+        ("SKILL_EFFECTIVE_WARN_WORDS", "SKILL_EFFECTIVE_MAX_WORDS"),
+    )
+
+    @pytest.mark.parametrize(("warn_name", "fail_name"), BANDS)
+    def test_warn_band_is_below_the_fail_band(self, warn_name, fail_name):
+        warn = getattr(audit_assets, warn_name)
+        fail = getattr(audit_assets, fail_name)
+        assert warn < fail, f"{warn_name} must be under {fail_name}"
+
+    def test_at_the_warn_threshold_is_silent(self):
+        assert audit_assets.budget("a", 2000, 2000, 4800, 3, "2000 words") == []
+
+    def test_one_over_the_warn_threshold_warns_without_failing(self):
+        found = audit_assets.budget("a", 2001, 2000, 4800, 3, "2001 words")
+        assert len(found) == 1
+        assert found[0].warning is True
+        assert "2000 warn threshold" in found[0].detail
+
+    def test_at_the_fail_ceiling_still_only_warns(self):
+        found = audit_assets.budget("a", 4800, 2000, 4800, 3, "4800 words")
+        assert found[0].warning is True
+
+    def test_one_over_the_fail_ceiling_fails(self):
+        found = audit_assets.budget("a", 4801, 2000, 4800, 3, "4801 words")
+        assert len(found) == 1
+        assert found[0].warning is False
+        assert "over the 4800 ceiling" in found[0].detail
+
+    def test_a_warning_names_the_three_questions_it_asks(self):
+        """The warn text routes the judgement to reflect rather than deciding
+        "useless" in a checker, so losing the prompt makes the band useless."""
+        found = audit_assets.budget("a", 2001, 2000, 4800, 3, "2001 words")
+        for probe in ("duplicated intent", "reflect", "decays", "new skill"):
+            assert probe in found[0].detail
+
+    def test_a_finding_is_a_failure_unless_it_says_otherwise(self):
+        """A check that became advisory by accident is worse than no check."""
+        assert audit_assets.Finding(3, "a", "detail").warning is False
+
+    def test_partition_splits_warnings_from_failures(self):
+        warn = audit_assets.Finding(3, "w", "d", warning=True)
+        fail = audit_assets.Finding(3, "f", "d")
+        assert audit_assets.partition([warn, fail]) == ([fail], [warn])
+
+    def test_strict_promotes_warnings_to_failures(self):
+        """The nightly loop runs unsupervised, so it keeps the hard band."""
+        warn = audit_assets.Finding(3, "w", "d", warning=True)
+        fail = audit_assets.Finding(3, "f", "d")
+        assert audit_assets.partition([warn, fail], strict=True) == (
+            [warn, fail],
+            [],
+        )
+
+    def test_a_warning_does_not_fail_the_run(self, fake_root):
+        (fake_root / "AGENTS.md").write_text(
+            "word " * (audit_assets.AGENTS_MD_WARN_WORDS + 1)
+        )
+        found = audit_assets.check_budgets(fake_root)
+        assert [f.warning for f in found] == [True]
+        failures, warnings = audit_assets.partition(found)
+        assert failures == []
+        assert len(warnings) == 1
+
+
 class TestReferenceBudgets:
     """Nothing measured a reference file, so the sanctioned way to bring a
     skill under its body ceiling was to move prose into a file no check could
@@ -128,8 +206,13 @@ class TestReferenceBudgets:
         assert all(f.principle == 3 for f in found)
 
     def test_a_reference_within_its_ceiling_is_silent(self, fake_root):
+        """Silent means under the *warn* band. At REFERENCE_MAX_WORDS the file
+        is over warn and under fail, so it warns rather than saying nothing --
+        which is the two-band behaviour, not a regression."""
         write_skill(fake_root, "big", "Use when big")
-        self.reference(fake_root, "big", "catalog.md", audit_assets.REFERENCE_MAX_WORDS)
+        self.reference(
+            fake_root, "big", "catalog.md", audit_assets.REFERENCE_WARN_WORDS
+        )
         assert audit_assets.check_budgets(fake_root) == []
 
     def test_a_nested_reference_is_measured_too(self, fake_root):
@@ -571,7 +654,12 @@ class TestCli:
     def test_json_reports_live_and_suppressed_separately(self, capsys):
         audit_assets.main(["--json"])
         payload = json.loads(capsys.readouterr().out)
-        assert set(payload) == {"findings", "awaiting_regrant", "suppressed"}
+        assert set(payload) == {
+            "findings",
+            "warnings",
+            "awaiting_regrant",
+            "suppressed",
+        }
 
     def test_no_ledger_reports_accepted_exceptions_as_findings(self, capsys):
         audit_assets.main(["--json", "--no-ledger"])
@@ -589,8 +677,9 @@ class TestRepoIsClean:
     """
 
     def test_no_live_findings(self):
+        failures, _ = audit_assets.partition(audit_assets.audit(REPO_ROOT))
         live, _, _ = audit_assets.triage(
-            audit_assets.audit(REPO_ROOT), audit_assets.load_ledger(), REPO_ROOT
+            failures, audit_assets.load_ledger(), REPO_ROOT
         )
         assert live == [], "\n".join(
             f"P{f.principle} {f.asset}: {f.detail}" for f in live
