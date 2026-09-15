@@ -92,6 +92,7 @@ pixi run skills                     # validate portable Agent Skills metadata
 pixi run suppressions               # every noqa must say why
 pixi run thresholds                 # assertion bounds a diff loosened
 pixi run audit                      # agent-asset principle breaches
+                                    #   (--strict fails on warnings too)
 pixi run test                       # pytest
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
@@ -205,6 +206,16 @@ and pricing remain separate and unchanged.
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is
   what makes the improvement loop converge rather than nag.
+- Each context budget has two bands. Crossing the lower one prints a
+  warning, exits 0, and asks the three questions the `reflect` skill
+  owns -- is this duplicated prose or duplicated intent, does it add
+  context or reinforce decaying behaviour or neither, does it belong in
+  a lower tier. Crossing the upper one fails. Warnings are deliberately
+  not ledgerable: an exception suppresses a finding until the asset
+  changes, which is right for a decision made once and wrong for a
+  question whose answer changes as the asset grows. `--strict` promotes
+  warnings to failures, for an unsupervised run that has no human to
+  ask.
 - `audit-ledger.toml` -- accepted exceptions to the five agent-asset
   principles, keyed on asset *and* principle. Where `friction-ledger`
   reopens a class when its count doubles, an entry here carries the
