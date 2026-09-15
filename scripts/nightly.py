@@ -33,13 +33,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 BRIEF = REPO_ROOT / ".nightly-brief"
 LOG = REPO_ROOT / ".nightly-log"
 
-# One proposal per night, enforced by refusing to overwrite an unread brief.
-# Unreviewed drift is the second failure mode after self-confirming edits: a
-# loop that stages seven proposals in a week has produced a backlog nobody
-# reads, which is the same as producing nothing except that it also edited
-# the config seven times.
-MAX_PENDING = 1
-
 
 def instrument(name: str, args: list[str]) -> dict | None:
     """Run one instrument and parse its JSON, or None if it could not run.
@@ -139,8 +132,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if BRIEF.is_file():
-        # Not an error: last night's proposal has not been reviewed, so
-        # staging another would build the backlog MAX_PENDING exists to stop.
+        # One unreviewed proposal at a time, and the brief's own existence is
+        # the whole mechanism -- there is no count to configure, because the
+        # limit that matters is "a human has not read the last one yet".
+        # Unreviewed drift is the second failure mode after self-confirming
+        # edits: a loop that stages seven proposals in a week has produced a
+        # backlog nobody reads, which is the same as producing nothing except
+        # that it also edited the config seven times. Not an error.
         message = f"held: {BRIEF.name} still pending review"
         print(message)
         if not args.dry_run:
