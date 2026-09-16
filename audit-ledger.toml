@@ -557,3 +557,39 @@ Not ledgered as a trust boundary on the exit code: `result.returncode` is
 returned as this script's own status, which is the contract a wrapper owes
 its caller, and an integer carries nothing.
 """
+
+[[decision]]
+asset = "skills/workflow-orchestration/SKILL.md"
+principle = 3
+date = "2026-09-16"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "d9ced7d2c40ea05b79bde7a3a156767dd36a19375a389f13e3e8c3a42a12145c"
+note = """
+2123 words against the 2000 warn threshold; 4800 is the failure line, so
+this is an advisory to review before adding, not a breach.
+
+The body earns its length: it is the orchestrator's contract, and every
+section is load-bearing for a different step of the spine -- the ceremony
+table decides how much process a task gets, the gate policy overrides two
+other skills' checkpoints, the reviewer table fixes who reviews what at
+which model tier, and the red-flag table is the rationalization catalog.
+Cutting any of them would move the content to a reference file the
+orchestrator has to be told to open, which for a contract read once per
+task is worse than the words.
+
+The ceiling has already done its job twice, which is the argument for
+leaving it where it is rather than raising it. A guidance paragraph on
+which agent-config scripts travel with a project and which are shared was
+drafted into step 0 and rejected by the budget test; one eviction attempt
+gained 2 words, so the addition was reverted and the guidance went to the
+consuming project's own CLAUDE.md, where it is actionable. A budget that
+refuses an addition and redirects it is functioning.
+
+Accepted rather than trimmed because the growth is not this branch's: it
+came from the step-6 parallel-review change. Trimming another author's
+section to absorb a warning would cost a considered edit and buy 100-odd
+words. Revisit if it approaches 4800, or if a *new* section is proposed --
+at which point the question is what comes out, not whether the ceiling
+moves.
+"""
