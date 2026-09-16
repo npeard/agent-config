@@ -288,6 +288,16 @@ and pricing remain separate and unchanged.
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/spec-retraction-check.py` -- fires when a *spec* is written
+  with retraction-shaped instructions in it ("claims to retract", "what
+  the earlier draft claimed"). `AGENTS.md` and `writing-orchestration`
+  already carry the rule that a correction replaces the claim it
+  corrects, and it was still violated twice in one branch: the rule
+  binds the spec stage, the spec is written by the orchestrator, and
+  nothing reviewed it. Diff-versus-spec review structurally cannot catch
+  this one, because the spec *is* the defect. Advisory, not blocking --
+  a spec legitimately records past retractions as background, so the
+  patterns are verb-shaped to tell that apart from an instruction.
 - `hooks/promotion-check.py` -- fires when an `AGENTS.md`, `CLAUDE.md`,
   memory or skill file is written *outside* this repo, asking whether
   the preference is general enough to belong here instead. It resolves
