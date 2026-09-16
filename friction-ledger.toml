@@ -983,3 +983,65 @@ No hook can reach either. Hooks fire on tool calls and session events; the
 defect is an inference drawn from a result, which no PreToolUse payload
 contains.
 """
+
+[[decision]]
+class = "edit-anchor-miss"
+source = "mined"
+count_at_decision = 4
+date = "2026-09-15"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+Edit refusing because old_string no longer matched, 4 times across 3
+sessions. Every instance was the guard doing its job: the anchor was stale
+because a concurrent subagent had rewritten the file, Edit declined rather
+than writing to the wrong region, and the harness said so in the result. One
+round trip bought the guarantee that nobody's edit gets silently clobbered.
+
+Named what a failing scenario would need before reading the result, per this
+skill's own rule: an Edit whose old_string no longer matches where the tool
+succeeds anyway, or writes a different region than intended. That did not
+happen in any of the four. The class is the harness reporting a conflict it
+correctly refused to resolve, not a defect.
+
+Staleness detection is harness-native -- nothing in hooks/ or skills/
+implements it -- so there is no asset here to improve either.
+"""
+
+[[decision]]
+class = "concurrent-subagent-commit-contamination"
+source = "observed"
+date = "2026-09-15"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+Twice on the triple-correlation infra branch, a commit swept in a concurrent
+subagent's uncommitted work: once mine (`git add pyproject.toml` while a
+Phase 3 agent was editing it, landing its report-feature tables in a commit
+whose message described only lint-ignore scoping), once a subagent's, which
+staged another's README.md and had to reset.
+
+Cause is the spec, not tooling. Both specs assigned each phase a file list,
+which reads as sufficient until two phases legitimately need one file --
+pyproject.toml here, which nearly every phase touches. The specs never said
+what to do at that overlap. `git add <file>` is then the natural move and is
+wrong; `git add -p` or staging by hunk is right.
+
+Deliberately not an artifact:
+
+- Tier 4 is closed. workflow-orchestration is already at 2123 words, over
+  the 2000 warn threshold, and `pixi run audit` asks whether new prose
+  belongs in a lower tier before accepting more. This does.
+- Tier 1-2 is tempting and premature. "Did this commit stage files outside
+  the phase's scope" is mechanically checkable, but a hook needs to know the
+  phase's scope, which lives only in a gitignored spec -- so it would have
+  to infer intent from a commit message. Both instances were also caught
+  within minutes, once by me on review and once by the subagent itself, so
+  the failure is self-announcing rather than silent.
+- One branch, two instances, both recovered. Below the bar. Reopen if it
+  recurs on a branch that does not catch it.
+
+The transferable lesson is a spec-writing habit, not a rule: when phases run
+in parallel, name the shared files and say who stages what. That belongs in
+the next spec, which is where it has been applied.
+"""
