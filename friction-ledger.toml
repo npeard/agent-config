@@ -986,7 +986,7 @@ contains.
 
 [[decision]]
 class = "edit-anchor-miss"
-source = "mined"
+source = "transcript"
 count_at_decision = 4
 date = "2026-09-15"
 cause = "working-as-designed"
