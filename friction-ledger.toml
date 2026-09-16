@@ -1045,3 +1045,30 @@ The transferable lesson is a spec-writing habit, not a rule: when phases run
 in parallel, name the shared files and say who stages what. That belongs in
 the next spec, which is where it has been applied.
 """
+
+[[decision]]
+class = "pixi-python-bump-leaves-stale-abi-wheels"
+source = "observed"
+date = "2026-09-15"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+Bumping triple-correlation from Python 3.12 to 3.14 left the environment with
+a 3.14 conda interpreter and cp312-tagged PyPI extension modules: `pixi
+install` swapped the interpreter and reused the ABI-tagged wheel cache.
+numpy then failed to import. Fix was deleting .pixi/envs/<env> and
+reinstalling each environment.
+
+Tier 0 on two counts. The failure is loud and self-describing -- numpy's own
+import error names the missing `_multiarray_umath` module and says it is
+likely a bad install or environment, which is exactly what it was -- so
+nothing was silently wrong. And it is one incident on one bump; a Python
+major bump is rare enough that a standing rule in AGENTS.md would be read
+hundreds of times per use.
+
+Recorded where it will actually be read instead: triple-correlation's
+CLAUDE.md environment-constraints section, beside the numba-sets-the-ceiling
+note, since that is what the next person bumping Python in that repo opens.
+Reopen as a general rule if a second project hits it, which would make it a
+pixi behaviour rather than a one-off.
+"""
