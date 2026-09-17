@@ -1072,3 +1072,123 @@ note, since that is what the next person bumping Python in that repo opens.
 Reopen as a general rule if a second project hits it, which would make it a
 pixi behaviour rather than a one-off.
 """
+
+[[decision]]
+class = "notebooks-skill-names-a-server-that-loses-writes"
+source = "observed"
+date = "2026-09-17"
+cause = "asset-not-adopted"
+outcome = "tier-2"
+note = """
+The `notebooks` skill sends the reader to `notebook-mcp-server`, the VS Code
+extension. On this machine that server reported `{"updated": true}` for two
+cell edits that never reached disk -- it had written VS Code's in-memory
+buffer only, and persisting needed a human pressing Ctrl+S. It also expires
+its client session every few minutes (three times in an hour, twice
+mid-edit, each needing a full Claude Code restart), and its advertised
+`notebook_uri` argument is ignored: it rejects on "no active notebook"
+before reading it, so a human must click *into a cell body*, not merely
+focus the tab. Roughly four hours and several restarts went into
+establishing that.
+
+Cause 2, not 7: a working channel exists and is now proven -- Datalayer's
+`jupyter-mcp-server` against a Jupyter server launched from the project's
+own pixi env. It talks to the kernel and contents APIs rather than an editor
+buffer, so no focus requirement and no human save step. It was used here to
+edit and insert cells in a 46-cell notebook, execute against the correct
+interpreter, and commit the result.
+
+Tier 2 and owned by the skill, not by prose. The setup detail that is not
+guessable: `uvx jupyter-mcp-server@latest` needs the `start --transport
+stdio` subcommand (bare invocation serves nothing and times out the 30 s
+connect budget, as does the first run while uvx downloads), the Jupyter
+server must be launched *detached* or it dies with every session restart,
+and the project needs `jupyter-collaboration` installed -- without it cell
+reads and edits 404 on /api/collaboration while code execution keeps
+working, so the failure presents as a permissions problem rather than a
+missing package.
+
+Filed as an actionable entry in agent-config's own TASKS.md rather than
+edited into the skill from a different repo's session. The general lesson
+the skill should carry above the specific server: on any notebook MCP
+server, a success return is not evidence the write landed -- confirm on
+disk.
+"""
+
+[[decision]]
+class = "mcp-insert-cell-drops-cells-in-quick-succession"
+source = "observed"
+date = "2026-09-17"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+Datalayer's `jupyter-mcp-server` 2.1.16 silently drops inserted cells when
+`insert_cell` is called several times in quick succession. Three
+back-to-back inserts each returned success with a rising cell count, and
+none reached disk or survived in the server's own view -- a whole phase's
+work had to be redone. Inserting one cell at a time and confirming the
+on-disk cell count before the next worked for five consecutive cells, and
+`overwrite_cell_source`/`edit_cell_source` on existing cells never showed
+it.
+
+Cause 5. This is a third-party server's bug in a specific version, not
+something agent-config can fix or should encode as a standing rule -- and
+the workaround is already implied by the more general rule the previous
+entry proposes for the skill (a success return is not evidence the write
+landed; confirm on disk). Adding a separate artifact for the insert-specific
+case would duplicate that intent with a version-scoped detail likely to be
+fixed upstream.
+
+Recorded in doqs's TASKS.md, where whoever next edits those notebooks will
+read it, and noted in the skill entry above as the concrete instance of the
+general rule. Reopen if a second server shows the same shape, which would
+make it a property of the MCP notebook ecosystem rather than one release.
+"""
+
+[[decision]]
+class = "spec-written-against-the-path-not-taken"
+source = "observed"
+date = "2026-09-17"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+Three spec errors in one cycle, each surfacing only on contact with the
+code, each costing a round trip:
+
+  1. The spec put `TAU_P = TAU_P_S / SECONDS_PER_UNIT` in the globals cell,
+     but `SECONDS_PER_UNIT` was defined twenty cells later.
+  2. The spec instructed "assert the recovered length equals M + 1". True on
+     the idealized path; false on the finite-pulse path, where a fused-away
+     zero dwell has no native operator at all. The implementing agent hit
+     `expected 15 native operators, got 2` end-to-end and fixed it properly.
+  3. I flagged in review prose that `J0*T = 1/S` breaks at finite pulses,
+     then failed to follow that into the marker code, which kept the
+     idealized conversion and drew marks 2.3x-7.6x too wide. The user caught
+     it by noticing the sample-per-marker count did not match the reported
+     periods.
+
+Cause 6, and the diagnosis matters: all three are one root cause, not three.
+The spec was written by reading the *idealized* code path and describing the
+finite-pulse one by analogy. Every error is a place where the two paths
+differ. No tool could have caught this -- the spec was internally coherent
+and its claims were all true of the code it was written against.
+
+Tier 0, deliberately. AGENTS.md already carries the rule this generalizes:
+"Absence of a declaration is not absence of a capability... probe the live
+system... so 'not found' is falsifiable" (line ~158). What happened here is
+that rule's mirror image -- presence of a pattern on one path is not
+presence of it on another -- and restating it a second time, aimed at specs,
+is the "restate it louder" move the skill names as a red flag. The existing
+`spec-retraction-check` hook shows what a real fix looks like at this stage,
+but it works because retraction language is textually detectable; "this
+claim is true of a path the work will not take" is not.
+
+What actually worked, and cost one round trip each: the implementing agents
+verified spec claims against the code before acting, reported the spec as
+wrong, and fixed it. That is the system behaving correctly -- a spec is a
+handoff artifact, and catching its errors is part of what the implement-then-
+review loop is for. Two of three were caught by subagents, one by the user.
+Reopen if a later cycle shows spec errors surviving review into a merged
+branch, which would mean the loop is not catching them rather than that
+specs occasionally contain them.
+"""
