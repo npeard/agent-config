@@ -6,3 +6,4 @@ __pycache__/
 .superpowers/
 .nightly-brief
 .nightly-log
+.claude/worktrees/
