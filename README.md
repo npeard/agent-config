@@ -245,6 +245,12 @@ and pricing remain separate and unchanged.
   asked what was frustrating, a model always answers, and SkillOpt
   measured an ungated version of this loop falling from 0.554 to 0.026
   over five nights while its gated twin lost nothing.
+- `scripts/dep_updates.py` -- dependency updates a pixi project could
+  take, from both of its sources. `pixi upgrade --dry-run` owns the
+  same-source half; this adds the cross-source half pixi does not look
+  at, because an agent once said "no torch 2.14 anywhere" after querying
+  only conda-forge while PyPI had it. Cached per project for 24 h, and
+  `--ack` silences a declined version until a newer one appears.
 - `friction-ledger.toml` -- decisions about recurring friction found by
   `pixi run friction`, each recording a `cause` as well as an `outcome`.
   A decided class is not re-proposed unless its count doubles, which is

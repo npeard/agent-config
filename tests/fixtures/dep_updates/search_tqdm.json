@@ -1,0 +1,55 @@
+{
+ "win-64": [
+  {
+   "name": "tqdm",
+   "version": "4.38.0",
+   "build": "py27_1",
+   "subdir": "win-64",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  },
+  {
+   "name": "tqdm",
+   "version": "4.15.0",
+   "build": "py27_0",
+   "subdir": "win-64",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  },
+  {
+   "name": "tqdm",
+   "version": "4.9.0",
+   "build": "py27_0",
+   "subdir": "win-64",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  }
+ ],
+ "noarch": [
+  {
+   "name": "tqdm",
+   "version": "4.70.1",
+   "build": "pyh6be1c34_0",
+   "subdir": "noarch",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  },
+  {
+   "name": "tqdm",
+   "version": "4.70.0",
+   "build": "pyha7b4d00_0",
+   "subdir": "noarch",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  },
+  {
+   "name": "tqdm",
+   "version": "4.67.3",
+   "build": "pyha7b4d00_0",
+   "subdir": "noarch",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  },
+  {
+   "name": "tqdm",
+   "version": "4.15.0",
+   "build": "py_1",
+   "subdir": "noarch",
+   "channel": "https://conda.anaconda.org/conda-forge/"
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "platform": "win-64",
+ "environments_info": [
+  {
+   "name": "default",
+   "features": [
+    "default"
+   ],
+   "platforms": [
+    {
+     "name": "win-64-cuda-13-0",
+     "subdir": "win-64",
+     "virtual_packages": [
+      "cuda=13.0"
+     ]
+    },
+    {
+     "name": "linux-64",
+     "subdir": "linux-64",
+     "virtual_packages": []
+    },
+    {
+     "name": "osx-64",
+     "subdir": "osx-64",
+     "virtual_packages": []
+    },
+    {
+     "name": "osx-arm64",
+     "subdir": "osx-arm64",
+     "virtual_packages": []
+    }
+   ]
+  },
+  {
+   "name": "dev",
+   "features": [
+    "dev",
+    "test",
+    "default"
+   ],
+   "platforms": [
+    {
+     "name": "osx-arm64",
+     "subdir": "osx-arm64",
+     "virtual_packages": []
+    },
+    {
+     "name": "win-64-cuda-13-0",
+     "subdir": "win-64",
+     "virtual_packages": [
+      "cuda=13.0"
+     ]
+    },
+    {
+     "name": "osx-64",
+     "subdir": "osx-64",
+     "virtual_packages": []
+    },
+    {
+     "name": "linux-64",
+     "subdir": "linux-64",
+     "virtual_packages": []
+    }
+   ]
+  },
+  {
+   "name": "test",
+   "features": [
+    "test",
+    "default"
+   ],
+   "platforms": [
+    {
+     "name": "win-64-cuda-13-0",
+     "subdir": "win-64",
+     "virtual_packages": [
+      "cuda=13.0"
+     ]
+    },
+    {
+     "name": "linux-64",
+     "subdir": "linux-64",
+     "virtual_packages": []
+    },
+    {
+     "name": "osx-arm64",
+     "subdir": "osx-arm64",
+     "virtual_packages": []
+    },
+    {
+     "name": "osx-64",
+     "subdir": "osx-64",
+     "virtual_packages": []
+    }
+   ]
+  }
+ ]
+}

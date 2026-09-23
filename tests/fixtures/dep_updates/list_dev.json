@@ -1,0 +1,133 @@
+[
+ {
+  "name": "cuda-version",
+  "version": "13.0",
+  "kind": "conda",
+  "source": "https://conda.anaconda.org/conda-forge",
+  "is_explicit": true,
+  "requested_spec": "13.*",
+  "depends": [],
+  "url": "https://conda.anaconda.org/conda-forge/noarch/cuda-version-13.0-hc7b4dd1_3.conda"
+ },
+ {
+  "name": "doqs",
+  "version": null,
+  "kind": "pypi",
+  "source": "./",
+  "is_explicit": true,
+  "requested_spec": "{ path = \".\", editable = true }",
+  "depends": [
+   "matplotlib",
+   "torchode",
+   "torchdiffeq",
+   "arc-alkali-rydberg-calculator>=3.9",
+   "tqdm",
+   "h5py",
+   "pytest>=8.0 ; extra == 'test'",
+   "pytest-cov>=3.0 ; extra == 'test'",
+   "pytest-xdist>=2.5 ; extra == 'test'",
+   "pytest-benchmark ; extra == 'test'",
+   "pytest>=8.0.0 ; extra == 'dev'",
+   "ruff ; extra == 'dev'",
+   "codespell ; extra == 'dev'",
+   "pre-commit ; extra == 'dev'",
+   "nbstripout ; extra == 'dev'",
+   "ty ; extra == 'dev'",
+   "bandit ; extra == 'dev'",
+   "coverage[toml] ; extra == 'dev'",
+   "jupyterlab ; extra == 'dev'",
+   "psutil ; extra == 'dev'",
+   "ipykernel ; extra == 'dev'",
+   "nbclient ; extra == 'dev'",
+   "nbformat ; extra == 'dev'",
+   "nbconvert ; extra == 'dev'"
+  ],
+  "url": "./"
+ },
+ {
+  "name": "numpy",
+  "version": "2.5.3",
+  "kind": "conda",
+  "source": "https://conda.anaconda.org/conda-forge",
+  "is_explicit": true,
+  "requested_spec": "*",
+  "depends": [
+   "python",
+   "vc >=14.3,<15",
+   "vc14_runtime >=14.44.35208",
+   "ucrt >=10.0.20348.0",
+   "liblapack >=3.9.0,<4.0a0",
+   "libcblas >=3.9.0,<4.0a0",
+   "libblas >=3.9.0,<4.0a0",
+   "python_abi 3.13.* *_cp313"
+  ],
+  "url": "https://conda.anaconda.org/conda-forge/win-64/numpy-2.5.3-py313ha8dc839_0.conda"
+ },
+ {
+  "name": "python",
+  "version": "3.13.15",
+  "kind": "conda",
+  "source": "https://conda.anaconda.org/conda-forge",
+  "is_explicit": true,
+  "requested_spec": ">=3.13,<3.14",
+  "depends": [
+   "bzip2 >=1.0.8,<2.0a0",
+   "libexpat >=2.8.1,<3.0a0",
+   "libffi >=3.7.0,<3.8.0a0",
+   "liblzma >=5.8.3,<6.0a0",
+   "libmpdec >=4.0.0,<5.0a0",
+   "libpython 3.13.15 h4f90d01_103_cp313",
+   "libsqlite >=3.53.4,<4.0a0",
+   "libzlib >=1.3.2,<2.0a0",
+   "openssl >=3.5.8,<4.0a0",
+   "python_abi 3.13.* *_cp313",
+   "tk >=8.6.13,<8.7.0a0",
+   "tzdata",
+   "ucrt >=10.0.20348.0",
+   "vc >=14.3,<15",
+   "vc14_runtime >=14.44.35208"
+  ],
+  "url": "https://conda.anaconda.org/conda-forge/win-64/python-3.13.15-h254dcb4_103_cp313.conda"
+ },
+ {
+  "name": "pytorch-gpu",
+  "version": "2.13.0",
+  "kind": "conda",
+  "source": "https://conda.anaconda.org/conda-forge",
+  "is_explicit": true,
+  "requested_spec": ">=2.13",
+  "depends": [
+   "pytorch 2.13.0 cuda*_mkl*302"
+  ],
+  "url": "https://conda.anaconda.org/conda-forge/win-64/pytorch-gpu-2.13.0-cuda130_mkl_hd6e8df1_302.conda"
+ },
+ {
+  "name": "ruff",
+  "version": "0.15.15",
+  "kind": "pypi",
+  "source": "https://pypi.org/simple",
+  "is_explicit": true,
+  "requested_spec": "\"==0.15.15\"",
+  "depends": [],
+  "url": "https://files.pythonhosted.org/packages/02/a8/1269eddd6945a06c23f055ef7848886e37cf9d6a8bebb386a3115f01470c/ruff-0.15.15-py3-none-win_amd64.whl"
+ },
+ {
+  "name": "tqdm",
+  "version": "4.70.1",
+  "kind": "pypi",
+  "source": "https://pypi.org/simple",
+  "is_explicit": true,
+  "requested_spec": "\"*\"",
+  "depends": [
+   "colorama ; sys_platform == 'win32'",
+   "requests ; extra == 'discord'",
+   "envwrap ; extra == 'discord'",
+   "slack-sdk ; extra == 'slack'",
+   "envwrap ; extra == 'slack'",
+   "requests ; extra == 'telegram'",
+   "envwrap ; extra == 'telegram'",
+   "ipywidgets>=6 ; extra == 'notebook'"
+  ],
+  "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl"
+ }
+]

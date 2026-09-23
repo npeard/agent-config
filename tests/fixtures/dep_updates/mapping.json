@@ -1,0 +1,12 @@
+{
+ "pytorch-gpu": null,
+ "pytorch": "torch",
+ "cuda-version": null,
+ "python": null,
+ "numpy": "numpy",
+ "ruff": "ruff",
+ "tqdm": "tqdm",
+ "torchdiffeq": "torchdiffeq",
+ "matplotlib": "matplotlib",
+ "matplotlib-base": "matplotlib"
+}

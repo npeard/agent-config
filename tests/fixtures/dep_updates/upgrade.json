@@ -1,0 +1,75 @@
+{
+ "version": 1,
+ "environment": {
+  "dev": {
+   "win-64-cuda-13-0": [
+    {
+     "name": "ruff",
+     "type": "pypi",
+     "explicit": true,
+     "before": {
+      "pypi": "https://files.pythonhosted.org/packages/02/a8/1269eddd6945a06c23f055ef7848886e37cf9d6a8bebb386a3115f01470c/ruff-0.15.15-py3-none-win_amd64.whl",
+      "version": "0.15.15"
+     },
+     "after": {
+      "pypi": "https://files.pythonhosted.org/packages/1e/5d/a509c07d714b6da88f2c518b4637cf6f1d46b074be8f0f1e5fb9ff5126fe/ruff-0.16.8-py3-none-win_amd64.whl",
+      "version": "0.16.8"
+     }
+    }
+   ],
+   "linux-64": [
+    {
+     "name": "jupyter_server_ydoc",
+     "type": "pypi",
+     "before": {
+      "pypi": "https://files.pythonhosted.org/packages/fa/14/05e044ffa23ba355ecdb4c8147a872356568a04951f15634f0d42af6da25/jupyter_server_ydoc-3.0.3-py3-none-any.whl",
+      "version": "3.0.3"
+     },
+     "after": {
+      "pypi": "https://files.pythonhosted.org/packages/f9/ff/6a660bf1b87ec72a88d3180a06a970e0a3ba4bce603e35849efc19d51623/jupyter_server_ydoc-3.0.4-py3-none-any.whl",
+      "version": "3.0.4"
+     }
+    },
+    {
+     "name": "ruff",
+     "type": "pypi",
+     "explicit": true,
+     "before": {
+      "pypi": "https://files.pythonhosted.org/packages/fe/1c/e6e5e568f22be4fb05d6244234aba384c06b451252453b821e1a529263cf/ruff-0.15.15-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "version": "0.15.15"
+     },
+     "after": {
+      "pypi": "https://files.pythonhosted.org/packages/1a/41/d83af9879a7b6e8bf5fe16b1da0b134049d2f5d3afac12defb0897cb84bd/ruff-0.16.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "version": "0.16.8"
+     }
+    },
+    {
+     "name": "tqdm",
+     "type": "pypi",
+     "explicit": true,
+     "before": {
+      "pypi": "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl",
+      "version": "4.67.3"
+     },
+     "after": {
+      "pypi": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+      "version": "4.70.1"
+     }
+    }
+   ],
+   "osx-64": [
+    {
+     "name": "numpy",
+     "type": "conda",
+     "explicit": true,
+     "before": {
+      "conda": "https://conda.anaconda.org/conda-forge/osx-64/numpy-2.5.2-py313ha2a7659_1.conda"
+     },
+     "after": {
+      "conda": "https://conda.anaconda.org/conda-forge/osx-64/numpy-2.5.3-py313ha2a7659_0.conda"
+     }
+    }
+   ]
+  }
+ }
+}

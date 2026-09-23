@@ -593,3 +593,30 @@ words. Revisit if it approaches 4800, or if a *new* section is proposed --
 at which point the question is what comes out, not whether the ceiling
 moves.
 """
+
+[[decision]]
+asset = "scripts/dep_updates.py"
+principle = 5
+date = "2026-09-23"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "61fb01c14551fc6a1be0e49e92f4d35132917317549acac441214de26e91587b"
+note = """
+Reads PyPI JSON, `pixi search`, `pixi list` and the solver's stderr. It prints
+a summary that the SessionStart hook will carry into agent context in every
+project, including a cloned repo whose manifest nobody here wrote.
+
+Here is what reaches the output, and what bounds each part. Candidate versions
+pass `version_key`, a digits-dots-post regex, so a PyPI or channel "version"
+cannot carry prose. Wheel labels are built only from tags that matched a fixed
+platform regex and a fixed Python-tag set. Package names, locked versions and
+`requested_spec` come from pixi's own parse of the project's lock and manifest,
+and that parse rejects names outside the conda and PyPI charsets. The solver
+excerpt is ASCII-filtered pixi text, which may quote the manifest.
+
+The remaining risk is manifest-authored text in a spec or in the solver
+excerpt. `render` collapses whitespace in every detail line, so none of that
+text can open a line of its own. A newline in a name did exactly that in
+task-list.py, and a test pins the fix here. Nothing read is executed or passed
+to a shell, and the `--ack` hint names only this script's own path.
+"""
