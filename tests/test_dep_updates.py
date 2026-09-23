@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import os
 import re
 import subprocess
 import time
@@ -309,6 +310,67 @@ class TestCrossSource:
         ]
         assert check(project, fake).cross_source[0].wheel == "none-any wheel"
 
+    @pytest.mark.parametrize(
+        ("platform", "tag", "wheel"),
+        [
+            ("osx-arm64", "macosx_11_0_arm64", "macosx_11_0_arm64 cp313 wheel"),
+            (
+                "osx-arm64",
+                "macosx_10_9_universal2",
+                "macosx_10_9_universal2 cp313 wheel",
+            ),
+            ("osx-arm64", "macosx_10_13_x86_64", "no wheel for this platform"),
+            ("osx-64", "macosx_10_13_x86_64", "macosx_10_13_x86_64 cp313 wheel"),
+            ("osx-64", "macosx_10_9_universal2", "macosx_10_9_universal2 cp313 wheel"),
+            ("osx-64", "macosx_11_0_arm64", "no wheel for this platform"),
+            ("linux-64", "manylinux_2_28_x86_64", "manylinux_2_28_x86_64 cp313 wheel"),
+            ("linux-64", "musllinux_1_2_x86_64", "musllinux_1_2_x86_64 cp313 wheel"),
+            ("linux-64", "manylinux_2_28_aarch64", "no wheel for this platform"),
+            (
+                "linux-aarch64",
+                "manylinux_2_28_aarch64",
+                "manylinux_2_28_aarch64 cp313 wheel",
+            ),
+            ("linux-aarch64", "manylinux_2_28_x86_64", "no wheel for this platform"),
+        ],
+    )
+    def test_wheel_tags_match_only_this_platform(
+        self, project, fake, platform, tag, wheel
+    ):
+        fake.info["platform"] = platform
+        fake.pypi["torch"]["releases"]["2.14.0"] = [
+            {
+                "filename": f"torch-2.14.0-cp313-cp313-{tag}.whl",
+                "packagetype": "bdist_wheel",
+            }
+        ]
+        torch = next(
+            f for f in check(project, fake).cross_source if f.pypi_name == "torch"
+        )
+        assert torch.wheel == wheel
+
+    @pytest.mark.parametrize(
+        ("pypi_name", "conda_name"),
+        [("ruamel.yaml", "ruamel.yaml"), ("Typing_Extensions", "typing_extensions")],
+    )
+    def test_unmapped_pypi_dep_is_searched_by_its_lowercased_name(
+        self, project, fake, pypi_name, conda_name
+    ):
+        # The spec's fallback is the lowercased PyPI name, separators kept:
+        # conda-forge carries ruamel.yaml and typing_extensions under those
+        # spellings, and PEP 503 normalization would rename both.
+        row = next(r for r in fake.lists["dev"] if r["name"] == "tqdm")
+        fake.lists["dev"].append({**row, "name": pypi_name, "version": "1.0.0"})
+        fake.search[conda_name] = {
+            "noarch": [
+                {"name": conda_name, "version": "2.0.0", "channel": "conda-forge"}
+            ]
+        }
+        report = check(project, fake)
+        searched = [argv[-1] for argv in fake.runs if argv[1] == "search"]
+        assert conda_name in searched
+        assert (pypi_name, "2.0.0") in names(report.cross_source)
+
     def test_absent_from_source_is_not_an_error(self, project, fake):
         del fake.pypi["torch"]
         report = check(project, fake)
@@ -332,9 +394,26 @@ class TestFailureModes:
         fake.missing_pixi = True
         report = check(project, fake)
         assert report.applicable
-        assert "pixi not found" in report.solve_error
+        # Its own field, not a solve_error string: a caller must not have to
+        # string-match to tell a missing tool from a real solver conflict.
+        assert report.pixi_missing
+        assert report.solve_error is None
+        assert not dep_updates.is_clean(report)
+        summary, _lines = dep_updates.render(report, Path("d.py"))
+        assert summary == "dependency updates: pixi not found on PATH"
+
+    def test_a_degradation_note_renders_when_nothing_else_does(self, project, fake):
+        # Nothing to report, but the mapping was unreachable: the output must
+        # not read as a clean "up to date" while names were only guessed.
+        fake.mapping = urllib.error.URLError("offline")
+        fake.upgrade = completed([], stdout=json.dumps({"environment": {}}))
+        del fake.pypi["torch"]
+        report = check(project, fake)
+        assert report.same_source == report.cross_source == report.unchecked == []
         summary, lines = dep_updates.render(report, Path("d.py"))
-        assert "pixi not found" in " ".join([summary, *lines])
+        assert "up to date" not in summary
+        assert any("name mapping unavailable" in line for line in lines)
+        assert not dep_updates.is_clean(report)
 
     def test_upgrade_past_the_deadline_is_unchecked(self, project, fake):
         fake.upgrade = subprocess.TimeoutExpired(["pixi", "upgrade"], 1)
@@ -417,6 +496,80 @@ class TestCache:
         (project / "pixi.lock").write_text("changed\n")
         check(project, fake)
         assert self.lists_run(fake) > before
+
+
+class TestCachedOnly:
+    """The SessionStart hook and `preflight --offline` read the cache and
+    nothing else, so a stale or absent cache is None, never a computation."""
+
+    def test_absent_cache_is_none(self, project):
+        assert dep_updates.cached(project, now=NOW) is None
+
+    def test_fresh_cache_is_returned_with_acks_applied(self, project, fake):
+        dep_updates.ack(project, check(project, fake))
+        report = dep_updates.cached(project, now=NOW + 1)
+        assert report.from_cache
+        assert report.same_source == report.cross_source == []
+
+    def test_stale_cache_is_none(self, project, fake):
+        check(project, fake)
+        assert dep_updates.cached(project, now=NOW + DAY + 1) is None
+
+    def test_non_pixi_project_is_not_applicable(self, tmp_path):
+        assert not dep_updates.cached(tmp_path, now=NOW).applicable
+
+
+class TestRefreshLock:
+    def lock(self, project):
+        return project / ".pixi" / "agent-drift" / "refresh.lock"
+
+    def test_a_free_lock_is_taken(self, project):
+        path = self.lock(project)
+        assert (
+            dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True) is None
+        )
+        assert path.read_text() == "11"
+
+    def test_a_live_peer_keeps_the_lock(self, project):
+        path = self.lock(project)
+        dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True)
+        assert dep_updates.acquire_lock(path, pid=22, pid_alive=lambda pid: True) == 11
+        assert path.read_text() == "11"
+
+    @pytest.mark.parametrize("content", ["999", "", "not a pid"])
+    def test_a_stale_lock_is_taken_over(self, project, content):
+        path = self.lock(project)
+        path.parent.mkdir(parents=True)
+        path.write_text(content)
+        alive = {999: False}
+        got = dep_updates.acquire_lock(path, pid=22, pid_alive=alive.__getitem__)
+        assert got is None
+        assert path.read_text() == "22"
+
+    def test_release_leaves_a_peer_s_lock_alone(self, project):
+        path = self.lock(project)
+        dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True)
+        dep_updates.release_lock(path, pid=22)
+        assert path.read_text() == "11"
+        dep_updates.release_lock(path, pid=11)
+        assert not path.exists()
+
+    def test_a_second_refresh_refuses_while_a_live_peer_holds_the_lock(
+        self, project, monkeypatch, capsys
+    ):
+        # This test process is the live peer, so the real liveness probe and
+        # the real CLI are exercised; refusing must happen before any check.
+        dep_updates.acquire_lock(
+            self.lock(project), pid=os.getpid(), pid_alive=lambda pid: True
+        )
+
+        def must_not_run(*args, **kwargs):
+            raise AssertionError("a refused refresh must not check")
+
+        monkeypatch.setattr(dep_updates, "check", must_not_run)
+        assert dep_updates.main([str(project), "--refresh"]) == 0
+        assert "already running" in capsys.readouterr().out
+        assert self.lock(project).read_text() == str(os.getpid())
 
 
 class TestAck:

@@ -21,10 +21,13 @@ So there are two halves, and pixi owns one of them.
   for the current platform only, since that is where the user works.
 
 Results are cached per project in ``.pixi/agent-drift/deps.json`` for 24 h,
-and invalidated early when the lock or manifest changes, because the
-SessionStart hook runs this on every session and a cold check costs ~10 s.
-``--ack`` records the reported versions so that a declined update stops
-being raised until a newer release appears.
+and invalidated early when the lock or manifest changes. A cold check costs
+~25 s on doqs, so the SessionStart hook only reads the cache (``cached``)
+and, when it is stale, starts ``--refresh`` detached. That refresh holds a
+pid lock next to the cache, so a second one refuses while the first is
+alive, and it kills its own pixi children if it is interrupted. ``--ack``
+records the reported versions so that a declined update stops being raised
+until a newer release appears.
 
 Trust boundary: the text printed here comes from PyPI, the conda channels
 and the pixi solver, and it reaches an agent's context through the hook.
@@ -46,10 +49,12 @@ import argparse
 import concurrent.futures
 import dataclasses
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -61,6 +66,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+
+def _load_platform_paths():
+    """The sibling platform module, loaded by path: this file is run by the
+    SessionStart hook from any cwd, so sys.path cannot be relied on."""
+    spec = importlib.util.spec_from_file_location(
+        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+platform_paths = _load_platform_paths()
+
 MAPPING_URL = (
     "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/"
     "compressed_mapping.json"
@@ -69,10 +88,10 @@ PYPI_JSON = "https://pypi.org/pypi/{}/json"
 CACHE_SECONDS = 24 * 3600
 MAPPING_SECONDS = 7 * 24 * 3600
 REQUEST_SECONDS = 5.0
-# The CLI is run by hand, where waiting is acceptable; the SessionStart hook
-# passes its own tighter deadline. A cold run on doqs needs ~25 s, most of
-# it `pixi list` (see _locked).
-CLI_BUDGET_SECONDS = 60.0
+# The CLI is also the detached refresh the SessionStart hook starts, which
+# nobody waits on, so the budget is generous. A cold run on doqs needs
+# ~25 s, most of it `pixi list` (see _locked).
+CLI_BUDGET_SECONDS = 120.0
 UPGRADE = ["pixi", "upgrade", "--dry-run", "--json"]
 STDERR_LINES = 8
 
@@ -110,9 +129,41 @@ class DepReport:
     same_source: list[Finding]
     cross_source: list[Finding]
     solve_error: str | None
+    pixi_missing: bool
     unchecked: list[str]
     notes: list[str]
     from_cache: bool
+
+
+def _blank(applicable: bool, platform: str) -> DepReport:
+    return DepReport(
+        applicable=applicable,
+        platform=platform,
+        same_source=[],
+        cross_source=[],
+        solve_error=None,
+        pixi_missing=False,
+        unchecked=[],
+        notes=[],
+        from_cache=False,
+    )
+
+
+def is_clean(report: DepReport) -> bool:
+    """Whether there is nothing to tell the user, degradations included.
+
+    One definition, because render, preflight and the SessionStart hook all
+    decide on it, and a note left out of one of them read as "up to date"
+    while the check was running on guessed names.
+    """
+    return not (
+        report.solve_error
+        or report.pixi_missing
+        or report.same_source
+        or report.cross_source
+        or report.unchecked
+        or report.notes
+    )
 
 
 _RELEASE = re.compile(r"(\d+(?:\.\d+)*)(?:\.?post(\d+))?")
@@ -353,8 +404,15 @@ def _pypi_identity(pkg: dict, mapping: dict | None) -> str | None:
 
 
 def _conda_identity(pypi_name: str, reverse: dict[str, list[str]]) -> str:
-    name = _normalize(pypi_name)
-    candidates = reverse.get(name, [])
+    """The conda name of a PyPI package: the mapping's, else the lowercased name.
+
+    Lowercased and not PEP 503-normalized, because conda-forge keeps PyPI's
+    separators: ``pixi search`` finds ``ruamel.yaml`` and ``zope.interface``
+    on win-64 and exits 1 for ``ruamel-yaml`` and ``zope-interface``
+    (checked 2026-09-23), so normalizing reported both as absent.
+    """
+    name = pypi_name.lower()
+    candidates = reverse.get(_normalize(pypi_name), [])
     return name if name in candidates or not candidates else candidates[0]
 
 
@@ -486,19 +544,19 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
     ``locked`` is a previous listing still valid for this lock, or None to
     list afresh.
     """
-    empty = DepReport(True, "", [], [], None, [], [], False)
+    empty = _blank(True, "")
     try:
         info = json.loads(
             _run(run, ["pixi", "info", "--json"], math.inf, deadline).stdout
         )
     except FileNotFoundError:
-        empty.solve_error = "pixi not found on PATH"
+        empty.pixi_missing = True
         return empty, None
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         empty.unchecked.append(f"pixi info ({_reason(exc)})")
         return empty, None
     platform = info["platform"]
-    report = DepReport(True, platform, [], [], None, [], [], False)
+    report = _blank(True, platform)
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=16)
     try:
         upgrade = pool.submit(_run, run, UPGRADE, math.inf, deadline)
@@ -578,6 +636,7 @@ def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | 
             same_source=[Finding(**f) for f in cached["same_source"]],
             cross_source=[Finding(**f) for f in cached["cross_source"]],
             solve_error=cached["solve_error"],
+            pixi_missing=False,
             unchecked=[],
             notes=list(cached["notes"]),
             from_cache=True,
@@ -612,6 +671,35 @@ def _cache_path(root: Path) -> Path:
     return root / ".pixi" / "agent-drift" / "deps.json"
 
 
+def _stamp(root: Path, manifest: Path) -> dict:
+    return {
+        "lock_sha256": _sha256(root / "pixi.lock"),
+        "manifest_sha256": _sha256(manifest),
+    }
+
+
+def _apply_acks(report: DepReport, acked: list[dict]) -> DepReport:
+    report.same_source = _unacked(report.same_source, acked)
+    report.cross_source = _unacked(report.cross_source, acked)
+    return report
+
+
+def cached(root: Path, *, now: float) -> DepReport | None:
+    """The fresh cached report, or None when a refresh is due.
+
+    Never computes: the SessionStart hook cannot wait on the network or on
+    ``pixi list`` (~21 s per env on doqs), so it reads this and starts a
+    detached ``--refresh`` when it is None. ``preflight --offline`` reads it
+    for the same reason.
+    """
+    manifest = _manifest(root)
+    if manifest is None:
+        return _blank(False, "")
+    data = _read_json(_cache_path(root))
+    report = _cached_report(data, _stamp(root, manifest), now)
+    return None if report is None else _apply_acks(report, _acked(data))
+
+
 def check(
     root: Path,
     *,
@@ -628,46 +716,41 @@ def check(
     """
     manifest = _manifest(root)
     if manifest is None:
-        return DepReport(False, "", [], [], None, [], [], False)
+        return _blank(False, "")
+    if not refresh and (report := cached(root, now=now)) is not None:
+        return report
     cache_path = _cache_path(root)
-    cached = _read_json(cache_path)
-    acked = _acked(cached)
-    stamp = {
-        "lock_sha256": _sha256(root / "pixi.lock"),
-        "manifest_sha256": _sha256(manifest),
-    }
-    report = None if refresh else _cached_report(cached, stamp, now)
-    if report is None:
-        same_lock = cached is not None and all(
-            cached.get(key) == value for key, value in stamp.items()
+    previous = _read_json(cache_path)
+    acked = _acked(previous)
+    stamp = _stamp(root, manifest)
+    same_lock = previous is not None and all(
+        previous.get(key) == value for key, value in stamp.items()
+    )
+    locked = previous.get("locked") if same_lock else None
+    report, locked = _compute(
+        root,
+        fetch,
+        run,
+        now,
+        deadline,
+        locked if isinstance(locked, dict) else None,
+    )
+    # No platform means pixi never answered; caching that would hide a
+    # later fix to PATH for a day.
+    if report.platform:
+        record = dataclasses.asdict(report)
+        del record["from_cache"]
+        _write_json(
+            cache_path,
+            {
+                "checked_at": now,
+                **stamp,
+                **record,
+                "locked": locked,
+                "acked": acked,
+            },
         )
-        locked = cached.get("locked") if same_lock else None
-        report, locked = _compute(
-            root,
-            fetch,
-            run,
-            now,
-            deadline,
-            locked if isinstance(locked, dict) else None,
-        )
-        # No platform means pixi never answered; caching that would hide a
-        # later fix to PATH for a day.
-        if report.platform:
-            record = dataclasses.asdict(report)
-            del record["from_cache"]
-            _write_json(
-                cache_path,
-                {
-                    "checked_at": now,
-                    **stamp,
-                    **record,
-                    "locked": locked,
-                    "acked": acked,
-                },
-            )
-    report.same_source = _unacked(report.same_source, acked)
-    report.cross_source = _unacked(report.cross_source, acked)
-    return report
+    return _apply_acks(report, acked)
 
 
 def ack(root: Path, report: DepReport) -> None:
@@ -688,6 +771,8 @@ def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
     """A summary line and the detail lines under it."""
     if not report.applicable:
         return "dependency updates: not a pixi project", []
+    if report.pixi_missing:
+        return "dependency updates: pixi not found on PATH", []
     parts = []
     if report.solve_error:
         parts.append("pixi upgrade failed")
@@ -696,15 +781,11 @@ def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
     parts.append(f"{len(report.cross_source)} cross-source")
     if report.unchecked:
         parts.append(f"{len(report.unchecked)} unchecked")
-    clean = not (
-        report.solve_error
-        or report.same_source
-        or report.cross_source
-        or report.unchecked
-    )
+    if report.notes:
+        parts.append("degraded")
     where = f" ({report.platform})" if report.platform else ""
     summary = f"dependency updates{where}: " + (
-        "up to date" if clean else ", ".join(parts)
+        "up to date" if is_clean(report) else ", ".join(parts)
     )
     lines = [report.solve_error] if report.solve_error else []
     for f in [] if report.solve_error else report.same_source:
@@ -724,7 +805,7 @@ def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
         )
     if report.unchecked:
         lines.append("unchecked: " + ", ".join(report.unchecked))
-    lines.extend(report.notes if lines else [])
+    lines.extend(report.notes)
     if report.same_source or report.cross_source:
         lines.append(f"cross-source checked for {report.platform} only")
         lines.append(
@@ -742,33 +823,102 @@ def _fetch(url: str) -> bytes:
         return response.read()
 
 
-def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("project", nargs="?", default=".")
-    parser.add_argument("--refresh", action="store_true", help="ignore the cache")
-    parser.add_argument("--ack", action="store_true", help="acknowledge findings")
-    parser.add_argument("--json", action="store_true", help="print the raw report")
-    args = parser.parse_args(argv)
-    root = Path(args.project).resolve()
+# Every pixi process the live runner has started and not yet reaped, so an
+# interrupted refresh can kill its own children instead of orphaning them.
+_children: set[subprocess.Popen] = set()
+
+
+def live_run(root: Path) -> Run:
+    """The real ``run``: pixi in ``root``, killed at its timeout.
+
+    Popen rather than subprocess.run so that each child is registered in
+    ``_children`` while it runs. ``CREATE_NO_WINDOW`` because the detached
+    refresh has no console, and Windows gives a console child of such a
+    process a visible window of its own.
+    """
 
     def run(argv: list[str], timeout: float) -> subprocess.CompletedProcess:
         # pixi writes UTF-8 whatever the console code page is.
-        return subprocess.run(
+        with subprocess.Popen(
             argv,
-            capture_output=True,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=timeout,
             cwd=root,
-        )
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ) as proc:
+            _children.add(proc)
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                raise
+            finally:
+                _children.discard(proc)
+        return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
 
+    return run
+
+
+def _lock_holder(path: Path) -> int | None:
+    try:
+        return int(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def acquire_lock(
+    path: Path, *, pid: int, pid_alive: Callable[[int], bool]
+) -> int | None:
+    """Take the refresh lock for ``pid``, or return the live holder's pid.
+
+    The SessionStart hook starts a refresh whenever the cache is stale, so
+    two sessions opened together would otherwise run two ~25 s refreshes
+    of the same project. A lock whose pid is dead or unreadable is stale --
+    a refresh killed outright never releases it -- and is taken over. Two
+    takers racing for one stale lock can both win; both write the cache
+    atomically, so that costs a duplicate refresh, never a torn file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for _attempt in range(5):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            holder = _lock_holder(path)
+            if holder is not None and pid_alive(holder):
+                return holder
+            # Windows refuses to unlink a file a peer still has open
+            # mid-write; the next attempt then reads the peer's pid.
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(str(pid))
+        return None
+    raise OSError(f"could not take the refresh lock {path}")
+
+
+def release_lock(path: Path, *, pid: int) -> None:
+    """Remove the lock only if ``pid`` still holds it, never a successor's."""
+    if _lock_holder(path) == pid:
+        path.unlink(missing_ok=True)
+
+
+def _exit_on_signal(signum, _frame):
+    # SystemExit unwinds main's finally, which kills the pixi children.
+    raise SystemExit(128 + signum)
+
+
+def _report(root: Path, args) -> int:
     start = time.time()
     report = check(
         root,
         fetch=_fetch,
-        run=run,
+        run=live_run(root),
         now=start,
         deadline=start + CLI_BUDGET_SECONDS,
         refresh=args.refresh,
@@ -785,6 +935,42 @@ def main(argv: list[str]) -> int:
         for line in lines:
             print(f"  {line}")
     return 0
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("project", nargs="?", default=".")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="ignore the cache; refuses while another refresh holds the lock",
+    )
+    parser.add_argument("--ack", action="store_true", help="acknowledge findings")
+    parser.add_argument("--json", action="store_true", help="print the raw report")
+    args = parser.parse_args(argv)
+    root = Path(args.project).resolve()
+    if not args.refresh or _manifest(root) is None:
+        return _report(root, args)
+
+    lock, pid = _cache_path(root).with_name("refresh.lock"), os.getpid()
+    holder = acquire_lock(lock, pid=pid, pid_alive=platform_paths.pid_alive)
+    if holder is not None:
+        print(f"refresh already running (pid {holder})")
+        return 0
+    trapped = [
+        getattr(signal, name)
+        for name in ("SIGTERM", "SIGBREAK")
+        if hasattr(signal, name)
+    ]
+    previous = {signum: signal.signal(signum, _exit_on_signal) for signum in trapped}
+    try:
+        return _report(root, args)
+    finally:
+        for proc in list(_children):
+            proc.kill()
+        release_lock(lock, pid=pid)
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 if __name__ == "__main__":
