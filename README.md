@@ -159,10 +159,27 @@ and pricing remain separate and unchanged.
 - `install.ps1` -- PowerShell shim over `install.py`, for Windows.
 - `scripts/platform_paths.py` -- where every platform difference the
   installer, hook registration, `preflight` and the audit care about is
-  decided once: the pixi interpreter layout, what counts as a link, and
-  junction vs symlink. A library module, not a script -- hooks
-  deliberately do not import it, since they run standalone under
-  whatever interpreter `~/.claude/settings.json` names.
+  decided once: the pixi interpreter layout, what counts as a link,
+  junction vs symlink, and VS Code's per-OS user-settings directory. A
+  library module, not a script -- hooks deliberately do not import it,
+  since they run standalone under whatever interpreter
+  `~/.claude/settings.json` names.
+- `scripts/vscode_extensions.py` + `vscode-extensions.toml` -- reports
+  drift between this machine's installed VS Code extensions and the
+  standard set the TOML file declares, each entry with a `reason` so a
+  change to it is a decision rather than drift. Exists because an
+  unwanted extension (`notebook-mcp-server`) reported writes that never
+  reached disk and cost about 4 hours before anyone noticed (ledger:
+  notebooks-skill-names-a-server-that-loses-writes), and because nothing
+  stated which extensions a machine is expected to have at all. Reads
+  the global disabled-extensions state from VS Code's own sqlite db,
+  opened read-only (`mode=ro`) so a running VS Code is never contended
+  with, and reports a locked or missing db as "enabled state unknown"
+  rather than crashing -- a missing required extension is still reported
+  in that state, and an installed forbidden one is still reported as
+  active. Every external effect (`code --list-extensions`, the db, the
+  IDE lock, process liveness) is an injected callable, so no test
+  touches the real ones.
 - `scripts/installation_contract.py` -- the shared canonical guidance,
   generated adapter formats and host destination tuples used by the
   installer and preflight. It is an import-only contract module, not a

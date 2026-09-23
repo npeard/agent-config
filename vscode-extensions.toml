@@ -1,0 +1,35 @@
+# Standard VS Code extension set for this machine, checked by
+# scripts/vscode_extensions.py (consumed by `pixi run preflight` and the
+# environment-drift SessionStart hook). Every entry states why it is
+# required or forbidden, so changing this file is a decision, not drift.
+# Everything else is unlisted: allowed, and never reported.
+
+[required."anthropic.claude-code"]
+reason = "Claude Code's own VS Code integration (IDE connection, diagnostics, selection context)"
+
+[required."charliermarsh.ruff"]
+reason = "Python formatting and linting, the editor-side half of `pixi run format`/`lint`"
+
+[required."astral-sh.ty"]
+reason = "Python language service and type checker, chosen over Pylance for this machine"
+
+[required."ms-python.python"]
+reason = "core Python extension: debugging, environment selection, test discovery"
+
+[required."ms-python.vscode-python-envs"]
+reason = "Python Environments UI; needs a pixi provider (below) to list pixi environments"
+
+[required."jjjermiah.pixi-vscode"]
+reason = "manages pixi projects and tasks -- the project-management half of the pixi pair; renan-r-santos.pixi-code is the other half"
+
+[required."renan-r-santos.pixi-code"]
+reason = "Python Environments provider that lets ms-python.vscode-python-envs select pixi environments -- the environments half of the pixi pair; jjjermiah.pixi-vscode is the other half"
+
+[required."openai.chatgpt"]
+reason = "Codex's VS Code integration, used alongside Claude Code"
+
+[forbidden."olavovieiradecarvalho.notebook-mcp-server"]
+reason = "reports notebook writes that never reach disk; cost about 4 hours once (ledger: notebooks-skill-names-a-server-that-loses-writes)"
+
+[forbidden."ms-python.vscode-pylance"]
+reason = "a second Python language server alongside ty, giving duplicate and conflicting diagnostics"
