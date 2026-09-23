@@ -1192,3 +1192,59 @@ Reopen if a later cycle shows spec errors surviving review into a merged
 branch, which would mean the loop is not catching them rather than that
 specs occasionally contain them.
 """
+
+[[decision]]
+class = "user-rejected-tool"
+date = "2026-09-23"
+cause = "underspecified-task"
+outcome = "tier-0"
+count_at_decision = 18
+note = """
+Reopened by the doubling rule (9 -> 18). The prior entry left a specific
+instruction: check whether long-running compute scoping is still the trigger.
+It is not the whole story any more, so this is not a re-stamp.
+
+The prior batch was AskUserQuestion menus about how to scope an N-hour sweep,
+rejected because a fixed option set drafted before the user's context could
+not contain the real answer. This session (a four-item post-merge cleanup in
+`doqs`) contributed two rejections of a different shape: a batch of tool calls
+was interrupted so the user could redirect the task's premise. The model had
+asserted "there is no torch 2.14" after checking only conda-forge -- the
+project's channel -- and started building on that. The user knew 2.14 existed
+on PyPI and stopped the batch. One cheap check (PyPI, or the GitHub release
+tags) would have settled it before any work depended on it.
+
+So the cause is unchanged -- rework from a decision point, not from tooling
+failing to catch something -- but the decision point moved earlier: not
+"which option do you want" but "is the premise this task rests on actually
+true". No hook can judge that; whether a premise needs verifying before it is
+built on requires knowing what the premise is load-bearing for.
+
+Tier 0 again, and tier 4 is additionally closed right now: AGENTS.md is at
+1523 words, inside the P3 warn band, and this session already added a clause
+to it. Adding more prose would require evicting something, and nothing here
+justifies that.
+
+That added clause is the real outcome of this friction and is already
+committed (agent-config 5651a17): the "Absence of a declaration is not absence
+of a capability" rule now says one registry is not the world -- name the
+source with the verdict ("not on conda-forge win-64") rather than asserting
+non-existence, and check whether a version ceiling is the project's own pin
+rather than the ecosystem's. It was the project's own pin, a stale
+cuda-version floor holding the solve two minor versions back.
+
+Evidence the corrected behaviour works, with the power-to-fail check the
+skill asks for: the failure mode is "assert absence from one source". For a
+test to have power here it had to contain a second absence claim reached
+through one channel. It did -- later the same session the model needed to know
+whether torch 2.14 changed the CSR-autograd premise, and instead of reasoning
+from the 2.13 result it installed 2.14 in a throwaway pixi env and probed it
+directly, then reported the versions and the exact error strings. Same shape,
+opposite handling.
+
+If this reopens again at 36, the question to ask is whether the two symptoms
+have genuinely diverged enough to be separate classes -- menu-shaped questions
+the user cannot answer from a fixed option set, versus premises acted on
+before they were checked. They share cause 6 today, but they would want
+different fixes if either grew a mechanical tell.
+"""
