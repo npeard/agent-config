@@ -13,8 +13,9 @@ So there are two halves, and pixi owns one of them.
   its explicit proposals and never re-derives them. A solve failure is
   reported as the solver's own text and not retried with a guessed
   ``--exclude``: the conflict is itself worth telling the user about, and a
-  retry would hide it. Nothing is ever applied; every upgrade argv carries
-  ``--dry-run``.
+  retry would hide it. Nothing is ever applied or installed: every upgrade
+  argv carries ``--dry-run``, and every pixi call that could install an
+  environment carries ``--no-install`` (``--frozen`` alone installs).
 * **Cross-source** updates are the only thing computed here: for each
   explicit locked dependency, the newest final release in the source it is
   *not* locked from (PyPI for a conda package, conda-forge for a PyPI one),
@@ -92,7 +93,11 @@ REQUEST_SECONDS = 5.0
 # nobody waits on, so the budget is generous. A cold run on doqs needs
 # ~25 s, most of it `pixi list` (see _locked).
 CLI_BUDGET_SECONDS = 120.0
-UPGRADE = ["pixi", "upgrade", "--dry-run", "--json"]
+UPGRADE = ["pixi", "upgrade", "--dry-run", "--no-install", "--json"]
+# What pixi output of an unforeseen shape raises when parsed. preflight
+# promises exit 0, so each parse catches these and records the step as
+# unchecked instead of crashing.
+MALFORMED = (KeyError, TypeError, ValueError, AttributeError, IndexError)
 STDERR_LINES = 8
 
 # PyPI wheel platform tags that install on each pixi platform.
@@ -243,8 +248,11 @@ def _write_json(path: Path, data: dict) -> None:
     A cache that cannot be written costs only a recompute next time, so an
     OSError is dropped rather than failing the check.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    except OSError:
+        return
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(data, handle)
@@ -266,6 +274,8 @@ def _reason(exc: BaseException) -> str:
         return "timed out"
     if isinstance(exc, OSError):
         return "unreachable"
+    if isinstance(exc, MALFORMED):
+        return "unexpected output"
     return f"failed: {type(exc).__name__}"
 
 
@@ -339,12 +349,42 @@ def _same_source(upgrade: dict, platform: str) -> list[Finding]:
     return sorted(found.values(), key=lambda f: f.name)
 
 
-def _locked(pool, run: Run, info: dict, deadline: float) -> dict[str, list]:
-    """Explicit locked packages by name, as ``[package, envs]``.
+def _valid_row(pkg) -> bool:
+    """Whether a listed package has every field the checks read."""
+    if not isinstance(pkg, dict):
+        return False
+    fields = ["name", "version", "kind"] + (
+        ["source"] if pkg.get("kind") == "conda" else []
+    )
+    return all(isinstance(pkg.get(field), str) for field in fields)
 
-    The envs are listed in parallel because ``pixi list`` is slow on a
-    project with an editable path dependency (~21 s per env on doqs,
-    against 0.2 s without one).
+
+def _valid_listing(locked) -> bool:
+    return isinstance(locked, dict) and all(
+        isinstance(entry, list) and len(entry) == 2 and _valid_row(entry[0])
+        for entry in locked.values()
+    )
+
+
+def _env_rows(result: subprocess.CompletedProcess) -> list[dict]:
+    result.check_returncode()
+    # An editable path dependency has no version, and nothing to update.
+    rows = [pkg for pkg in json.loads(result.stdout) if pkg.get("version") is not None]
+    if not all(_valid_row(pkg) for pkg in rows):
+        raise ValueError("a pixi list row lacks the expected fields")
+    return rows
+
+
+def _locked(pool, run: Run, info: dict, platform: str, deadline: float):
+    """Explicit locked packages by name, as ``[package, envs]``, and the envs
+    that could not be listed.
+
+    Only envs solved for this platform are listed, matched on ``subdir``
+    because the platform ``name`` carries any virtual-package suffix
+    (``win-64-cuda-13-0``). They are listed in parallel because ``pixi
+    list`` is slow on a project with an editable path dependency (~21 s per
+    env on doqs, against 0.2 s without one). One env failing does not
+    discard the others.
     """
     jobs = [
         (
@@ -352,22 +392,28 @@ def _locked(pool, run: Run, info: dict, deadline: float) -> dict[str, list]:
             pool.submit(
                 _run,
                 run,
-                ["pixi", "list", "--json", "--explicit", "--frozen", "-e", env["name"]],
+                [
+                    *("pixi", "list", "--json", "--explicit", "--frozen"),
+                    *("--no-install", "-e", env["name"]),
+                ],
                 math.inf,
                 deadline,
             ),
         )
         for env in info["environments_info"]
+        if any(p.get("subdir") == platform for p in env.get("platforms") or [])
     ]
     locked: dict[str, list] = {}
+    unchecked = []
     for env, job in jobs:
-        result = job.result(timeout=max(0.0, deadline - time.time()))
-        result.check_returncode()
-        for pkg in json.loads(result.stdout):
-            if pkg.get("version") is None:  # an editable path dependency
-                continue
+        try:
+            rows = _env_rows(job.result(timeout=max(0.0, deadline - time.time())))
+        except (OSError, subprocess.SubprocessError, *MALFORMED) as exc:
+            unchecked.append(f"pixi list -e {env} ({_reason(exc)})")
+            continue
+        for pkg in rows:
             locked.setdefault(pkg["name"], [pkg, []])[1].append(env)
-    return locked
+    return locked, unchecked
 
 
 def _mapping(root: Path, fetch: Fetch, now: float) -> dict:
@@ -387,9 +433,11 @@ def _mapping(root: Path, fetch: Fetch, now: float) -> dict:
 def _pypi_identity(pkg: dict, mapping: dict | None) -> str | None:
     """The PyPI name of a conda package, or None when it has none.
 
-    A metapackage maps to null (``pytorch-gpu``); its identity is the first
-    dependency that has one (``pytorch`` -> ``torch``). One hop only, so a
-    package such as ``cuda-version`` or ``python`` stays unmapped.
+    A metapackage maps to null (``pytorch-gpu``); its identity is a mapped
+    dependency pinned to its own version (``pytorch 2.13.0 cuda*`` ->
+    ``torch``). The pin is what marks a metapackage: ``python`` depends on
+    ``pip`` too, and taking any mapped dependency reported pip's releases
+    as python's. One hop only, so ``cuda-version`` stays unmapped.
     """
     if mapping is None:
         return pkg["name"]
@@ -397,9 +445,11 @@ def _pypi_identity(pkg: dict, mapping: dict | None) -> str | None:
     if target:
         return target
     for dep in pkg.get("depends") or []:
-        target = mapping.get(dep.split()[0])
-        if target:
-            return target
+        parts = dep.split()
+        if len(parts) >= 2 and parts[1].removeprefix("==") == pkg["version"]:
+            target = mapping.get(parts[0])
+            if target:
+                return target
     return None
 
 
@@ -503,11 +553,8 @@ def _spec(pkg: dict) -> str | None:
 def _cross_source(pool, locked, mapping, fetch, run, platform, deadline):
     """Findings from the other source, plus what could not be checked."""
     python_pkg = locked.get("python", ({}, []))[0]
-    python = (
-        tuple(int(p) for p in python_pkg["version"].split(".")[:2])
-        if python_pkg
-        else None
-    )
+    minor = re.match(r"(\d+)\.(\d+)", python_pkg.get("version", ""))
+    python = (int(minor[1]), int(minor[2])) if minor else None
     reverse: dict[str, list[str]] = {}
     for conda_name, pypi_name in (mapping or {}).items():
         if pypi_name:
@@ -549,23 +596,32 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
         info = json.loads(
             _run(run, ["pixi", "info", "--json"], math.inf, deadline).stdout
         )
+        platform = info["platform"]
+        if not isinstance(platform, str) or not isinstance(
+            info["environments_info"], list
+        ):
+            raise TypeError("pixi info lacks a platform or its environments")
     except FileNotFoundError:
         empty.pixi_missing = True
         return empty, None
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+    except (OSError, subprocess.SubprocessError, *MALFORMED) as exc:
         empty.unchecked.append(f"pixi info ({_reason(exc)})")
         return empty, None
-    platform = info["platform"]
     report = _blank(True, platform)
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=16)
     try:
         upgrade = pool.submit(_run, run, UPGRADE, math.inf, deadline)
         mapping_job = pool.submit(_mapping, root, fetch, now)
+        # Only a complete listing is kept for reuse: a partial one reused
+        # under the same lock would hide the env that failed until it moved.
+        reusable = locked
         if locked is None:
             try:
-                locked = _locked(pool, run, info, deadline)
-            except (OSError, ValueError, subprocess.SubprocessError) as exc:
-                report.unchecked.append(f"pixi list ({_reason(exc)})")
+                locked, failed = _locked(pool, run, info, platform, deadline)
+            except MALFORMED as exc:  # an environments_info entry of odd shape
+                locked, failed = {}, [f"pixi list ({_reason(exc)})"]
+            report.unchecked.extend(failed)
+            reusable = None if failed else locked
         try:
             mapping = mapping_job.result(timeout=max(0.0, deadline - time.time()))
         except (OSError, ValueError) as exc:  # offline, timed out, or bad JSON
@@ -587,7 +643,11 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
                 excerpt = _solve_excerpt(result.stderr)
                 report.solve_error = f"pixi upgrade failed to solve: {excerpt}"
             else:
-                report.same_source = _same_source(json.loads(result.stdout), platform)
+                try:
+                    upgrades = json.loads(result.stdout)
+                    report.same_source = _same_source(upgrades, platform)
+                except MALFORMED as exc:
+                    report.unchecked.append(f"pixi upgrade ({_reason(exc)})")
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
     proposals = {f.name: f.candidate for f in report.same_source}
@@ -611,7 +671,7 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
             )
         )
     report.cross_source.sort(key=lambda f: f.name)
-    return report, locked
+    return report, reusable
 
 
 def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | None:
@@ -733,7 +793,7 @@ def check(
         run,
         now,
         deadline,
-        locked if isinstance(locked, dict) else None,
+        locked if _valid_listing(locked) else None,
     )
     # No platform means pixi never answered; caching that would hide a
     # later fix to PATH for a day.

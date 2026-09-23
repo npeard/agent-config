@@ -70,12 +70,19 @@ class Fake:
         verb = argv[1]
         if verb == "upgrade":
             assert "--dry-run" in argv
+            assert "--no-install" in argv
             answer = self.upgrade
         elif verb == "info":
             answer = completed(argv, stdout=json.dumps(self.info))
         elif verb == "list":
-            env = argv[argv.index("-e") + 1]
-            answer = completed(argv, stdout=json.dumps(self.lists[env]))
+            # --frozen alone installs the environment; --no-install stops it.
+            assert "--no-install" in argv
+            listing = self.lists[argv[argv.index("-e") + 1]]
+            answer = (
+                listing
+                if isinstance(listing, BaseException | subprocess.CompletedProcess)
+                else completed(argv, stdout=json.dumps(listing))
+            )
         elif verb == "search":
             found = self.search.get(argv[-1])
             answer = (
@@ -105,6 +112,9 @@ class Fake:
 
     def upgrade_argvs(self):
         return [argv for argv in self.runs if argv[1] == "upgrade"]
+
+    def listed_envs(self):
+        return [argv[argv.index("-e") + 1] for argv in self.runs if argv[1] == "list"]
 
     def set_locked(self, name, version):
         for rows in self.lists.values():
@@ -235,6 +245,90 @@ class TestSameSource:
         assert fake.upgrade_argvs()
         assert all("--dry-run" in argv for argv in fake.upgrade_argvs())
 
+    def test_no_pixi_call_installs(self, project, fake):
+        # pixi's help: --frozen "Install[s] the environment as defined in the
+        # lock file". A drift check must never modify an environment.
+        check(project, fake)
+        installing = [argv for argv in fake.runs if argv[1] in ("list", "upgrade")]
+        assert installing
+        assert all("--no-install" in argv for argv in installing)
+
+
+class TestLocked:
+    def test_an_env_without_this_platform_is_not_listed(self, project, fake):
+        fake.info["environments_info"].append(
+            {
+                "name": "linux-only",
+                "platforms": [{"name": "linux-64", "subdir": "linux-64"}],
+            }
+        )
+        report = check(project, fake)
+        assert sorted(fake.listed_envs()) == ["default", "dev", "test"]
+        assert report.unchecked == []
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            subprocess.TimeoutExpired(["pixi", "list"], 1),
+            completed([], 1, stderr="boom"),
+            completed([], stdout="not json"),
+            completed([], stdout=json.dumps([{"name": "x", "version": "1"}])),
+        ],
+        ids=["timeout", "exit-1", "bad-json", "missing-keys"],
+    )
+    def test_one_failing_env_keeps_the_others(self, project, fake, failure):
+        fake.lists["test"] = failure
+        report = check(project, fake)
+        listing = [item for item in report.unchecked if item.startswith("pixi list")]
+        assert len(listing) == 1
+        assert listing[0].startswith("pixi list -e test (")
+        assert names(report.cross_source) == [("pytorch-gpu", "2.14.0")]
+
+    def test_a_partial_listing_is_not_reused(self, project, fake):
+        # Reusing it under the same lock would hide the failed env for good.
+        fake.lists["test"] = subprocess.TimeoutExpired(["pixi", "list"], 1)
+        check(project, fake)
+        fake.lists["test"] = fixture("list_default.json")
+        before = len(fake.listed_envs())
+        check(project, fake, now=NOW + DAY + 1)
+        assert "test" in fake.listed_envs()[before:]
+
+
+class TestUnexpectedPixiOutput:
+    """preflight promises exit 0, so pixi output of an unforeseen shape must
+    become an unchecked note rather than an exception."""
+
+    @pytest.mark.parametrize("drop", ["platform", "environments_info"])
+    def test_info_missing_a_key(self, project, fake, drop):
+        del fake.info[drop]
+        report = check(project, fake)
+        assert report.unchecked == ["pixi info (unexpected output)"]
+
+    @pytest.mark.parametrize(
+        "stdout",
+        [
+            "not json",
+            json.dumps({"environment": {"dev": {"win-64": [{"explicit": True}]}}}),
+            json.dumps([]),
+        ],
+    )
+    def test_upgrade_output_of_another_shape(self, project, fake, stdout):
+        fake.upgrade = completed([], stdout=stdout)
+        report = check(project, fake)
+        assert "pixi upgrade (unexpected output)" in report.unchecked
+        assert names(report.cross_source) == [("pytorch-gpu", "2.14.0")]
+
+    def test_a_malformed_cached_listing_is_relisted(self, project, fake):
+        check(project, fake)
+        cache = project / ".pixi" / "agent-drift" / "deps.json"
+        data = json.loads(cache.read_text())
+        data["locked"] = {"x": [{"name": "x"}, []]}
+        cache.write_text(json.dumps(data))
+        before = len(fake.listed_envs())
+        report = check(project, fake, now=NOW + DAY + 1)
+        assert len(fake.listed_envs()) > before
+        assert names(report.cross_source) == [("pytorch-gpu", "2.14.0")]
+
 
 class TestCrossSource:
     def test_candidate_equal_to_the_same_source_proposal_is_dropped(
@@ -338,6 +432,8 @@ class TestCrossSource:
         self, project, fake, platform, tag, wheel
     ):
         fake.info["platform"] = platform
+        for env in fake.info["environments_info"]:
+            env["platforms"].append({"name": platform, "subdir": platform})
         fake.pypi["torch"]["releases"]["2.14.0"] = [
             {
                 "filename": f"torch-2.14.0-cp313-cp313-{tag}.whl",
@@ -370,6 +466,29 @@ class TestCrossSource:
         searched = [argv[-1] for argv in fake.runs if argv[1] == "search"]
         assert conda_name in searched
         assert (pypi_name, "2.0.0") in names(report.cross_source)
+
+    def test_a_hop_needs_a_dependency_pinned_to_the_same_version(self, project, fake):
+        # conda-forge's python depends on pip, which has a PyPI name; taking
+        # any mapped dependency would report pip's releases as python's.
+        fake.mapping["pip"] = "pip"
+        for rows in fake.lists.values():
+            for row in rows:
+                if row["name"] == "python":
+                    row["depends"].append("pip")
+        fake.pypi["pip"] = fake.pypi["torch"]
+        report = check(project, fake)
+        assert "https://pypi.org/pypi/pip/json" not in fake.fetches
+        assert "python" not in [f.name for f in report.cross_source]
+
+    def test_a_hop_to_a_differently_versioned_dependency_is_not_taken(
+        self, project, fake
+    ):
+        for rows in fake.lists.values():
+            for row in rows:
+                if row["name"] == "pytorch-gpu":
+                    row["depends"] = ["pytorch 2.12.0 cuda*_mkl*302"]
+        check(project, fake)
+        assert "https://pypi.org/pypi/torch/json" not in fake.fetches
 
     def test_absent_from_source_is_not_an_error(self, project, fake):
         del fake.pypi["torch"]
@@ -451,6 +570,14 @@ class TestFailureModes:
             "deps.json",
             "mapping.json",
         ]
+
+
+class TestWriteJson:
+    def test_an_unmakeable_directory_is_dropped_not_raised(self, tmp_path):
+        blocker = tmp_path / "blocker"
+        blocker.write_text("a file where the cache directory would go")
+        dep_updates._write_json(blocker / "sub" / "deps.json", {"a": 1})
+        assert blocker.read_text().startswith("a file")
 
 
 class TestCache:
