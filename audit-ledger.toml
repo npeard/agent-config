@@ -366,15 +366,15 @@ principle = 4
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "717d11cd2de4c360dbdb6c24e4c98ec692435a707f54b8bf653c06b87e793251"
+asset_sha = "0d5efb2f57e2511343691bab4838daa8e20251fc4b65886c9b2432e58786f695"
 note = """
 check_script_help's own rationale is "a script an agent must read to use has
 failed principle 3 while pretending to serve it" -- but this file is never
 invoked. It is a library module imported by install.py, register_hooks.py,
-preflight.py and audit_assets.py to keep one set of platform decisions
-(interpreter layout, what counts as a link, junction vs symlink) from being
-duplicated and drifting across them; hooks deliberately do not import it,
-since they run standalone and stay stdlib-only.
+preflight.py, audit_assets.py, dep_updates.py, vscode_extensions.py and
+hooks/environment-drift.py (the one hook that loads it, by absolute path) to
+keep one set of platform decisions from being duplicated and drifting across
+them.
 
 Bolting on an ArgumentParser that no one runs would satisfy the check without
 serving the principle behind it: there is no CLI interface for --help to
@@ -395,6 +395,12 @@ register_codex_hooks.py had reintroduced exactly that -- it hardcoded
 could only answer for the running host. Codex hooks.json names both platforms
 in one entry, so the module now exposes both layouts by name and no caller
 needs to spell one itself.
+
+Re-granted 2026-09-23 after it gained vscode_user_dir, installation_checkout
+and pid_alive. Still import-only with no entry point, so still the false
+positive. The additions again confirm the premise: installation_checkout had
+been copied into vscode_extensions.py, and the copy lost the 20 s git
+timeout the original had.
 """
 
 [[decision]]
@@ -600,7 +606,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "61fb01c14551fc6a1be0e49e92f4d35132917317549acac441214de26e91587b"
+asset_sha = "ebff3abbd414f9d47d9152e3023e2920bc00ab2d1570b2fa471539467c1e4e98"
 note = """
 Reads PyPI JSON, `pixi search`, `pixi list` and the solver's stderr. It prints
 a summary that the SessionStart hook will carry into agent context in every
@@ -619,4 +625,29 @@ excerpt. `render` collapses whitespace in every detail line, so none of that
 text can open a line of its own. A newline in a name did exactly that in
 task-list.py, and a test pins the fix here. Nothing read is executed or passed
 to a shell, and the `--ack` hint names only this script's own path.
+
+Re-granted 2026-09-23 after the refresh lock, cached(), pixi_missing and the
+always-rendered degradation notes. None of these widens what is emitted. The
+notes and the "pixi not found" and "refresh already running" lines are this
+file's own text, and the pid in the last passes through int(). The live
+runner still passes an argv list, with no shell.
+"""
+
+[[decision]]
+asset = "hooks/environment-drift.py"
+principle = 5
+date = "2026-09-23"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "81165c22c10c1789657ac1cf4374732431058bac874f22b4b9e2d99ded7a87a6"
+note = """
+Emits into SessionStart context in every project, so the check is right to
+flag it. Its only subprocess is the detached refresh, whose stdio is DEVNULL
+and never read. Everything it emits is produced by the two renderers it
+loads. dep_updates.render is bounded as that file's own entry above
+describes. vscode_extensions.render reports only ids and reasons from this
+repo's vscode-extensions.toml, because an unlisted extension is never
+reported, plus a fixed IDE message. The IDE lock's authToken is never
+emitted, and a test pins that. The trust boundary is also stated in the
+hook's docstring.
 """
