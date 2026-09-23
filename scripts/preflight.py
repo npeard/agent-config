@@ -13,19 +13,24 @@ are state and belong here; "is there a type checker at all" does not.
 
 Deliberately stdlib-only and project-agnostic -- it is meant to be copied
 into new projects verbatim, per this repo's ``scripts/`` convention. Copied
-alone it runs and reports; the two checks that ask what a link is on this
-platform (hook registration and skill links) need ``platform_paths.py``
-beside it and skip without it. It
+alone it runs and reports; the checks that need a sibling module skip
+without it: hook registration and skill links need ``platform_paths.py``,
+and the dependency and VS Code extension rows need ``dep_updates.py`` and
+``vscode_extensions.py`` (plus ``platform_paths.py``, which both load). It
 assumes a current interpreter rather than degrading to whatever `python3`
 the machine ships: every project gets a local pixi environment, and hooks
 invoke that environment's python explicitly. See the interpreter check
 below, which enforces the assumption instead of hoping for it.
 
 Usage:
-    python scripts/preflight.py [--with-tests] [--check-updates] [--strict]
+    python scripts/preflight.py [--with-tests] [--check-updates] [--offline]
+                                [--strict]
 
-Two checks are opt-in because the common caller is a fast, possibly
-offline SessionStart hook:
+The dependency-updates row is on by default and may use the network: its
+result is cached per project for 24 h, and a declined update is the user's
+decision to record (``dep_updates.py --ack``), not a reason to skip the
+row. The SessionStart hook ``hooks/environment-drift.py`` reports the same
+rows from the cache without waiting.
 
 ``--with-tests``
     Actually run the detected test command. Off by default because a suite
@@ -33,6 +38,8 @@ offline SessionStart hook:
 ``--check-updates``
     Query upstream for newer pre-commit hook revs. Off by default because
     it needs network and costs a ``git ls-remote`` per configured repo.
+``--offline``
+    Report dependency updates from the cache only, never the network.
 
 Exit status is 0 unless ``--strict`` is passed, so that a hook can never
 abort a session over a warning.
@@ -47,53 +54,49 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
-def _load_platform_paths():
-    """The sibling platform module, or None when it was not copied along.
+def _load_sibling(name: str):
+    """The sibling module ``name``, or None when it was not copied along.
 
     Loaded by path rather than by name so resolution does not depend on
     sys.path, and so no sys.path mutation is needed -- `ruff --fix` would
     hoist one above the E402 boundary, and this repo ships zero
-    suppressions. (An earlier version of this docstring cited the importlib
-    pattern the tests use for *hyphenated* hook filenames as the precedent.
-    That is a different problem: `platform_paths` is a legal identifier and
-    could be imported by name. Loading by path is still the better fit here,
-    for the sys.path reason, but the cited precedent did not support it.)
+    suppressions. Registered in sys.modules before it runs because
+    dataclasses look their own module up there while the class is built.
 
     None is not an error. This file's own docstring and the README both
-    advertise it as copyable into a new project verbatim, and
-    platform_paths.py is deliberately not on that list -- it is a library
-    module. Loading it unconditionally broke that promise the loudest way
-    available: a FileNotFoundError traceback from module scope, before a
-    single check ran, in a script whose exit contract is 0 unless --strict
-    precisely so a SessionStart hook can never abort a session over a
-    warning. The checks that need it now skip, which is the idiom every
-    other optional sibling here already uses.
+    advertise it as copyable into a new project verbatim, and the siblings
+    are deliberately not on that list. Loading one unconditionally broke
+    that promise the loudest way available: a FileNotFoundError traceback
+    from module scope, before a single check ran, in a script whose exit
+    contract is 0 unless --strict precisely so a SessionStart hook can
+    never abort a session over a warning. The checks that need a sibling
+    skip instead.
     """
-    path = Path(__file__).resolve().parent / "platform_paths.py"
+    path = Path(__file__).resolve().parent / f"{name}.py"
     if not path.is_file():
         return None
-    spec = importlib.util.spec_from_file_location("platform_paths", path)
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
-def _load_installation_contract():
-    """The installer contract, or None when it was not copied along."""
-    path = Path(__file__).resolve().parent / "installation_contract.py"
-    if not path.is_file():
-        return None
-    spec = importlib.util.spec_from_file_location("installation_contract", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-platform_paths = _load_platform_paths()
-installation_contract = _load_installation_contract()
+platform_paths = _load_sibling("platform_paths")
+installation_contract = _load_sibling("installation_contract")
+# Both load platform_paths themselves, so they are only usable beside it.
+dep_updates = _load_sibling("dep_updates") if platform_paths else None
+vscode_extensions = _load_sibling("vscode_extensions") if platform_paths else None
+# The standard set lives at the root of the checkout that ships the module.
+EXTENSION_STANDARD = (
+    Path(vscode_extensions.__file__).resolve().parent.parent / "vscode-extensions.toml"
+    if vscode_extensions
+    else None
+)
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -101,15 +104,20 @@ OK, WARN, FAIL = "ok", "warn", "fail"
 class Report:
     def __init__(self) -> None:
         self.rows: list[tuple[str, str, str]] = []
+        # Parallel to rows: the indented lines printed under each one.
+        self.lines: list[list[str]] = []
 
-    def add(self, status: str, label: str, detail: str = "") -> None:
+    def add(self, status: str, label: str, detail: str = "", lines=()) -> None:
         self.rows.append((status, label, detail))
+        self.lines.append(list(lines))
 
     def render(self) -> int:
         width = max(len(s) for s, _, _ in self.rows)
-        for status, label, detail in self.rows:
+        for (status, label, detail), lines in zip(self.rows, self.lines, strict=True):
             line = f"[{status:<{width}}] {label}"
             print(f"{line}: {detail}" if detail else line)
+            for extra in lines:
+                print(f"  {extra}")
         counts = {s: sum(1 for r in self.rows if r[0] == s) for s in (OK, WARN, FAIL)}
         print(
             f"\n{counts[OK]} ok, {counts[WARN]} warning(s), {counts[FAIL]} failure(s)"
@@ -178,6 +186,99 @@ def check_clean_tree(report: Report) -> None:
         report.add(WARN, "clean working tree", f"{n} uncommitted change(s)")
     else:
         report.add(OK, "clean working tree")
+
+
+def check_upstream(report: Report) -> None:
+    """Warn when the branch's upstream is a branch of another name.
+
+    `git checkout -b X origin/Y` sets Y as X's upstream, and a VS Code Sync
+    (or a bare `git push`) then updates the shared branch Y: in doqs session
+    3d220b2c that put commits on draft-august in two repos. The name is read
+    from the merge ref rather than split off `@{u}`, which cannot tell a
+    remote called `a/b` from a branch called `b/c`.
+    """
+    branch = git("symbolic-ref", "--quiet", "--short", "HEAD")
+    upstream = git("rev-parse", "--abbrev-ref", "@{u}") if branch else None
+    if not branch or not upstream:
+        report.add(OK, "branch upstream", "detached HEAD" if not branch else "none")
+        return
+    merge = git("config", f"branch.{branch}.merge") or ""
+    if merge.removeprefix("refs/heads/") == branch:
+        report.add(OK, "branch upstream", upstream)
+        return
+    remote = git("config", f"branch.{branch}.remote") or "origin"
+    report.add(
+        WARN,
+        "branch upstream",
+        f"upstream is {upstream} -- a VS Code Sync or plain push would update "
+        f"that shared branch; `git branch --unset-upstream` or "
+        f"`git push -u {remote} HEAD`",
+    )
+
+
+def check_dependencies(report: Report, root: Path, offline: bool) -> None:
+    """Report dependency updates, same-source and cross-source.
+
+    Offline reads only the cache the SessionStart hook's detached refresh
+    and earlier runs wrote, so it never waits on the network. Silent in a
+    project that is not a pixi project.
+    """
+    if dep_updates is None:
+        return
+    now = time.time()
+    if offline:
+        result = dep_updates.cached(root, now=now)
+        if result is None:
+            report.add(
+                WARN,
+                "dependency updates (cached)",
+                "no cached result (run preflight without --offline)",
+            )
+            return
+    else:
+        result = dep_updates.check(
+            root,
+            fetch=dep_updates.live_fetch,
+            run=dep_updates.live_run(root),
+            now=now,
+            deadline=now + dep_updates.CLI_BUDGET_SECONDS,
+            refresh=False,
+        )
+    if not result.applicable:
+        return
+    summary, lines = dep_updates.render(result, Path(dep_updates.__file__).resolve())
+    label, _, detail = summary.partition(": ")
+    report.add(
+        OK if dep_updates.is_clean(result) else WARN,
+        f"{label} (cached)" if offline else label,
+        detail,
+        lines,
+    )
+
+
+def check_extensions(report: Report, root: Path) -> None:
+    """Report VS Code extension drift against the standard set.
+
+    The IDE check compares against the main checkout, since that is the
+    folder a VS Code window has open when an agent works in a worktree.
+    Silent without the standard file (a copied preflight) or without `code`
+    (a machine with no VS Code).
+    """
+    if vscode_extensions is None or not EXTENSION_STANDARD.is_file():
+        return
+    result = vscode_extensions.live_check(
+        vscode_extensions.load_standard(EXTENSION_STANDARD),
+        platform_paths.installation_checkout(root),
+        home=Path.home(),
+        env=os.environ,
+    )
+    if not result.applicable:
+        return
+    summary, lines = vscode_extensions.render(result)
+    label, _, detail = summary.partition(": ")
+    report.add(
+        WARN if vscode_extensions.problem_count(result) else OK, label, detail, lines
+    )
 
 
 def declared_floor(root: Path) -> tuple[int, int] | None:
@@ -813,6 +914,11 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="skip the friction report (on by default: local and fast)",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="report dependency updates from the cache only",
+    )
     args = parser.parse_args(argv)
 
     report = Report()
@@ -829,11 +935,14 @@ def main(argv: list[str]) -> int:
         return 1 if args.strict else 0
 
     check_branch(report)
+    check_upstream(report)
     check_clean_tree(report)
     check_precommit_installed(report, root)
     if args.check_updates:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
+    check_dependencies(report, root, offline=args.offline)
+    check_extensions(report, root)
     check_hooks(report, root)
     check_codex_hooks(report, root)
     check_instructions(report, root, Path.home())

@@ -5,9 +5,12 @@ layout, that a link is a symlink, and that reads are UTF-8 -- were repeated
 across install, hook registration, preflight and the audit, so a Windows fix
 in one left the others wrong.
 
-Hooks deliberately do NOT import this. They are spawned standalone with an
-arbitrary cwd, so they stay stdlib-only and self-contained; the duplication
-that costs is held in check by a shared test fixture instead.
+Hooks are spawned standalone with an arbitrary cwd, so most stay
+self-contained and do not import this; the duplication that costs is held
+in check by a shared test fixture instead. environment-drift.py is the
+exception: it loads this module, and the scripts that need it, by absolute
+path from its own checkout, so the cwd cannot break it, and like them this
+module is stdlib-only.
 """
 
 from __future__ import annotations

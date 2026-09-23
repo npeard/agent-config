@@ -38,6 +38,178 @@ def isolate_preflight_home(monkeypatch: pytest.MonkeyPatch, root: Path) -> Path:
     return home
 
 
+def forbidden(*args, **kwargs):
+    raise AssertionError("a test reached the network, pixi or VS Code")
+
+
+@pytest.fixture(autouse=True)
+def no_external_effects(monkeypatch: pytest.MonkeyPatch):
+    """main() now runs the dependency and extension checks, whose real
+    effects are the network, pixi and `code`; no test may reach them."""
+    monkeypatch.setattr(preflight.dep_updates, "live_fetch", forbidden)
+    monkeypatch.setattr(preflight.dep_updates, "live_run", lambda root: forbidden)
+    monkeypatch.setattr(preflight.vscode_extensions, "_run_code", lambda argv: None)
+
+
+def dep_report(**changes):
+    dep = preflight.dep_updates
+    report = dep._blank(True, "win-64")
+    for key, value in changes.items():
+        setattr(report, key, value)
+    return report
+
+
+def torch_finding():
+    return preflight.dep_updates.Finding(
+        name="pytorch-gpu",
+        pypi_name="torch",
+        source="conda-forge",
+        locked="2.13.0",
+        candidate="2.14.0",
+        candidate_source="pypi",
+        wheel="win_amd64 cp313 wheel",
+        spec=">=2.13",
+        envs=["default"],
+    )
+
+
+class TestDetailLines:
+    def test_lines_render_indented_under_their_row(self, capsys):
+        report = preflight.Report()
+        report.add(WARN, "dependency updates", "1 cross-source", lines=["a", "b"])
+        report.add(OK, "next row")
+        report.render()
+        out = capsys.readouterr().out.splitlines()
+        assert out[:4] == [
+            "[warn] dependency updates: 1 cross-source",
+            "  a",
+            "  b",
+            "[ok  ] next row",
+        ]
+
+
+class TestUpstream:
+    """A branch whose upstream is a shared branch let a VS Code Sync push
+    commits onto draft-august in two repos (doqs session 3d220b2c)."""
+
+    @pytest.fixture
+    def cloned(self, git_repo: Path, tmp_path: Path, monkeypatch) -> Path:
+        remote = tmp_path / "remote.git"
+        run_git(tmp_path, "init", "-q", "--bare", str(remote))
+        run_git(git_repo, "remote", "add", "origin", str(remote))
+        run_git(git_repo, "push", "-q", "origin", "main")
+        run_git(git_repo, "branch", "-q", "draft-august")
+        run_git(git_repo, "push", "-q", "origin", "draft-august")
+        monkeypatch.chdir(git_repo)
+        return git_repo
+
+    def upstream(self) -> tuple[list[str], str]:
+        report = preflight.Report()
+        preflight.check_upstream(report)
+        return statuses(report, "branch upstream"), details(report, "branch upstream")
+
+    def test_same_name_is_ok(self, cloned: Path):
+        run_git(cloned, "checkout", "-q", "-b", "feature")
+        run_git(cloned, "push", "-q", "-u", "origin", "feature")
+        assert self.upstream()[0] == [OK]
+
+    def test_a_different_name_warns(self, cloned: Path):
+        run_git(cloned, "checkout", "-q", "-b", "obc-direct", "origin/draft-august")
+        status, detail = self.upstream()
+        assert status == [WARN]
+        assert "upstream is origin/draft-august" in detail
+        assert "git branch --unset-upstream" in detail
+        assert "git push -u origin HEAD" in detail
+
+    def test_no_upstream_is_ok(self, cloned: Path):
+        run_git(cloned, "checkout", "-q", "-b", "local-only")
+        assert self.upstream()[0] == [OK]
+
+    def test_detached_head_is_ok(self, cloned: Path):
+        run_git(cloned, "checkout", "-q", "--detach")
+        assert self.upstream()[0] == [OK]
+
+
+class TestDependencies:
+    @pytest.fixture
+    def project(self, tmp_path: Path) -> Path:
+        (tmp_path / "pixi.toml").write_text("[workspace]\nname = 'p'\n")
+        return tmp_path
+
+    def test_findings_warn_with_detail_lines(self, project, monkeypatch):
+        found = dep_report(cross_source=[torch_finding()])
+        monkeypatch.setattr(preflight.dep_updates, "check", lambda *a, **k: found)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        assert statuses(report, "dependency updates (win-64)") == [WARN]
+        assert any("pytorch-gpu -> torch" in line for line in report.lines[0])
+
+    def test_clean_is_ok(self, project, monkeypatch):
+        monkeypatch.setattr(
+            preflight.dep_updates, "check", lambda *a, **k: dep_report()
+        )
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        assert statuses(report, "dependency updates (win-64)") == [OK]
+
+    def test_a_non_pixi_project_is_silent(self, tmp_path):
+        report = preflight.Report()
+        preflight.check_dependencies(report, tmp_path, offline=False)
+        assert report.rows == []
+
+    def test_pixi_missing_warns(self, project, monkeypatch):
+        missing = dep_report(pixi_missing=True, platform="")
+        monkeypatch.setattr(preflight.dep_updates, "check", lambda *a, **k: missing)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        assert [s for s, _, _ in report.rows] == [WARN]
+        assert "pixi not found" in details(report, "dependency updates")
+
+    def test_offline_reads_the_cache_and_never_fetches(self, project, monkeypatch):
+        monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
+        found = dep_report(cross_source=[torch_finding()], from_cache=True)
+        monkeypatch.setattr(preflight.dep_updates, "cached", lambda root, now: found)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=True)
+        assert statuses(report, "dependency updates (win-64) (cached)") == [WARN]
+
+    def test_offline_without_a_cache_says_so(self, project, monkeypatch):
+        monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=True)
+        assert "no cached result" in details(report, "dependency updates (cached)")
+
+
+class TestExtensions:
+    def test_a_problem_warns_with_detail_lines(self, tmp_path, monkeypatch):
+        ext = preflight.vscode_extensions
+        found = ext.ExtReport(
+            applicable=True,
+            missing=["astral-sh.ty"],
+            disabled_required=[],
+            forbidden_active=[],
+            ide=None,
+            notes=[],
+        )
+        monkeypatch.setattr(ext, "check", lambda *a, **k: found)
+        report = preflight.Report()
+        preflight.check_extensions(report, tmp_path)
+        assert statuses(report, "VS Code extensions") == [WARN]
+        assert "missing (required): astral-sh.ty" in report.lines[0]
+
+    def test_no_code_on_path_is_silent(self, tmp_path):
+        report = preflight.Report()
+        preflight.check_extensions(report, tmp_path)
+        assert report.rows == []
+
+    def test_an_absent_standard_is_silent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(preflight, "EXTENSION_STANDARD", tmp_path / "absent.toml")
+        monkeypatch.setattr(preflight.vscode_extensions, "check", forbidden)
+        report = preflight.Report()
+        preflight.check_extensions(report, tmp_path)
+        assert report.rows == []
+
+
 class TestConfiguredRevs:
     """The regex silently matched only one of several common layouts, and
     the caller then reported success -- a false pass."""

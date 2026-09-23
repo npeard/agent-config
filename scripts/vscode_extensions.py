@@ -246,6 +246,20 @@ def check(
     )
 
 
+def problem_count(report: ExtReport) -> int:
+    """How many things to tell the user; notes alone are not problems.
+
+    Shared with preflight and the SessionStart hook, which stay silent at
+    zero, so render's count and their silence cannot disagree.
+    """
+    return (
+        len(report.missing)
+        + len(report.disabled_required)
+        + len(report.forbidden_active)
+        + (1 if report.ide else 0)
+    )
+
+
 def render(report: ExtReport) -> tuple[str, list[str]]:
     if not report.applicable:
         return "VS Code extensions: not applicable (code not on PATH)", []
@@ -260,12 +274,7 @@ def render(report: ExtReport) -> tuple[str, list[str]]:
     if report.ide:
         lines.append(report.ide)
 
-    problems = (
-        len(report.missing)
-        + len(report.disabled_required)
-        + len(report.forbidden_active)
-        + (1 if report.ide else 0)
-    )
+    problems = problem_count(report)
     summary = (
         "VS Code extensions: ok"
         if not problems
@@ -297,6 +306,24 @@ def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def live_check(
+    standard: Standard, root: Path, *, home: Path, env: Mapping[str, str]
+) -> ExtReport:
+    """check() with this machine's real effects: `code`, VS Code's state db
+    and the IDE locks under `home`, and real pid liveness. The one wiring
+    shared by main, preflight and the SessionStart hook."""
+    db = platform_paths.vscode_user_dir(home) / "globalStorage" / "state.vscdb"
+    return check(
+        standard,
+        root=root,
+        run=_run_code,
+        read_disabled=lambda: read_disabled_from(db),
+        ide_dir=home / ".claude" / "ide",
+        env=env,
+        pid_alive=platform_paths.pid_alive,
+    )
 
 
 def _repo_root() -> Path:
@@ -336,18 +363,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     root = args.root or _repo_root()
-    home = Path.home()
-    db = platform_paths.vscode_user_dir(home) / "globalStorage" / "state.vscdb"
-
-    report = check(
-        standard,
-        root=root,
-        run=_run_code,
-        read_disabled=lambda: read_disabled_from(db),
-        ide_dir=home / ".claude" / "ide",
-        env=os.environ,
-        pid_alive=platform_paths.pid_alive,
-    )
+    report = live_check(standard, root, home=Path.home(), env=os.environ)
     summary, lines = render(report)
     print(summary)
     for line in lines:

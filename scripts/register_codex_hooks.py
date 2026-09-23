@@ -40,6 +40,7 @@ class HookSpec:
 
 CODEX_HOOKS = (
     HookSpec("task-list.py", "SessionStart", None),
+    HookSpec("environment-drift.py", "SessionStart", None),
     HookSpec("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
     HookSpec("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
     HookSpec("audit-owed.py", "PostToolUse", "Bash"),

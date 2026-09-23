@@ -72,6 +72,12 @@ the canonical guidance and that skills are linked into both host
 destinations. Re-run the installer after updating this repository if it
 reports an adapter or link as stale.
 
+It also reports dependency updates (`scripts/dep_updates.py`, cached per
+project for 24 h; `--offline` reads the cache only), VS Code extension
+drift against `vscode-extensions.toml`, and a branch whose upstream is a
+branch of another name -- the precondition for a VS Code Sync pushing
+onto a shared branch, which happened in doqs session 3d220b2c.
+
 Hooks in `~/.claude/settings.json` must therefore name this repo's
 environment python explicitly, not `python3`. The installer writes that
 for you, backing the file up first, so the interpreter cannot drift by
@@ -162,9 +168,10 @@ and pricing remain separate and unchanged.
   decided once: the pixi interpreter layout, what counts as a link,
   junction vs symlink, VS Code's per-OS user-settings directory, which
   checkout a worktree installs from, and how to ask whether a pid is
-  alive without killing it on Windows. A library module, not a script --
-  hooks deliberately do not import it, since they run standalone under
-  whatever interpreter `~/.claude/settings.json` names.
+  alive without killing it on Windows. A library module, not a script.
+  Hooks run standalone under whatever interpreter
+  `~/.claude/settings.json` names, so only `hooks/environment-drift.py`
+  uses it, loading it by absolute path from its own checkout.
 - `scripts/vscode_extensions.py` + `vscode-extensions.toml` -- reports
   drift between this machine's installed VS Code extensions and the
   standard set the TOML file declares, each entry with a `reason` so a
@@ -193,7 +200,7 @@ and pricing remain separate and unchanged.
   test fails if a hook omits its marker; `preflight` reports when this
   machine's registrations are out of date, since that is machine state
   rather than repo state and no test can gate it.
-- `scripts/register_codex_hooks.py` -- converges the five supported
+- `scripts/register_codex_hooks.py` -- converges the six supported
   policy mappings in `~/.codex/hooks.json` while preserving foreign
   handlers. It configures hooks; review and trust them through Codex
   `/hooks` before they run.
@@ -338,6 +345,15 @@ and pricing remain separate and unchanged.
   interpreter that runs a hook is named in `~/.claude/settings.json` --
   a file outside this repo's checks -- and a task list is worth having
   approximately when that file is stale.
+- `hooks/environment-drift.py` -- puts preflight's dependency-updates
+  and VS Code extension rows in front of every session, silent when
+  there is nothing to report. It never waits on the network: it reads
+  the dependency cache, and when that is stale starts
+  `dep_updates.py --refresh` detached (pid-locked, so concurrent
+  sessions do not duplicate it) and says the result arrives next
+  session. Both halves were misses the user caught by hand: "no torch
+  2.14 anywhere" after querying only conda-forge, and an unwanted
+  notebook extension that lost writes.
 - `skills/quantikz/` -- drawing and debugging quantum circuit diagrams
   in LaTeX. The one domain skill here rather than a workflow one, and
   the reason `.pre-commit-config.yaml` excludes its directory from

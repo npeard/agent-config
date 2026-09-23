@@ -19,6 +19,7 @@ def repo(tmp_path: Path) -> Path:
     (tmp_path / "hooks").mkdir()
     for name in (
         "task-list.py",
+        "environment-drift.py",
         "prose-writing.py",
         "promotion-check.py",
         "audit-owed.py",
@@ -35,6 +36,7 @@ def test_declared_hooks_are_the_supported_static_mapping(registrar, repo: Path):
         for item in registrar.declared_hooks(repo)
     ] == [
         ("task-list.py", "SessionStart", None),
+        ("environment-drift.py", "SessionStart", None),
         ("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
         ("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
         ("audit-owed.py", "PostToolUse", "Bash"),

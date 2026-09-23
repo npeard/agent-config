@@ -817,7 +817,7 @@ def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
     return summary, [" ".join(line.split()) for line in lines]
 
 
-def _fetch(url: str) -> bytes:
+def live_fetch(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "dep_updates"})
     with urllib.request.urlopen(request, timeout=REQUEST_SECONDS) as response:
         return response.read()
@@ -917,7 +917,7 @@ def _report(root: Path, args) -> int:
     start = time.time()
     report = check(
         root,
-        fetch=_fetch,
+        fetch=live_fetch,
         run=live_run(root),
         now=start,
         deadline=start + CLI_BUDGET_SECONDS,

@@ -63,7 +63,9 @@ uncertainty, then state the assumption you made and continue.
 when starting fresh work; add `--check-updates` weekly rather than every
 session, since it costs a network round trip per hook repo. If the
 project has no such script, copy `scripts/preflight.py` from
-`agent-config`.
+`agent-config`. Its dependency-updates row is a question for the user,
+not information to note: ask whether to update before other work, and
+treat "update" as the default answer.
 
 ### 1. Understand -- `superpowers:brainstorming`
 
