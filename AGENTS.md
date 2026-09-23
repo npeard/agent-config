@@ -161,7 +161,12 @@ changes there and not here.
   the command -- and say which check you ran, so "not found" is
   falsifiable. Config files, docs and core APIs all under-report: a
   server can be listening on a port no config names, and a feature
-  missing from a core library can be shipped by a package.
+  missing from a core library can be shipped by a package. **One
+  registry is not the world:** a package absent from the channel a
+  project happens to use may be released upstream, so name the source
+  with the verdict ("not on conda-forge win-64") rather than asserting
+  it does not exist -- and check whether the ceiling is the project's
+  own pin rather than the ecosystem's.
 
 - **Stopping a background job does not stop what it spawned.** Killing a
   shell wrapper leaves its children running detached. Harmless for a
