@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 WINDOWS = os.name == "nt"
@@ -47,6 +48,25 @@ def interpreter(repo: Path) -> Path:
     not running on and would otherwise write the same path into both fields.
     """
     return windows_interpreter(repo) if WINDOWS else posix_interpreter(repo)
+
+
+def vscode_user_dir(home: Path) -> Path:
+    """VS Code's per-user settings directory, which holds
+    globalStorage/state.vscdb -- where the global disabled-extensions list
+    lives, read by vscode_extensions.py.
+
+    A pure function of `home`, like the rest of this module, rather than
+    reading %APPDATA% or $XDG_CONFIG_HOME: those coincide with the standard
+    per-OS layout below in the overwhelming common case, and a pure function
+    is what lets a test supply an arbitrary home without touching the real
+    environment.
+    """
+    home = Path(home)
+    if WINDOWS:
+        return home / "AppData" / "Roaming" / "Code" / "User"
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / "Code" / "User"
+    return home / ".config" / "Code" / "User"
 
 
 def link_dir(src: Path, dest: Path) -> None:
