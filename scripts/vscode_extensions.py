@@ -128,38 +128,6 @@ def read_disabled_from(db: Path) -> set[str] | None:
     }
 
 
-def pid_alive(pid: int) -> bool:
-    """Whether a process with this pid is currently running.
-
-    Signal 0 is the standard liveness probe on POSIX, but os.kill on
-    Windows routes any signal other than the two console events through
-    TerminateProcess -- so the probe would kill the very process it asks
-    about (hooks/notify.py's `alive` sidesteps this by skipping the check
-    entirely on Windows). Opening the process handle through ctypes answers
-    the same question there without touching it.
-    """
-    if platform_paths.WINDOWS:
-        import ctypes
-
-        query_limited_information = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(
-            query_limited_information, False, pid
-        )
-        if not handle:
-            return False
-        ctypes.windll.kernel32.CloseHandle(handle)
-        return True
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except OSError:
-        # Alive but not ours (PermissionError), or an otherwise unusable
-        # pid. Neither is evidence of death.
-        return True
-    return True
-
-
 def _normalize_path(path: Path) -> str:
     """A form of `path` that compares equal across the spellings the same
     location can have -- a Windows-lowercased drive letter, a differing
@@ -331,40 +299,6 @@ def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
         return None
 
 
-def _installation_checkout(root: Path) -> Path:
-    """Resolve a git worktree to its main checkout.
-
-    The IDE lock's `workspaceFolders` names whatever folder VS Code's
-    window is actually open on, which for an agent working in a worktree
-    is the main checkout, not the worktree -- a worktree is not something
-    a human opens as its own VS Code window. Comparing the bare worktree
-    path made every worktree session read as "not connected" even when the
-    IDE integration genuinely was. Mirrors preflight.py's
-    installation_checkout(); duplicated rather than imported because this
-    script must not depend on preflight.py -- Task 3 wires preflight.py to
-    depend on this module, not the other way around.
-    """
-    root = root.resolve()
-    if not (root / ".git").is_file():
-        return root
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return root
-    listing = out.stdout.strip("\0")
-    if not listing:
-        return root
-    main = listing.split("\0\0", 1)[0].split("\0")
-    if main[0].startswith("worktree ") and "bare" not in main:
-        return Path(main[0].removeprefix("worktree ")).resolve()
-    return root
-
-
 def _repo_root() -> Path:
     try:
         out = subprocess.run(
@@ -375,7 +309,7 @@ def _repo_root() -> Path:
         )
     except (subprocess.CalledProcessError, OSError):
         return Path.cwd()
-    return _installation_checkout(Path(out.stdout.strip() or "."))
+    return platform_paths.installation_checkout(Path(out.stdout.strip() or "."))
 
 
 def main(argv: list[str]) -> int:
@@ -412,7 +346,7 @@ def main(argv: list[str]) -> int:
         read_disabled=lambda: read_disabled_from(db),
         ide_dir=home / ".claude" / "ide",
         env=os.environ,
-        pid_alive=pid_alive,
+        pid_alive=platform_paths.pid_alive,
     )
     summary, lines = render(report)
     print(summary)

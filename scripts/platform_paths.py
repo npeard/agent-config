@@ -69,6 +69,68 @@ def vscode_user_dir(home: Path) -> Path:
     return home / ".config" / "Code" / "User"
 
 
+def installation_checkout(root: Path) -> Path:
+    """Resolve a git worktree to its main checkout.
+
+    Installed skills link into the main checkout, and VS Code's IDE lock
+    names the folder its window has open, which for an agent in a worktree
+    is the main checkout too. The first porcelain record is the main
+    checkout; NUL delimiters preserve spaces and avoid Git's quoting of
+    unusual paths, and a bare repo owns no install. The timeout is why this
+    lives in one place: a copy without it could hang preflight and the
+    SessionStart hook on a wedged git.
+    """
+    root = Path(root).resolve()
+    if not (root / ".git").is_file():
+        return root
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=20,
+        ).stdout.strip("\0")
+    except (subprocess.SubprocessError, OSError):
+        return root
+    if listing:
+        main = listing.split("\0\0", 1)[0].split("\0")
+        if main[0].startswith("worktree ") and "bare" not in main:
+            return Path(main[0].removeprefix("worktree ")).resolve()
+    return root
+
+
+def pid_alive(pid: int) -> bool:
+    """Whether a process with this pid is currently running.
+
+    Signal 0 is the standard liveness probe on POSIX, but os.kill on
+    Windows routes any signal other than the two console events through
+    TerminateProcess -- so the probe would kill the very process it asks
+    about. Opening the process handle answers the same question there
+    without touching it.
+    """
+    if WINDOWS:
+        import ctypes
+
+        query_limited_information = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(
+            query_limited_information, False, pid
+        )
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        # Alive but not ours (PermissionError), or an otherwise unusable
+        # pid. Neither is evidence of death.
+        return True
+    return True
+
+
 def link_dir(src: Path, dest: Path) -> None:
     """Point dest at the directory src.
 

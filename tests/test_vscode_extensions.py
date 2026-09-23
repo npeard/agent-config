@@ -18,7 +18,6 @@ import subprocess
 from pathlib import Path
 
 import vscode_extensions
-from conftest import run_git
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -455,33 +454,6 @@ class TestReadDisabledFrom:
         before = db.stat().st_mtime_ns
         vscode_extensions.read_disabled_from(db)
         assert db.stat().st_mtime_ns == before
-
-
-class TestPidAlive:
-    def test_the_current_process_is_alive(self):
-        assert vscode_extensions.pid_alive(os.getpid()) is True
-
-    def test_an_unassigned_pid_is_not_alive(self):
-        # A pid far past any plausible live process on a dev machine, and
-        # not 0/negative, which have special meanings on some platforms.
-        assert vscode_extensions.pid_alive(2**31 - 1) is False
-
-
-class TestInstallationCheckout:
-    """A worktree resolves to its main checkout, since that is the folder
-    the IDE lock's workspaceFolders actually names (see the docstring on
-    _installation_checkout for why this matters for the IDE check)."""
-
-    def test_a_worktree_resolves_to_the_main_checkout(self, git_repo: Path):
-        worktree = git_repo / "a worktree"
-        run_git(git_repo, "worktree", "add", "-q", "-b", "feature", str(worktree))
-        assert vscode_extensions._installation_checkout(worktree) == git_repo.resolve()
-
-    def test_the_main_checkout_resolves_to_itself(self, git_repo: Path):
-        assert vscode_extensions._installation_checkout(git_repo) == git_repo.resolve()
-
-    def test_a_plain_non_git_directory_resolves_to_itself(self, tmp_path):
-        assert vscode_extensions._installation_checkout(tmp_path) == tmp_path.resolve()
 
 
 class TestRunCode:

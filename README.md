@@ -160,10 +160,11 @@ and pricing remain separate and unchanged.
 - `scripts/platform_paths.py` -- where every platform difference the
   installer, hook registration, `preflight` and the audit care about is
   decided once: the pixi interpreter layout, what counts as a link,
-  junction vs symlink, and VS Code's per-OS user-settings directory. A
-  library module, not a script -- hooks deliberately do not import it,
-  since they run standalone under whatever interpreter
-  `~/.claude/settings.json` names.
+  junction vs symlink, VS Code's per-OS user-settings directory, which
+  checkout a worktree installs from, and how to ask whether a pid is
+  alive without killing it on Windows. A library module, not a script --
+  hooks deliberately do not import it, since they run standalone under
+  whatever interpreter `~/.claude/settings.json` names.
 - `scripts/vscode_extensions.py` + `vscode-extensions.toml` -- reports
   drift between this machine's installed VS Code extensions and the
   standard set the TOML file declares, each entry with a `reason` so a

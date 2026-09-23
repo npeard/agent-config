@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import run_git
 
 REPO = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location(
@@ -192,3 +193,41 @@ class TestVerifyLink:
 
     def test_a_missing_path_is_refused(self, tmp_path):
         assert not platform_paths.verify_link(tmp_path / "nope", tmp_path)
+
+
+class TestInstallationCheckout:
+    """A worktree resolves to its main checkout: the IDE lock names the folder
+    VS Code has open, and installed skills link into the main checkout."""
+
+    def test_a_worktree_resolves_to_the_main_checkout(self, git_repo: Path):
+        worktree = git_repo / "a worktree"
+        run_git(git_repo, "worktree", "add", "-q", "-b", "feature", str(worktree))
+        assert platform_paths.installation_checkout(worktree) == git_repo.resolve()
+
+    def test_the_main_checkout_resolves_to_itself(self, git_repo: Path):
+        assert platform_paths.installation_checkout(git_repo) == git_repo.resolve()
+
+    def test_a_plain_non_git_directory_resolves_to_itself(self, tmp_path):
+        assert platform_paths.installation_checkout(tmp_path) == tmp_path.resolve()
+
+    def test_a_hung_git_falls_back_to_the_root(self, tmp_path, monkeypatch):
+        # A copy of this function without the timeout shipped once; a hung
+        # git would then hang preflight and the SessionStart hook with it.
+        (tmp_path / ".git").write_text("gitdir: elsewhere\n")
+
+        def hang(argv, **kwargs):
+            assert kwargs.get("timeout"), "git must run under a timeout"
+            raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+        monkeypatch.setattr(platform_paths.subprocess, "run", hang)
+        assert platform_paths.installation_checkout(tmp_path) == tmp_path.resolve()
+
+
+class TestPidAlive:
+    def test_the_current_process_is_alive(self):
+        assert platform_paths.pid_alive(os.getpid()) is True
+
+    def test_an_unassigned_pid_is_not_alive(self):
+        # Far past any plausible live pid, and not 0/negative, which have
+        # special meanings on some platforms.
+        assert platform_paths.pid_alive(2**31 - 1) is False

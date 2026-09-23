@@ -668,28 +668,13 @@ def _install_hint() -> str:
     return "./install.ps1" if windows else "./install.sh"
 
 
-def installation_checkout(root: Path) -> Path:
-    """Resolve the main checkout without assuming where Git stores its metadata."""
-    root = root.resolve()
-    if not (root / ".git").is_file():
-        return root
-    # The first porcelain record is the main checkout. NUL delimiters preserve
-    # spaces and avoid Git's quoting of unusual paths; a bare repo owns no install.
-    listing = git("-C", str(root), "worktree", "list", "--porcelain", "-z")
-    if listing:
-        main = listing.split("\0\0", 1)[0].split("\0")
-        if main[0].startswith("worktree ") and "bare" not in main:
-            return Path(main[0].removeprefix("worktree ")).resolve()
-    return root
-
-
 def check_instructions(report: Report, root: Path, home: Path) -> None:
     """Report generated instruction adapters that are missing or stale."""
-    root = installation_checkout(root)
+    if installation_contract is None or platform_paths is None:
+        return
+    root = platform_paths.installation_checkout(root)
     if (
-        installation_contract is None
-        or platform_paths is None
-        or not (root / "install.py").is_file()
+        not (root / "install.py").is_file()
         or not (root / installation_contract.GUIDANCE_NAME).is_file()
     ):
         return
@@ -751,7 +736,7 @@ def check_skills(
     )
     source_roots = {
         source.resolve(),
-        (installation_checkout(root) / "skills").resolve(),
+        (platform_paths.installation_checkout(root) / "skills").resolve(),
     }
     wrong = sorted(
         name
