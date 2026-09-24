@@ -259,8 +259,6 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
 def check_extensions(report: Report, root: Path) -> None:
     """Report VS Code extension drift against the standard set.
 
-    The IDE check compares against the main checkout, since that is the
-    folder a VS Code window has open when an agent works in a worktree.
     Silent without the standard file (a copied preflight) or without `code`
     (a machine with no VS Code).
     """
@@ -268,7 +266,7 @@ def check_extensions(report: Report, root: Path) -> None:
         return
     result = vscode_extensions.live_check(
         vscode_extensions.load_standard(EXTENSION_STANDARD),
-        platform_paths.installation_checkout(root),
+        root,
         home=Path.home(),
         env=os.environ,
     )

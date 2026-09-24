@@ -154,12 +154,15 @@ def _check_ide(
 ) -> str | None:
     """(problem text, or None when fine or not applicable).
 
-    Only checked inside a VS Code terminal, where `CLAUDE_CODE_SSE_PORT`
-    is meaningful at all. The lock's `authToken` is read here (it is the
-    whole file) but never placed in the return value -- it must never
-    reach any output.
+    Only checked for Claude Code (which sets `CLAUDECODE`) inside a VS Code
+    terminal, where `CLAUDE_CODE_SSE_PORT` is meaningful at all: the hook
+    also runs under Codex, which never sets it. The project matches when
+    it, or the main checkout of its worktree, is at or under a workspace
+    folder, since a window opened on a parent directory serves it too. The
+    lock's `authToken` is read here (it is the whole file) but never placed
+    in the return value -- it must never reach any output.
     """
-    if env.get("TERM_PROGRAM") != "vscode":
+    if not env.get("CLAUDECODE") or env.get("TERM_PROGRAM") != "vscode":
         return None
     port = env.get("CLAUDE_CODE_SSE_PORT")
     if not port:
@@ -175,10 +178,14 @@ def _check_ide(
     folders = data.get("workspaceFolders")
     if not isinstance(folders, list):
         return _IDE_PROBLEM
-    target = _normalize_path(root)
+    targets = [
+        Path(_normalize_path(p))
+        for p in (root, platform_paths.installation_checkout(root))
+    ]
     if not any(
-        isinstance(folder, str) and _normalize_path(Path(folder)) == target
+        isinstance(folder, str) and target.is_relative_to(_normalize_path(Path(folder)))
         for folder in folders
+        for target in targets
     ):
         return _IDE_PROBLEM
     return None
@@ -336,7 +343,7 @@ def _repo_root() -> Path:
         )
     except (subprocess.CalledProcessError, OSError):
         return Path.cwd()
-    return platform_paths.installation_checkout(Path(out.stdout.strip() or "."))
+    return Path(out.stdout.strip() or ".")
 
 
 def main(argv: list[str]) -> int:

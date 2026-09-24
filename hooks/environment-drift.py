@@ -113,7 +113,7 @@ def context(root, *, spawn, now, home, env):
     if STANDARD.is_file():
         exts = vscode_extensions.live_check(
             vscode_extensions.load_standard(STANDARD),
-            platform_paths.installation_checkout(root),
+            root,
             home=home,
             env=env,
         )

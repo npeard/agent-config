@@ -229,7 +229,11 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "28330"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: pid == 4242,
             ),
@@ -248,7 +252,11 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "28330"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: False,
             ),
@@ -270,7 +278,11 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "28330"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -298,7 +310,95 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "28330"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
+                ide_dir=ide_dir,
+                pid_alive=lambda pid: True,
+            ),
+        )
+        assert report.ide is None
+
+    def test_outside_claude_code_skips_the_check(self, tmp_path):
+        # The hook also runs under Codex, which never sets
+        # CLAUDE_CODE_SSE_PORT; only Claude Code sets CLAUDECODE.
+        report = vscode_extensions.check(
+            make_standard(),
+            **check_defaults(
+                env={"TERM_PROGRAM": "vscode"},
+                ide_dir=tmp_path / "ide",
+                pid_alive=no_ide_alive,
+            ),
+        )
+        assert report.ide is None
+
+    def test_a_project_inside_a_workspace_folder_matches(self, tmp_path):
+        workspace = tmp_path / "Projects"
+        root = workspace / "project"
+        root.mkdir(parents=True)
+        ide_dir = self.make_lock(
+            tmp_path, 28330, pid=4242, workspace_folders=[str(workspace) + os.sep]
+        )
+        report = vscode_extensions.check(
+            make_standard(),
+            **check_defaults(
+                root=root,
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
+                ide_dir=ide_dir,
+                pid_alive=lambda pid: True,
+            ),
+        )
+        assert report.ide is None
+
+    def test_a_sibling_with_a_shared_prefix_does_not_match(self, tmp_path):
+        root = tmp_path / "project-two"
+        root.mkdir()
+        ide_dir = self.make_lock(
+            tmp_path, 28330, pid=4242, workspace_folders=[str(tmp_path / "project")]
+        )
+        report = vscode_extensions.check(
+            make_standard(),
+            **check_defaults(
+                root=root,
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
+                ide_dir=ide_dir,
+                pid_alive=lambda pid: True,
+            ),
+        )
+        assert report.ide is not None
+
+    def test_a_worktree_matches_through_its_main_checkout(self, tmp_path, monkeypatch):
+        main = tmp_path / "main"
+        worktree = tmp_path / "worktrees" / "feature"
+        main.mkdir()
+        worktree.mkdir(parents=True)
+        monkeypatch.setattr(
+            vscode_extensions.platform_paths,
+            "installation_checkout",
+            lambda root: main if Path(root) == worktree else Path(root),
+        )
+        ide_dir = self.make_lock(
+            tmp_path, 28330, pid=4242, workspace_folders=[str(main)]
+        )
+        report = vscode_extensions.check(
+            make_standard(),
+            **check_defaults(
+                root=worktree,
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -311,7 +411,7 @@ class TestIdeCheck:
             standard,
             **check_defaults(
                 run=fake_run([]),
-                env={"TERM_PROGRAM": "vscode"},
+                env={"CLAUDECODE": "1", "TERM_PROGRAM": "vscode"},
                 ide_dir=tmp_path / "ide",
                 pid_alive=no_ide_alive,
             ),
@@ -324,7 +424,11 @@ class TestIdeCheck:
             standard,
             **check_defaults(
                 run=fake_run([]),
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "9999"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "9999",
+                },
                 ide_dir=tmp_path / "ide",
                 pid_alive=no_ide_alive,
             ),
@@ -349,7 +453,11 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run(["bad.ext"]),
                 root=root,
-                env={"TERM_PROGRAM": "vscode", "CLAUDE_CODE_SSE_PORT": "28330"},
+                env={
+                    "CLAUDECODE": "1",
+                    "TERM_PROGRAM": "vscode",
+                    "CLAUDE_CODE_SSE_PORT": "28330",
+                },
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: False,  # force a problem, the likelier leak site
             ),
