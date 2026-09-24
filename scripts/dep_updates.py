@@ -34,7 +34,8 @@ Trust boundary: the text printed here comes from PyPI, the conda channels
 and the pixi solver, and it reaches an agent's context through the hook.
 Only package names, versions, wheel tags and the solver's error excerpt
 are emitted, each on one line, and none of it is executed or passed to a
-shell. The ``--ack`` hint names only this script's own path.
+shell. The ``--ack`` hint names only the running interpreter, this script
+and the project root, each quoted.
 
 Stdlib-only, because the SessionStart hook's interpreter is not a project
 environment. ``fetch`` and ``run`` are injected so the tests never touch the
@@ -835,8 +836,13 @@ def ack(root: Path, report: DepReport) -> None:
     _write_json(cache_path, {**cached, "acked": list(acked.values())})
 
 
-def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
-    """A summary line and the detail lines under it."""
+def render(report: DepReport, root: Path) -> tuple[str, list[str]]:
+    """A summary line and the detail lines under it, for the project at root.
+
+    The ack hint names the running interpreter, because bare `python` is
+    the Microsoft Store stub on Windows, and the project, because the CLI
+    defaults to cwd, which the reader of a hook's context need not share.
+    """
     if not report.applicable:
         return "dependency updates: not a pixi project", []
     if report.pixi_missing:
@@ -878,7 +884,8 @@ def render(report: DepReport, script_path: Path) -> tuple[str, list[str]]:
         lines.append(f"cross-source checked for {report.platform} only")
         lines.append(
             "Ask the user whether to update before other work (default: update). "
-            f"If they decline: python {script_path} --ack"
+            f'If they decline: "{sys.executable}" "{Path(__file__).resolve()}" '
+            f'"{root}" --ack'
         )
     # Collapse whitespace so that foreign text (a spec, a solver message)
     # can never start a line of its own in the hook's session context.
@@ -1016,7 +1023,7 @@ def _report(root: Path, args) -> int:
     elif args.json:
         print(json.dumps(dataclasses.asdict(report), indent=2))
     else:
-        summary, lines = render(report, Path(__file__).resolve())
+        summary, lines = render(report, root)
         print(summary)
         for line in lines:
             print(f"  {line}")

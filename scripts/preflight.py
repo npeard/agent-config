@@ -246,7 +246,7 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
         )
     if not result.applicable:
         return
-    summary, lines = dep_updates.render(result, Path(dep_updates.__file__).resolve())
+    summary, lines = dep_updates.render(result, root)
     label, _, detail = summary.partition(": ")
     report.add(
         OK if dep_updates.is_clean(result) else WARN,

@@ -109,7 +109,7 @@ def context(root, *, spawn, now, home, env):
             "preflight run"
         )
     elif deps.applicable and not dep_updates.is_clean(deps):
-        blocks.append(_block(*dep_updates.render(deps, SCRIPTS / "dep_updates.py")))
+        blocks.append(_block(*dep_updates.render(deps, root)))
     if STANDARD.is_file():
         exts = vscode_extensions.live_check(
             vscode_extensions.load_standard(STANDARD),
