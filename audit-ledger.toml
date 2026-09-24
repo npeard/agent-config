@@ -366,7 +366,7 @@ principle = 4
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "0d5efb2f57e2511343691bab4838daa8e20251fc4b65886c9b2432e58786f695"
+asset_sha = "e0c8e210bae6c9f751aa0cba80f952223bddd21637f913dc9513cd91ee414f7d"
 note = """
 check_script_help's own rationale is "a script an agent must read to use has
 failed principle 3 while pretending to serve it" -- but this file is never
@@ -401,6 +401,13 @@ and pid_alive. Still import-only with no entry point, so still the false
 positive. The additions again confirm the premise: installation_checkout had
 been copied into vscode_extensions.py, and the copy lost the 20 s git
 timeout the original had.
+
+Re-granted again 2026-09-23 after it gained load_sibling, the one by-path
+loader that dep_updates, vscode_extensions and the hook had each copied, and
+git_output, with installation_checkout's timeout now a required argument.
+Still import-only with no entry point, and the premise holds a third time:
+two of the loader copies had dropped the sys.modules registration the third
+kept.
 """
 
 [[decision]]
@@ -606,7 +613,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "9b8c7f9833ea829200f59af26bae2d14a32b85682e714a689d5a085543cdaf30"
+asset_sha = "6fe65350cefd7e9804cdb9e3e924e64191e017815dc2c52b31cc7518f8cc1ddb"
 note = """
 Reads PyPI JSON, `pixi search`, `pixi list` and the solver's stderr. It prints
 a summary that the SessionStart hook will carry into agent context in every
@@ -641,6 +648,14 @@ lines are this file's own words plus a pixi environment name, which pixi
 restricts to lowercase letters, digits and dashes, and a date from
 time.strftime. The widening is the ack hint's interpreter and root paths,
 described above.
+
+Re-granted a third time 2026-09-23 after cache_view took over the
+cache-and-lock decision from the hook and preflight, check() stopped
+re-reading the cache, and platform_paths began loading through
+load_sibling. The only new text is CacheView's "(as of DATE; refresh
+started)" or "(... refresh in progress)" label: this file's own words and
+a time.strftime date. A PyPI-locked finding's pypi_name is now None, which
+emits less, not more.
 """
 
 [[decision]]
@@ -649,11 +664,14 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "5011f9632232150dbafece52564216332c6bfaac917692d9ab858ab2f6b13491"
+asset_sha = "6a26df5420ef02e38ff0554e732aaaa4e499502eb349c312d23a04c4e262bdf6"
 note = """
 Emits into SessionStart context in every project, so the check is right to
-flag it. Its only subprocess is the detached refresh, whose stdio is DEVNULL
-and never read. Everything it emits is produced by the two renderers it
+flag it. The only subprocess it starts itself is the detached refresh, whose
+stdio is DEVNULL and never read. Through vscode_extensions it also runs
+`code --list-extensions`, whose ids are reported only when this repo's TOML
+lists them, and `git worktree list` under a 2 s timeout, whose output is
+compared against the IDE lock and never emitted. Everything it emits is produced by the two renderers it
 loads. dep_updates.render is bounded as that file's own entry above
 describes. vscode_extensions.render reports only ids and reasons from this
 repo's vscode-extensions.toml, because an unlisted extension is never
@@ -662,6 +680,10 @@ emitted, and a test pins that. The trust boundary is also stated in the
 hook's docstring.
 
 Re-granted 2026-09-23 after it began showing a stale cache's findings. They
-pass through the same dep_updates.render, and the only added text is this
-file's own "(as of DATE; refresh started)" label.
+pass through the same dep_updates.render, and the only added text is
+dep_updates' own "(as of DATE; refresh started)" or "(... refresh in
+progress)" label, which cache_view now decides for this hook and preflight
+alike. Re-read again after the loader moved to platform_paths.load_sibling
+and the IDE check's git call got its 2 s timeout; neither widens what is
+emitted.
 """
