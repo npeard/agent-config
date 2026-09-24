@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import platform_paths
@@ -173,6 +174,45 @@ class TestDependencies:
         preflight.check_dependencies(report, project, offline=True)
         assert statuses(report, "dependency updates (win-64) (cached)") == [WARN]
 
+    def hold_refresh_lock(self, project):
+        # This test process is the live holder the real probe will find.
+        lock = project / ".pixi" / "agent-drift" / "refresh.lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_text(str(os.getpid()))
+
+    def test_a_running_refresh_reports_the_cache_instead_of_computing(
+        self, project, monkeypatch
+    ):
+        self.hold_refresh_lock(project)
+        monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
+        found = dep_report(cross_source=[torch_finding()], from_cache=True)
+        checked = time.mktime((2026, 9, 22, 12, 0, 0, 0, 0, -1))
+        monkeypatch.setattr(
+            preflight.dep_updates, "last_known", lambda root: (found, checked)
+        )
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        label = "dependency updates (win-64) (as of 2026-09-22; refresh in progress)"
+        assert statuses(report, label) == [WARN]
+
+    def test_a_running_refresh_without_a_cache_says_so(self, project, monkeypatch):
+        self.hold_refresh_lock(project)
+        monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        assert "refresh in progress" in details(report, "dependency updates")
+
+    def test_a_raising_check_is_a_warning_not_an_exception(self, project, monkeypatch):
+        # preflight's contract is exit 0; a drift-check bug must not break it.
+        def boom(*args, **kwargs):
+            raise RuntimeError("bug")
+
+        monkeypatch.setattr(preflight.dep_updates, "check", boom)
+        report = preflight.Report()
+        preflight.check_dependencies(report, project, offline=False)
+        assert statuses(report, "dependency updates") == [WARN]
+        assert "RuntimeError" in details(report, "dependency updates")
+
     def test_offline_without_a_cache_says_so(self, project, monkeypatch):
         monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
         report = preflight.Report()
@@ -196,6 +236,16 @@ class TestExtensions:
         preflight.check_extensions(report, tmp_path)
         assert statuses(report, "VS Code extensions") == [WARN]
         assert "missing (required): astral-sh.ty" in report.lines[0]
+
+    def test_a_raising_check_is_a_warning_not_an_exception(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise RuntimeError("bug")
+
+        monkeypatch.setattr(preflight.vscode_extensions, "check", boom)
+        report = preflight.Report()
+        preflight.check_extensions(report, tmp_path)
+        assert statuses(report, "VS Code extensions") == [WARN]
+        assert "RuntimeError" in details(report, "VS Code extensions")
 
     def test_no_code_on_path_is_silent(self, tmp_path):
         report = preflight.Report()

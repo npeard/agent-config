@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -143,6 +144,30 @@ def test_a_stale_cache_spawns_exactly_one_refresh_and_does_not_wait(
     assert Path(argv[1]).name == "dep_updates.py"
     assert argv[2:] == [str(tmp_path), "--refresh"]
     assert "background" in text
+
+
+def test_a_stale_cache_shows_its_last_known_findings_dated(
+    quiet, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: None)
+    stale = dep_report(quiet, cross_source=[torch(quiet)])
+    checked = time.mktime((2026, 9, 22, 12, 0, 0, 0, 0, -1))
+    monkeypatch.setattr(quiet.dep_updates, "last_known", lambda root: (stale, checked))
+    spawn = Spawner()
+    text = context(quiet, tmp_path, spawn)
+    assert len(spawn.argvs) == 1
+    assert "(as of 2026-09-22; refresh started)" in text.splitlines()[0]
+    assert "pytorch-gpu -> torch" in text
+
+
+def test_a_stale_clean_cache_refreshes_silently(quiet, tmp_path, monkeypatch):
+    monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: None)
+    monkeypatch.setattr(
+        quiet.dep_updates, "last_known", lambda root: (dep_report(quiet), 0.0)
+    )
+    spawn = Spawner()
+    assert context(quiet, tmp_path, spawn) is None
+    assert len(spawn.argvs) == 1
 
 
 def test_a_fresh_cache_spawns_nothing(quiet, tmp_path):

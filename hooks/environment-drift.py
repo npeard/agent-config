@@ -15,8 +15,10 @@ task-list.py: an always-present block teaches the reader to skip it.
 
 It never waits on the network. A cold dependency check takes ~25 s on
 doqs, most of it `pixi list`, so the hook reads only the cache and, when
-that is stale or absent, starts `dep_updates.py --refresh` detached and
-says the result arrives next session. The refresh owns the lock, the
+that is stale or absent, starts `dep_updates.py --refresh` detached. A
+stale cache's findings are still shown, dated, since last week's torch
+update is more use than nothing; an absent one says the result arrives
+next session. The refresh owns the lock, the
 atomic cache write and the cleanup of its own children; the hook only
 launches it. The extension check runs inline because `code
 --list-extensions` answers in under a second.
@@ -103,11 +105,17 @@ def context(root, *, spawn, now, home, env):
     deps = dep_updates.cached(root, now=now)
     if deps is None:
         spawn([sys.executable, str(SCRIPTS / "dep_updates.py"), str(root), "--refresh"])
-        blocks.append(
-            "dependency updates: cache stale or absent; a background refresh "
-            "started, and its result arrives next session or on the next "
-            "preflight run"
-        )
+        known = dep_updates.last_known(root)
+        if known is None:
+            blocks.append(
+                "dependency updates: no cached result; a background refresh "
+                "started, and its result arrives next session or on the next "
+                "preflight run"
+            )
+        elif not dep_updates.is_clean(known[0]):
+            summary, lines = dep_updates.render(known[0], root)
+            label = f"({dep_updates.as_of(known[1])}; refresh started)"
+            blocks.append(_block(f"{summary} {label}", lines))
     elif deps.applicable and not dep_updates.is_clean(deps):
         blocks.append(_block(*dep_updates.render(deps, root)))
     if STANDARD.is_file():

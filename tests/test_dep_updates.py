@@ -660,6 +660,39 @@ class TestCachedOnly:
         assert not dep_updates.cached(tmp_path, now=NOW).applicable
 
 
+class TestLastKnown:
+    """What the hook and a preflight that finds a refresh running show:
+    the cached report however old, with when it was checked."""
+
+    def test_absent_cache_is_none(self, project):
+        assert dep_updates.last_known(project) is None
+
+    def test_a_stale_cache_is_returned_with_its_check_time(self, project, fake):
+        dep_updates.ack(project, check(project, fake))
+        releases = fake.pypi["torch"]["releases"]
+        releases["2.15.0"] = releases["2.14.0"]
+        check(project, fake, refresh=True)
+        (project / "pixi.lock").write_text("changed\n")
+        report, checked_at = dep_updates.last_known(project)
+        assert checked_at == NOW
+        assert report.from_cache
+        # Acks still apply: only the newer, unacknowledged release shows.
+        assert names(report.cross_source) == [("pytorch-gpu", "2.15.0")]
+        assert dep_updates.as_of(NOW) == time.strftime(
+            "as of %Y-%m-%d", time.localtime(NOW)
+        )
+
+    def test_refresh_running_follows_the_lock(self, project):
+        assert not dep_updates.refresh_running(project, now=time.time(), pid_alive=bool)
+        dep_updates.acquire_lock(
+            project / ".pixi" / "agent-drift" / "refresh.lock",
+            pid=11,
+            now=time.time(),
+            pid_alive=bool,
+        )
+        assert dep_updates.refresh_running(project, now=time.time(), pid_alive=bool)
+
+
 class TestRefreshLock:
     def lock(self, project):
         return project / ".pixi" / "agent-drift" / "refresh.lock"

@@ -50,12 +50,15 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import logging
 import os
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+log = logging.getLogger("preflight")
 
 
 def _load_sibling(name: str):
@@ -220,12 +223,25 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
     """Report dependency updates, same-source and cross-source.
 
     Offline reads only the cache the SessionStart hook's detached refresh
-    and earlier runs wrote, so it never waits on the network. Silent in a
-    project that is not a pixi project.
+    and earlier runs wrote, so it never waits on the network. So does an
+    online run that finds a refresh already holding the lock, rather than
+    racing it for ~25 s over the same cache. Silent in a project that is
+    not a pixi project. A bug in the check is a warning row, never an
+    exception, since preflight's exit status is 0 without --strict.
     """
     if dep_updates is None:
         return
+    try:
+        _dependency_row(report, root, offline)
+    except Exception as exc:
+        # The traceback goes to stderr for whoever debugs the check.
+        log.exception("dependency check failed")
+        report.add(WARN, "dependency updates", f"check failed: {exc!r}")
+
+
+def _dependency_row(report: Report, root: Path, offline: bool) -> None:
     now = time.time()
+    suffix = " (cached)" if offline else ""
     if offline:
         result = dep_updates.cached(root, now=now)
         if result is None:
@@ -235,6 +251,15 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
                 "no cached result (run preflight without --offline)",
             )
             return
+    elif dep_updates.refresh_running(root, now=now, pid_alive=platform_paths.pid_alive):
+        known = dep_updates.last_known(root)
+        if known is None:
+            report.add(
+                WARN, "dependency updates", "refresh in progress; no cached result"
+            )
+            return
+        result, checked_at = known
+        suffix = f" ({dep_updates.as_of(checked_at)}; refresh in progress)"
     else:
         result = dep_updates.check(
             root,
@@ -250,7 +275,7 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
     label, _, detail = summary.partition(": ")
     report.add(
         OK if dep_updates.is_clean(result) else WARN,
-        f"{label} (cached)" if offline else label,
+        label + suffix,
         detail,
         lines,
     )
@@ -264,6 +289,14 @@ def check_extensions(report: Report, root: Path) -> None:
     """
     if vscode_extensions is None or not EXTENSION_STANDARD.is_file():
         return
+    try:
+        _extension_row(report, root)
+    except Exception as exc:  # a bug here must not break preflight's exit 0
+        log.exception("extension check failed")
+        report.add(WARN, "VS Code extensions", f"check failed: {exc!r}")
+
+
+def _extension_row(report: Report, root: Path) -> None:
     result = vscode_extensions.live_check(
         vscode_extensions.load_standard(EXTENSION_STANDARD),
         root,

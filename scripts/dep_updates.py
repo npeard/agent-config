@@ -683,6 +683,24 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
     return report, reusable
 
 
+def _parse_report(cached: dict) -> DepReport | None:
+    """The report a cache holds, however old, or None when it is malformed."""
+    try:
+        return DepReport(
+            applicable=True,
+            platform=cached["platform"],
+            same_source=[Finding(**f) for f in cached["same_source"]],
+            cross_source=[Finding(**f) for f in cached["cross_source"]],
+            solve_error=cached["solve_error"],
+            pixi_missing=False,
+            unchecked=list(cached["unchecked"]),
+            notes=list(cached["notes"]),
+            from_cache=True,
+        )
+    except (KeyError, TypeError):
+        return None
+
+
 def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | None:
     """The cached report when fresh, else None (also for any malformed cache).
 
@@ -697,21 +715,9 @@ def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | 
         fresh = 0 <= now - cached["checked_at"] < lifetime and all(
             cached[key] == value for key, value in stamp.items()
         )
-        if not fresh:
-            return None
-        return DepReport(
-            applicable=True,
-            platform=cached["platform"],
-            same_source=[Finding(**f) for f in cached["same_source"]],
-            cross_source=[Finding(**f) for f in cached["cross_source"]],
-            solve_error=cached["solve_error"],
-            pixi_missing=False,
-            unchecked=list(cached["unchecked"]),
-            notes=list(cached["notes"]),
-            from_cache=True,
-        )
     except (KeyError, TypeError):
         return None
+    return _parse_report(cached) if fresh else None
 
 
 def _acked(cached: dict | None) -> list[dict]:
@@ -738,6 +744,10 @@ def _unacked(findings: list[Finding], acked: list[dict]) -> list[Finding]:
 
 def _cache_path(root: Path) -> Path:
     return root / ".pixi" / "agent-drift" / "deps.json"
+
+
+def _lock_path(root: Path) -> Path:
+    return _cache_path(root).with_name("refresh.lock")
 
 
 def _stamp(root: Path, manifest: Path) -> dict:
@@ -767,6 +777,32 @@ def cached(root: Path, *, now: float) -> DepReport | None:
     data = _read_json(_cache_path(root))
     report = _cached_report(data, _stamp(root, manifest), now)
     return None if report is None else _apply_acks(report, _acked(data))
+
+
+def last_known(root: Path) -> tuple[DepReport, float] | None:
+    """The cached report however stale, and when it was checked; None when
+    there is no readable cache.
+
+    For a reader that must not compute but should not go blank either: the
+    hook while its refresh runs, and preflight while another does.
+    """
+    data = _read_json(_cache_path(root))
+    report = None if data is None else _parse_report(data)
+    checked_at = (data or {}).get("checked_at")
+    if report is None or not isinstance(checked_at, int | float):
+        return None
+    return _apply_acks(report, _acked(data)), checked_at
+
+
+def as_of(checked_at: float) -> str:
+    """The label for a result read from the cache, by local date."""
+    return time.strftime("as of %Y-%m-%d", time.localtime(checked_at))
+
+
+def refresh_running(
+    root: Path, *, now: float, pid_alive: Callable[[int], bool]
+) -> bool:
+    return lock_holder(_lock_path(root), now=now, pid_alive=pid_alive) is not None
 
 
 def check(
@@ -1045,7 +1081,7 @@ def main(argv: list[str]) -> int:
     if not args.refresh or _manifest(root) is None:
         return _report(root, args)
 
-    lock, pid = _cache_path(root).with_name("refresh.lock"), os.getpid()
+    lock, pid = _lock_path(root), os.getpid()
     holder = acquire_lock(
         lock, pid=pid, now=time.time(), pid_alive=platform_paths.pid_alive
     )
