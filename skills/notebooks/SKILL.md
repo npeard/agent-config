@@ -1,7 +1,7 @@
 ---
 name: notebooks
-description: Use when creating, editing, executing or writing up a Jupyter notebook (.ipynb) - covers which tool to reach for, how to find the notebook MCP server that no config file lists, and what belongs in markdown prose versus cell output.
-compatibility: Cell tools need either the notebook MCP server (a VS Code extension, dynamic localhost port) or the host's own NotebookEdit; execution and kernel inspection need the MCP server specifically.
+description: Use when creating, editing, executing or writing up a Jupyter notebook (.ipynb) - covers which tool to reach for, how to connect the Jupyter MCP server, how to confirm a cell edit actually reached disk, and what belongs in markdown prose versus cell output.
+compatibility: Cell tools need Datalayer's jupyter-mcp-server connected to a JupyterLab server launched from the project's own environment. The host's NotebookEdit works only on notebooks small enough for Read, and cannot execute.
 ---
 
 # Notebooks
@@ -12,26 +12,48 @@ exist rather than hand-authoring JSON.
 
 ## Tool precedence
 
-| Task                                     | Tool                                                                                                                                                    |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| List, outline, search, read a cell       | `notebook_list_open`, `notebook_get_outline`, `notebook_search`, `notebook_get_cell_content`                                                            |
-| Create, edit, move, delete cells         | `notebook_insert_cell`, `notebook_bulk_add_cells`, `notebook_edit_cell`, `notebook_move_cell`, `notebook_delete_cell` -- else the host's `NotebookEdit` |
-| Execute and read results                 | `notebook_run_cell`, then `notebook_get_cell_output`                                                                                                    |
-| Live kernel variables, execution history | `notebook_get_kernel_context`, `notebook_get_kernel_info`                                                                                               |
-| Strip outputs                            | `notebook_clear_outputs`, `notebook_clear_all_outputs`                                                                                                  |
-| Write or edit raw `.ipynb` JSON          | **Never**                                                                                                                                               |
+The server is Datalayer's `jupyter-mcp-server`. Its tools appear as
+`mcp__jupyter__<name>`.
+
+| Task                                | Tool                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------- |
+| Pick the notebook to work on        | `list_notebooks`, `use_notebook`                                            |
+| Read the notebook or a cell         | `read_notebook`, `read_cell`                                                |
+| Edit, move, delete cells            | `overwrite_cell_source`, `edit_cell_source`, `move_cell`, `delete_cell`     |
+| Add a cell                          | `insert_cell`, or `insert_execute_code_cell`, **one at a time** (see below) |
+| Execute and read results            | `execute_cell`                                                              |
+| Live kernel state, scratch probes   | `execute_code`                                                              |
+| Strip outputs                       | `clear_cell_output`                                                         |
+| No server, notebook under Read size | The host's `NotebookEdit` (edit only, no execution)                         |
+| Write or edit raw `.ipynb` JSON     | **Never**                                                                   |
 
 The last row is the rule that costs the most when broken. A measured
 baseline: one notebook authored by emitting nbformat JSON, executed via
 `nbconvert`, then re-read by parsing the file with `json` to paste
 results back, took **823 tool calls and 278k tokens**. The MCP path is
-the same work in a handful of calls, because `notebook_run_cell` returns
-the output you would otherwise re-parse the file to get.
+the same work in a handful of calls, because `execute_cell` returns the
+output you would otherwise re-parse the file to get.
 
 Two capabilities have no `NotebookEdit` equivalent, and they are why the
-MCP server is worth finding: **executing a cell** and **reading live
+server is worth connecting: **executing a cell** and **reading live
 kernel state**. Without them you cannot check your own work, which is
 what pushes an agent toward asserting results in prose.
+
+### A success return is not evidence the write landed
+
+On every notebook MCP server met so far, a write tool has returned
+success for an edit that never reached the file. After each write,
+confirm it on disk before building on it: `git status`, a `grep` for the
+new text, or the file's cell count.
+
+- `insert_cell` called several times in quick succession returned
+  success with a rising cell count, and **none** of the cells reached
+  disk or survived in the server's own view. Insert one cell, confirm
+  it, then insert the next. `overwrite_cell_source` and
+  `edit_cell_source` on existing cells have not shown this.
+- The VS Code `notebook-mcp-server` extension returned
+  `{"updated": true}` for edits held only in the editor's unsaved
+  buffer.
 
 ### Do not build a third path
 
@@ -40,59 +62,82 @@ script -- is the same defect as writing the JSON by hand, plus an
 artifact the user never asked for. If the cell tools are unavailable,
 say so and ask; do not invent a generator.
 
-## Finding the MCP server
+## Connecting the server
 
-It is registered in **no** configuration file. Searching
-`~/.claude.json`, `settings.json`, `.mcp.json` or
-`claude_desktop_config.json` finds nothing and proves nothing -- a
-research pass concluded "no Jupyter MCP server exists on this machine"
-from exactly those searches while the server was live and serving 16
+Check in this order:
+
+1. **`mcp__jupyter__*` tools are in your tool index.** Call
+   `list_notebooks`. If it answers, use the tools.
+
+2. **The tools are listed but every call fails to connect.** The
+   JupyterLab server they talk to is not running. It is started
+   separately (step 3a), so a session restart does not bring it back.
+   Ask the user to relaunch it, or relaunch it yourself, detached.
+
+3. **No `mcp__jupyter__*` tools.** Run `claude mcp list` from the
+   project root. Registrations are per project (local scope), so
+   grepping a global config proves nothing about this project. If
+   `jupyter` is absent, set it up:
+
+   a. Start JupyterLab **detached** from the project's pixi environment,
+   so it outlives the session:
+   `jupyter lab --no-browser --port 8889 --IdentityProvider.token <tok> --ServerApp.root_dir <repo>`.
+   On Windows use `Start-Process`. A server started as a child of the
+   agent session dies at every restart.
+
+   b. Register the MCP server:
+   `claude mcp add jupyter --scope local --env JUPYTER_URL=http://localhost:8889 --env JUPYTER_TOKEN=<tok> -- uvx jupyter-mcp-server@latest start --transport stdio`.
+   The `start --transport stdio` suffix is required: without the
+   subcommand the server serves nothing and the connection times out at
+   30 s. Run the `uvx` command once beforehand, because the first run
+   downloads and also times out.
+
+   c. Restart the session so the tools load.
+
+Two prerequisites fail silently:
+
+- **The project must depend on `jupyter-collaboration`.** Cell reads and
+  edits go through `/api/collaboration`, which returns 404 without it.
+  Code execution keeps working, so the failure looks like a permissions
+  problem, not a missing package.
+- **Launch JupyterLab from inside the target environment.** Its own
+  kernelspec then resolves to the project's interpreter, and there is
+  exactly one kernel, so nothing can bind to the wrong one.
+  `pixi-kernel` is not needed.
+
+### Not the VS Code extension
+
+`notebook-mcp-server` (`olavovieiradecarvalho.notebook-mcp-server`) is
+forbidden in `vscode-extensions.toml`, and preflight flags it if it is
+installed and enabled.
+
+- It edits the editor's unsaved buffer, so its writes reach disk only
+  when a human presses Ctrl+S.
+- Every tool call needs a human to click into a cell body, and it
+  ignores its own `notebook_uri` argument.
+- Its client session expired three times in an hour. Its port kept
+  answering 200 throughout, so a listening port says nothing about
+  whether it is usable.
+
+### When the server is unavailable
+
+`NotebookEdit` requires a prior successful `Read`. `Read` refuses any
+file over its token ceiling (25000 tokens), and `offset`/`limit` do not
+help, because the whole notebook is rendered before slicing. So
+**`NotebookEdit` cannot touch most real research notebooks.** Check the
+size before planning around it.
+
+When neither path works, say so, name which one failed and why, and ask
+the user. Do not fall back to raw JSON.
+
+A brand-new notebook is the one sanctioned exception. `NotebookEdit`
+needs an existing file, so write a minimal nbformat envelope once
+(`cells: []` plus a kernelspec). Every cell after it goes through the
 tools.
-
-It is an HTTP endpoint published by a VS Code extension
-(`notebook-mcp-server`) on a **dynamic localhost port**. To find it:
-
-1. Check whether `notebook_*` tools are already available to you. If
-   they are, stop -- you have it.
-2. Read the extension's output channel in VS Code, which prints
-   `Notebook MCP Server activated at http://127.0.0.1:<port>/mcp`.
-3. Probe for a listener and confirm with an MCP `initialize` call.
-
-```bash
-# The port changes between sessions -- never hardcode one.
-netstat -ano | grep LISTENING | grep 127.0.0.1
-curl -s -X POST http://127.0.0.1:<port>/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
-       "protocolVersion":"2024-11-05","capabilities":{},
-       "clientInfo":{"name":"probe","version":"1"}}}'
-```
-
-A `serverInfo.name` of `notebook-mcp-server` confirms it. Three
-outcomes, and the middle one is the common one:
-
-- **`notebook_*` tools available.** Use them.
-- **The port answers but no `notebook_*` tool is in your tool index.**
-  The extension registered against a different VS Code window than the
-  one backing this session. Report that specifically -- "the server is
-  live on port N but not wired to this session" -- because "no MCP
-  server" would send the user looking for the wrong problem. Fall back
-  to `NotebookEdit` for cells, and say the smoke test could not run.
-- **Nothing answers.** The extension is not running: ask the user to
-  start it. VS Code owns its lifecycle; there is nothing for you to
-  launch.
-
-Never fall back to raw JSON in any of the three. `NotebookEdit` needs an
-existing file, so a brand-new notebook does need a minimal nbformat
-envelope (`cells: []` plus kernelspec) written once -- that is the one
-sanctioned exception, and every cell after it goes through the tools.
 
 Without an execution tool you cannot smoke-test. **Say so plainly and
 leave the notebook un-executed** rather than asserting results you did
-not see. `mcp__ide__executeCode` only reaches a notebook already open as
-an editor tab, so it returns "No active notebook editor found" for a
-file you just created.
+not see.
 
 ## Markdown prose describes the method, never the run
 
@@ -182,7 +227,8 @@ importing one.
 
 | Thought                                                     | Reality                                                                       |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| "No Jupyter MCP is configured, so there isn't one"          | No config lists it. Probe the port.                                           |
+| "No Jupyter MCP is configured, so there isn't one"          | Registrations are per project. Run `claude mcp list` there.                   |
+| "The tool said `updated`, so the edit is in"                | Not evidence. Check the file on disk before the next write.                   |
 | "I'll just write the .ipynb JSON, it's one file"            | Measured at 823 calls and 278k tokens. Use the cell tools.                    |
 | "I'll write a script to generate the notebook"              | A third path, plus an artifact nobody asked for.                              |
 | "The user asked to see the results, so I'll write them up"  | Results live in cell output. Write the reading guide; report numbers in chat. |
