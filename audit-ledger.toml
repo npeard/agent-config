@@ -606,7 +606,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "ebff3abbd414f9d47d9152e3023e2920bc00ab2d1570b2fa471539467c1e4e98"
+asset_sha = "9b8c7f9833ea829200f59af26bae2d14a32b85682e714a689d5a085543cdaf30"
 note = """
 Reads PyPI JSON, `pixi search`, `pixi list` and the solver's stderr. It prints
 a summary that the SessionStart hook will carry into agent context in every
@@ -624,13 +624,23 @@ The remaining risk is manifest-authored text in a spec or in the solver
 excerpt. `render` collapses whitespace in every detail line, so none of that
 text can open a line of its own. A newline in a name did exactly that in
 task-list.py, and a test pins the fix here. Nothing read is executed or passed
-to a shell, and the `--ack` hint names only this script's own path.
+to a shell. The `--ack` hint names the running interpreter, this script and
+the project root, each quoted; the root is the session's own cwd, and it too
+passes through the whitespace collapse.
 
 Re-granted 2026-09-23 after the refresh lock, cached(), pixi_missing and the
 always-rendered degradation notes. None of these widens what is emitted. The
 notes and the "pixi not found" and "refresh already running" lines are this
 file's own text, and the pid in the last passes through int(). The live
 runner still passes an argv list, with no shell.
+
+Re-granted again 2026-09-23 after the review fixes: --no-install, per-env
+listing with "pixi list -e ENV (reason)" unchecked items, "unexpected output"
+for malformed pixi text, last_known/as_of and the stale-lock age. The new
+lines are this file's own words plus a pixi environment name, which pixi
+restricts to lowercase letters, digits and dashes, and a date from
+time.strftime. The widening is the ack hint's interpreter and root paths,
+described above.
 """
 
 [[decision]]
@@ -639,7 +649,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "81165c22c10c1789657ac1cf4374732431058bac874f22b4b9e2d99ded7a87a6"
+asset_sha = "5011f9632232150dbafece52564216332c6bfaac917692d9ab858ab2f6b13491"
 note = """
 Emits into SessionStart context in every project, so the check is right to
 flag it. Its only subprocess is the detached refresh, whose stdio is DEVNULL
@@ -650,4 +660,8 @@ repo's vscode-extensions.toml, because an unlisted extension is never
 reported, plus a fixed IDE message. The IDE lock's authToken is never
 emitted, and a test pins that. The trust boundary is also stated in the
 hook's docstring.
+
+Re-granted 2026-09-23 after it began showing a stale cache's findings. They
+pass through the same dep_updates.render, and the only added text is this
+file's own "(as of DATE; refresh started)" label.
 """
