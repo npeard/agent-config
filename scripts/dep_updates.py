@@ -87,12 +87,20 @@ MAPPING_URL = (
 )
 PYPI_JSON = "https://pypi.org/pypi/{}/json"
 CACHE_SECONDS = 24 * 3600
+# How long a result with unchecked items stays fresh. Long enough that a
+# lasting failure (offline, say) does not relaunch a refresh at every
+# SessionStart, short enough that a transient one clears the same session.
+RETRY_SECONDS = 3600
 MAPPING_SECONDS = 7 * 24 * 3600
 REQUEST_SECONDS = 5.0
 # The CLI is also the detached refresh the SessionStart hook starts, which
 # nobody waits on, so the budget is generous. A cold run on doqs needs
 # ~25 s, most of it `pixi list` (see _locked).
 CLI_BUDGET_SECONDS = 120.0
+# A lock older than this is stale whatever its pid says: the pid may have
+# been reused, and on Windows a dead process whose handle is still open
+# reads as alive. Five budgets, so a live refresh is never taken over.
+LOCK_STALE_SECONDS = 600.0
 UPGRADE = ["pixi", "upgrade", "--dry-run", "--no-install", "--json"]
 # What pixi output of an unforeseen shape raises when parsed. preflight
 # promises exit 0, so each parse catches these and records the step as
@@ -677,16 +685,16 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
 def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | None:
     """The cached report when fresh, else None (also for any malformed cache).
 
-    A cache holding unchecked items is never fresh: what the budget cut
-    short is retried on the next run instead of staying unknown for 24 h.
+    A cache holding unchecked items is fresh for RETRY_SECONDS only: what
+    the budget or a failure cut short is retried within the hour instead of
+    staying unknown for 24 h.
     """
     if cached is None:
         return None
     try:
-        fresh = (
-            0 <= now - cached["checked_at"] < CACHE_SECONDS
-            and all(cached[key] == value for key, value in stamp.items())
-            and not cached["unchecked"]
+        lifetime = RETRY_SECONDS if cached["unchecked"] else CACHE_SECONDS
+        fresh = 0 <= now - cached["checked_at"] < lifetime and all(
+            cached[key] == value for key, value in stamp.items()
         )
         if not fresh:
             return None
@@ -697,7 +705,7 @@ def _cached_report(cached: dict | None, stamp: dict, now: float) -> DepReport | 
             cross_source=[Finding(**f) for f in cached["cross_source"]],
             solve_error=cached["solve_error"],
             pixi_missing=False,
-            unchecked=[],
+            unchecked=list(cached["unchecked"]),
             notes=list(cached["notes"]),
             from_cache=True,
         )
@@ -929,15 +937,33 @@ def _lock_holder(path: Path) -> int | None:
         return None
 
 
+def lock_holder(
+    path: Path, *, now: float, pid_alive: Callable[[int], bool]
+) -> int | None:
+    """The pid of a live refresh holding the lock at path, else None.
+
+    A lock whose pid is dead or unreadable, or which is older than
+    LOCK_STALE_SECONDS, is stale: a refresh killed outright never releases
+    it, and a pid alone cannot prove the holder is still the refresh.
+    """
+    try:
+        age = now - path.stat().st_mtime
+    except OSError:
+        return None
+    holder = _lock_holder(path)
+    if holder is None or age > LOCK_STALE_SECONDS or not pid_alive(holder):
+        return None
+    return holder
+
+
 def acquire_lock(
-    path: Path, *, pid: int, pid_alive: Callable[[int], bool]
+    path: Path, *, pid: int, now: float, pid_alive: Callable[[int], bool]
 ) -> int | None:
     """Take the refresh lock for ``pid``, or return the live holder's pid.
 
     The SessionStart hook starts a refresh whenever the cache is stale, so
     two sessions opened together would otherwise run two ~25 s refreshes
-    of the same project. A lock whose pid is dead or unreadable is stale --
-    a refresh killed outright never releases it -- and is taken over. Two
+    of the same project. A stale lock (see lock_holder) is taken over. Two
     takers racing for one stale lock can both win; both write the cache
     atomically, so that costs a duplicate refresh, never a torn file.
     """
@@ -946,8 +972,8 @@ def acquire_lock(
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            holder = _lock_holder(path)
-            if holder is not None and pid_alive(holder):
+            holder = lock_holder(path, now=now, pid_alive=pid_alive)
+            if holder is not None:
                 return holder
             # Windows refuses to unlink a file a peer still has open
             # mid-write; the next attempt then reads the peer's pid.
@@ -1013,7 +1039,9 @@ def main(argv: list[str]) -> int:
         return _report(root, args)
 
     lock, pid = _cache_path(root).with_name("refresh.lock"), os.getpid()
-    holder = acquire_lock(lock, pid=pid, pid_alive=platform_paths.pid_alive)
+    holder = acquire_lock(
+        lock, pid=pid, now=time.time(), pid_alive=platform_paths.pid_alive
+    )
     if holder is not None:
         print(f"refresh already running (pid {holder})")
         return 0

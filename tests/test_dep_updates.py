@@ -548,9 +548,20 @@ class TestFailureModes:
         cache = json.loads((project / ".pixi/agent-drift/deps.json").read_text())
         assert "torch" not in json.dumps(cache["cross_source"])
         fake.pypi["torch"] = fixture("pypi_torch.json")
-        report = check(project, fake)
+        report = check(project, fake, now=NOW + dep_updates.RETRY_SECONDS + 1)
         assert not report.from_cache
         assert names(report.cross_source) == [("pytorch-gpu", "2.14.0")]
+
+    def test_an_unchecked_cache_is_fresh_for_the_retry_window(self, project, fake):
+        # A lasting failure (offline) would otherwise relaunch a refresh at
+        # every SessionStart; the window bounds retries to one an hour.
+        fake.pypi["torch"] = TimeoutError("timed out")
+        check(project, fake)
+        within = NOW + dep_updates.RETRY_SECONDS - 1
+        report = dep_updates.cached(project, now=within)
+        assert report is not None and report.from_cache
+        assert any(item.startswith("torch") for item in report.unchecked)
+        assert dep_updates.cached(project, now=within + 2) is None
 
     def test_exhausted_budget_marks_queries_unchecked(self, project, fake):
         report = check(project, fake, deadline=time.time() - 1)
@@ -653,14 +664,24 @@ class TestRefreshLock:
     def test_a_free_lock_is_taken(self, project):
         path = self.lock(project)
         assert (
-            dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True) is None
+            dep_updates.acquire_lock(
+                path, pid=11, now=time.time(), pid_alive=lambda pid: True
+            )
+            is None
         )
         assert path.read_text() == "11"
 
     def test_a_live_peer_keeps_the_lock(self, project):
         path = self.lock(project)
-        dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True)
-        assert dep_updates.acquire_lock(path, pid=22, pid_alive=lambda pid: True) == 11
+        dep_updates.acquire_lock(
+            path, pid=11, now=time.time(), pid_alive=lambda pid: True
+        )
+        assert (
+            dep_updates.acquire_lock(
+                path, pid=22, now=time.time(), pid_alive=lambda pid: True
+            )
+            == 11
+        )
         assert path.read_text() == "11"
 
     @pytest.mark.parametrize("content", ["999", "", "not a pid"])
@@ -669,13 +690,37 @@ class TestRefreshLock:
         path.parent.mkdir(parents=True)
         path.write_text(content)
         alive = {999: False}
-        got = dep_updates.acquire_lock(path, pid=22, pid_alive=alive.__getitem__)
+        got = dep_updates.acquire_lock(
+            path, pid=22, now=time.time(), pid_alive=alive.__getitem__
+        )
         assert got is None
         assert path.read_text() == "22"
 
+    def test_an_old_lock_is_stale_even_with_a_live_pid(self, project):
+        # A reused pid, or a dead process whose handle Windows keeps open,
+        # would otherwise hold the lock forever; a refresh's budget is 120 s.
+        path = self.lock(project)
+        path.parent.mkdir(parents=True)
+        path.write_text("11")
+        old = time.time() - dep_updates.LOCK_STALE_SECONDS - 1
+        os.utime(path, (old, old))
+        assert dep_updates.lock_holder(path, now=time.time(), pid_alive=bool) is None
+        got = dep_updates.acquire_lock(
+            path, pid=22, now=time.time(), pid_alive=lambda pid: True
+        )
+        assert got is None
+        assert path.read_text() == "22"
+
+    def test_a_recent_lock_with_a_live_pid_is_held(self, project):
+        path = self.lock(project)
+        dep_updates.acquire_lock(path, pid=11, now=time.time(), pid_alive=bool)
+        assert dep_updates.lock_holder(path, now=time.time(), pid_alive=bool) == 11
+
     def test_release_leaves_a_peer_s_lock_alone(self, project):
         path = self.lock(project)
-        dep_updates.acquire_lock(path, pid=11, pid_alive=lambda pid: True)
+        dep_updates.acquire_lock(
+            path, pid=11, now=time.time(), pid_alive=lambda pid: True
+        )
         dep_updates.release_lock(path, pid=22)
         assert path.read_text() == "11"
         dep_updates.release_lock(path, pid=11)
@@ -687,7 +732,10 @@ class TestRefreshLock:
         # This test process is the live peer, so the real liveness probe and
         # the real CLI are exercised; refusing must happen before any check.
         dep_updates.acquire_lock(
-            self.lock(project), pid=os.getpid(), pid_alive=lambda pid: True
+            self.lock(project),
+            pid=os.getpid(),
+            now=time.time(),
+            pid_alive=lambda pid: True,
         )
 
         def must_not_run(*args, **kwargs):
