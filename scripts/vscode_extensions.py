@@ -37,18 +37,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+# The CLI, like preflight, can wait on git; the SessionStart hook passes less.
+CLI_GIT_SECONDS = 20.0
 
 
-def _load_platform_paths():
-    spec = importlib.util.spec_from_file_location(
-        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-platform_paths = _load_platform_paths()
+# Bootstrap, as in dep_updates: by path, and via load_sibling so the copy
+# the hook or preflight already registered is the one used.
+_spec = importlib.util.spec_from_file_location(
+    "_platform_paths_bootstrap", Path(__file__).resolve().parent / "platform_paths.py"
+)
+_bootstrap = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_bootstrap)
+platform_paths = _bootstrap.load_sibling("platform_paths")
 
 
 @dataclass(frozen=True)
@@ -151,6 +151,7 @@ def _check_ide(
     ide_dir: Path,
     env: Mapping[str, str],
     pid_alive: Callable[[int], bool],
+    git_timeout: float,
 ) -> str | None:
     """(problem text, or None when fine or not applicable).
 
@@ -180,7 +181,10 @@ def _check_ide(
         return _IDE_PROBLEM
     targets = [
         Path(_normalize_path(p))
-        for p in (root, platform_paths.installation_checkout(root))
+        for p in (
+            root,
+            platform_paths.installation_checkout(root, timeout=git_timeout),
+        )
     ]
     if not any(
         isinstance(folder, str) and target.is_relative_to(_normalize_path(Path(folder)))
@@ -200,6 +204,7 @@ def check(
     ide_dir: Path,
     env: Mapping[str, str],
     pid_alive: Callable[[int], bool],
+    git_timeout: float,
 ) -> ExtReport:
     result = run(["code", "--list-extensions"])
     if result is None:
@@ -241,7 +246,9 @@ def check(
         )
     notes.append("workspace-level disables are not read, only the global list")
 
-    ide = _check_ide(root, ide_dir=ide_dir, env=env, pid_alive=pid_alive)
+    ide = _check_ide(
+        root, ide_dir=ide_dir, env=env, pid_alive=pid_alive, git_timeout=git_timeout
+    )
 
     return ExtReport(
         applicable=True,
@@ -316,7 +323,12 @@ def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
 
 
 def live_check(
-    standard: Standard, root: Path, *, home: Path, env: Mapping[str, str]
+    standard: Standard,
+    root: Path,
+    *,
+    home: Path,
+    env: Mapping[str, str],
+    git_timeout: float,
 ) -> ExtReport:
     """check() with this machine's real effects: `code`, VS Code's state db
     and the IDE locks under `home`, and real pid liveness. The one wiring
@@ -330,20 +342,15 @@ def live_check(
         ide_dir=home / ".claude" / "ide",
         env=env,
         pid_alive=platform_paths.pid_alive,
+        git_timeout=git_timeout,
     )
 
 
 def _repo_root() -> Path:
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return Path.cwd()
-    return Path(out.stdout.strip() or ".")
+    top = platform_paths.git_output(
+        Path.cwd(), "rev-parse", "--show-toplevel", timeout=CLI_GIT_SECONDS
+    )
+    return Path((top or "").strip() or Path.cwd())
 
 
 def main(argv: list[str]) -> int:
@@ -370,7 +377,9 @@ def main(argv: list[str]) -> int:
         return 1
 
     root = args.root or _repo_root()
-    report = live_check(standard, root, home=Path.home(), env=os.environ)
+    report = live_check(
+        standard, root, home=Path.home(), env=os.environ, git_timeout=CLI_GIT_SECONDS
+    )
     summary, lines = render(report)
     print(summary)
     for line in lines:

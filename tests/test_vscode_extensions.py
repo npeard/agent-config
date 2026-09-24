@@ -54,6 +54,12 @@ def unknown_disabled():
 
 
 NO_IDE_ENV: dict[str, str] = {}
+# Claude Code inside a VS Code terminal, whose IDE lock is port 28330's.
+IDE_ENV = {
+    "CLAUDECODE": "1",
+    "TERM_PROGRAM": "vscode",
+    "CLAUDE_CODE_SSE_PORT": "28330",
+}
 
 
 def no_ide_alive(pid):
@@ -70,6 +76,7 @@ def check_defaults(**overrides):
         "ide_dir": Path("/nonexistent-ide-dir"),
         "env": NO_IDE_ENV,
         "pid_alive": no_ide_alive,
+        "git_timeout": 2.0,
     }
     kwargs.update(overrides)
     return kwargs
@@ -229,11 +236,7 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: pid == 4242,
             ),
@@ -252,11 +255,7 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: False,
             ),
@@ -278,11 +277,7 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -310,11 +305,7 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run([]),
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -345,11 +336,7 @@ class TestIdeCheck:
             make_standard(),
             **check_defaults(
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -366,11 +353,7 @@ class TestIdeCheck:
             make_standard(),
             **check_defaults(
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -385,7 +368,7 @@ class TestIdeCheck:
         monkeypatch.setattr(
             vscode_extensions.platform_paths,
             "installation_checkout",
-            lambda root: main if Path(root) == worktree else Path(root),
+            lambda root, timeout: main if Path(root) == worktree else Path(root),
         )
         ide_dir = self.make_lock(
             tmp_path, 28330, pid=4242, workspace_folders=[str(main)]
@@ -394,11 +377,7 @@ class TestIdeCheck:
             make_standard(),
             **check_defaults(
                 root=worktree,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: True,
             ),
@@ -453,11 +432,7 @@ class TestIdeCheck:
             **check_defaults(
                 run=fake_run(["bad.ext"]),
                 root=root,
-                env={
-                    "CLAUDECODE": "1",
-                    "TERM_PROGRAM": "vscode",
-                    "CLAUDE_CODE_SSE_PORT": "28330",
-                },
+                env=IDE_ENV,
                 ide_dir=ide_dir,
                 pid_alive=lambda pid: False,  # force a problem, the likelier leak site
             ),

@@ -77,7 +77,8 @@ def _load_sibling(name: str):
     from module scope, before a single check ran, in a script whose exit
     contract is 0 unless --strict precisely so a SessionStart hook can
     never abort a session over a warning. The checks that need a sibling
-    skip instead.
+    skip instead. That is also why this is not platform_paths.load_sibling:
+    it must run when platform_paths itself was not copied along.
     """
     path = Path(__file__).resolve().parent / f"{name}.py"
     if not path.is_file():
@@ -102,6 +103,8 @@ EXTENSION_STANDARD = (
 )
 
 OK, WARN, FAIL = "ok", "warn", "fail"
+# Every git call preflight makes; the SessionStart hook allows far less.
+GIT_SECONDS = 20
 
 
 class Report:
@@ -132,7 +135,11 @@ def git(*args: str) -> str | None:
     """Run a git command, returning None rather than raising on failure."""
     try:
         out = subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=True, timeout=20
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=GIT_SECONDS,
         )
     except (
         subprocess.CalledProcessError,
@@ -302,6 +309,7 @@ def _extension_row(report: Report, root: Path) -> None:
         root,
         home=Path.home(),
         env=os.environ,
+        git_timeout=GIT_SECONDS,
     )
     if not result.applicable:
         return
@@ -804,7 +812,7 @@ def check_instructions(report: Report, root: Path, home: Path) -> None:
     """Report generated instruction adapters that are missing or stale."""
     if installation_contract is None or platform_paths is None:
         return
-    root = platform_paths.installation_checkout(root)
+    root = platform_paths.installation_checkout(root, timeout=GIT_SECONDS)
     if (
         not (root / "install.py").is_file()
         or not (root / installation_contract.GUIDANCE_NAME).is_file()
@@ -868,7 +876,9 @@ def check_skills(
     )
     source_roots = {
         source.resolve(),
-        (platform_paths.installation_checkout(root) / "skills").resolve(),
+        (
+            platform_paths.installation_checkout(root, timeout=GIT_SECONDS) / "skills"
+        ).resolve(),
     }
     wrong = sorted(
         name

@@ -202,13 +202,22 @@ class TestInstallationCheckout:
     def test_a_worktree_resolves_to_the_main_checkout(self, git_repo: Path):
         worktree = git_repo / "a worktree"
         run_git(git_repo, "worktree", "add", "-q", "-b", "feature", str(worktree))
-        assert platform_paths.installation_checkout(worktree) == git_repo.resolve()
+        assert (
+            platform_paths.installation_checkout(worktree, timeout=20)
+            == git_repo.resolve()
+        )
 
     def test_the_main_checkout_resolves_to_itself(self, git_repo: Path):
-        assert platform_paths.installation_checkout(git_repo) == git_repo.resolve()
+        assert (
+            platform_paths.installation_checkout(git_repo, timeout=20)
+            == git_repo.resolve()
+        )
 
     def test_a_plain_non_git_directory_resolves_to_itself(self, tmp_path):
-        assert platform_paths.installation_checkout(tmp_path) == tmp_path.resolve()
+        assert (
+            platform_paths.installation_checkout(tmp_path, timeout=20)
+            == tmp_path.resolve()
+        )
 
     def test_a_hung_git_falls_back_to_the_root(self, tmp_path, monkeypatch):
         # A copy of this function without the timeout shipped once; a hung
@@ -216,11 +225,14 @@ class TestInstallationCheckout:
         (tmp_path / ".git").write_text("gitdir: elsewhere\n")
 
         def hang(argv, **kwargs):
-            assert kwargs.get("timeout"), "git must run under a timeout"
+            assert kwargs.get("timeout") == 20, "git must run under the timeout given"
             raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
 
         monkeypatch.setattr(platform_paths.subprocess, "run", hang)
-        assert platform_paths.installation_checkout(tmp_path) == tmp_path.resolve()
+        assert (
+            platform_paths.installation_checkout(tmp_path, timeout=20)
+            == tmp_path.resolve()
+        )
 
 
 class TestPidAlive:

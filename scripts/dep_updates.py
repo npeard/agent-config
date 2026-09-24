@@ -68,19 +68,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-
-def _load_platform_paths():
-    """The sibling platform module, loaded by path: this file is run by the
-    SessionStart hook from any cwd, so sys.path cannot be relied on."""
-    spec = importlib.util.spec_from_file_location(
-        "platform_paths", Path(__file__).resolve().parent / "platform_paths.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-platform_paths = _load_platform_paths()
+# Bootstrap: platform_paths is loaded by path, since the SessionStart hook
+# runs this from any cwd, and via its own load_sibling, so a copy the hook
+# or preflight already registered is the one used.
+_spec = importlib.util.spec_from_file_location(
+    "_platform_paths_bootstrap", Path(__file__).resolve().parent / "platform_paths.py"
+)
+_bootstrap = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_bootstrap)
+platform_paths = _bootstrap.load_sibling("platform_paths")
 
 MAPPING_URL = (
     "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/"

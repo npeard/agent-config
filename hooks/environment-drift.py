@@ -53,19 +53,22 @@ STANDARD = CHECKOUT / "vscode-extensions.toml"
 log = logging.getLogger("environment-drift")
 
 
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    # dataclasses look their own module up in sys.modules while building.
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+# The IDE check's git call runs on every session start, so it gets far less
+# than preflight's 20 s: a wedged git must not hold the session up.
+GIT_SECONDS = 2.0
 
 
 try:
-    platform_paths = _load("platform_paths")
-    dep_updates = _load("dep_updates")
-    vscode_extensions = _load("vscode_extensions")
+    # Bootstrap: load_sibling lives in platform_paths, so that one module is
+    # loaded by hand, and load_sibling then registers it and the rest.
+    _spec = importlib.util.spec_from_file_location(
+        "_platform_paths_bootstrap", SCRIPTS / "platform_paths.py"
+    )
+    _bootstrap = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_bootstrap)
+    platform_paths = _bootstrap.load_sibling("platform_paths")
+    dep_updates = platform_paths.load_sibling("dep_updates")
+    vscode_extensions = platform_paths.load_sibling("vscode_extensions")
 except Exception:
     # A broken checkout must not cost the session: log to stderr, which the
     # host keeps out of the session's context, and let main() stay silent.
@@ -124,6 +127,7 @@ def context(root, *, spawn, now, home, env):
             root,
             home=home,
             env=env,
+            git_timeout=GIT_SECONDS,
         )
         if exts.applicable and vscode_extensions.problem_count(exts):
             blocks.append(_block(*vscode_extensions.render(exts)))
