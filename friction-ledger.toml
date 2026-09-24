@@ -1248,3 +1248,141 @@ the user cannot answer from a fixed option set, versus premises acted on
 before they were checked. They share cause 6 today, but they would want
 different fixes if either grew a mechanical tell.
 """
+
+[[decision]]
+class = "latest-version-checked-in-one-source"
+source = "observed"
+date = "2026-09-23"
+cause = "rule-not-enforced"
+outcome = "tier-2"
+note = """
+doqs session e0f19169 said there was "no torch 2.14 ... anywhere on
+conda-forge win-64". That was true, but torch 2.14.0 was on PyPI with a
+win_amd64 cp313 wheel, and the user had to correct it. AGENTS.md already
+said "one registry is not the world"; the rule existed and was not
+followed. `pixi upgrade --dry-run` does not close the gap: it looks only in
+each package's declared source.
+
+Made mechanical. `scripts/dep_updates.py` takes same-source proposals from
+`pixi upgrade --dry-run` and adds a cross-source check (conda to PyPI via
+prefix.dev's mapping, plus one same-version hop for metapackages such as
+pytorch-gpu). Preflight shows it as a row, and `hooks/environment-drift.py`
+shows it at every session start, from a 24 h cache that a detached
+background process refreshes.
+"""
+
+[[decision]]
+class = "vscode-extension-drift"
+source = "observed"
+date = "2026-09-23"
+cause = "agent-config-gap"
+outcome = "tier-2"
+note = """
+Nothing stated which VS Code extensions this machine should have. The
+unwanted `notebook-mcp-server` cost about four hours (see
+`notebooks-skill-names-a-server-that-loses-writes`), and agents went
+looking for extensions that were not installed.
+
+`vscode-extensions.toml` now declares required and forbidden extensions,
+each with a reason. `scripts/vscode_extensions.py` checks them against
+`code --list-extensions` and VS Code's global disabled list, and checks
+that the Claude Code IDE lock names this workspace, but only under Claude
+Code in a VS Code terminal. The check reaches preflight and the
+SessionStart hook. Jupyter viewer extensions are deliberately unlisted,
+because the user allows them; only agent-facing notebook servers are
+forbidden.
+"""
+
+[[decision]]
+class = "branch-upstream-is-a-shared-branch"
+source = "observed"
+date = "2026-09-23"
+cause = "agent-config-gap"
+outcome = "tier-2"
+note = """
+doqs session 3d220b2c ran `git checkout -b obc-direct-rkky-cos
+origin/draft-august`, which makes the shared branch the new branch's
+upstream. Commits then reached draft-august on GitHub in two repos. The
+agent never ran `git push` before the user reported it, so the push is
+unexplained; the likeliest candidate is a VS Code Sync to the configured
+upstream. Recovery took two force-pushes and a cross-repo revert.
+
+Whatever pushed, the precondition is detectable: preflight's
+`check_upstream` warns when the upstream's branch name differs from the
+local one, and names the fix. The machine-level fix,
+`git config --global branch.autoSetupMerge simple`, is the user's call and
+was offered at integration rather than applied.
+"""
+
+[[decision]]
+class = "malformed-toml-in-ledger"
+source = "observed"
+date = "2026-09-23"
+cause = "rule-not-enforced"
+outcome = "tier-1"
+note = """
+claude-config session f9af2b87 (2026-09-15) wrote a bare backslash into a
+triple-quoted note. That is an illegal TOML escape, and it broke the next
+`pixi run friction`. Four calls went to repairing it, two of them sed
+quoting failures. `check-toml` from the existing pre-commit-hooks repo now
+rejects it at commit time.
+"""
+
+[[decision]]
+class = "codex-sandbox-lacks-home"
+source = "observed"
+date = "2026-09-23"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+Codex's Windows sandbox runs as a separate identity (CodexSandboxOffline)
+with no HOME. pixi failed with "Could not determine the home directory" in
+23 execs across 14 of 53 Codex sessions (2026-09-04 to 09-11). git refused
+with "dubious ownership", and `.git/index.lock` was denied. One session
+spent nine attempts reaching a working environment: HOME set explicitly,
+`safe.directory` passed through GIT_CONFIG_COUNT/GIT_CONFIG_KEY_0/
+GIT_CONFIG_VALUE_0, and a writable PRE_COMMIT_HOME. That recipe is recorded
+here so it is not derived a tenth time. Nothing in this repo can give the
+sandbox a home directory. The usual fallback, running the command outside
+the sandbox with approval, costs one round trip.
+"""
+
+[[decision]]
+class = "codex-ends-turn-at-checkpoint"
+source = "observed"
+date = "2026-09-23"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+In one Codex session (2026-09-04) the agent ended its turn after an
+intermediate commit four times ("you paused again?", "hello?"),
+acknowledging the two-gate rule each time. The rule is already in
+AGENTS.md, and Codex offers no hook that could refuse a turn end. Accepted
+at n=1 session. If it recurs, the next place to look is Codex's own config
+for a continuation setting, not a louder restatement.
+"""
+
+[[decision]]
+class = "bash-read-does-not-satisfy-edit"
+source = "observed"
+date = "2026-09-23"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+smi session b477324b, twice. The agent viewed a file with `sed -n` (which
+the auto-mode prompt encourages), then Edit refused: "File has not been
+read yet". Each cost one Read. The refusal happens at the point of use and
+names the fix.
+"""
+
+[[decision]]
+class = "agent-model-hook-fires"
+source = "observed"
+date = "2026-09-23"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+The agent-model hook blocked Agent dispatches that omitted `model` three
+times in doqs sessions e0f19169 and 1619c6cc. Each was one round trip,
+corrected at once. This is the hook doing its job.
+"""
