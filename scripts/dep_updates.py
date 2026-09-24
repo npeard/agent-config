@@ -759,20 +759,23 @@ def _apply_acks(report: DepReport, acked: list[dict]) -> DepReport:
     return report
 
 
+def _fresh(data: dict | None, stamp: dict, now: float) -> DepReport | None:
+    report = _cached_report(data, stamp, now)
+    return None if report is None else _apply_acks(report, _acked(data))
+
+
 def cached(root: Path, *, now: float) -> DepReport | None:
     """The fresh cached report, or None when a refresh is due.
 
     Never computes: the SessionStart hook cannot wait on the network or on
-    ``pixi list`` (~21 s per env on doqs), so it reads this and starts a
-    detached ``--refresh`` when it is None. ``preflight --offline`` reads it
-    for the same reason.
+    ``pixi list`` (~21 s per env on doqs), so it reads this (through
+    cache_view) and starts a detached ``--refresh`` when it is None.
+    ``preflight --offline`` reads it for the same reason.
     """
     manifest = _manifest(root)
     if manifest is None:
         return _blank(False, "")
-    data = _read_json(_cache_path(root))
-    report = _cached_report(data, _stamp(root, manifest), now)
-    return None if report is None else _apply_acks(report, _acked(data))
+    return _fresh(_read_json(_cache_path(root)), _stamp(root, manifest), now)
 
 
 def last_known(root: Path) -> tuple[DepReport, float] | None:
@@ -801,6 +804,44 @@ def refresh_running(
     return lock_holder(_lock_path(root), now=now, pid_alive=pid_alive) is not None
 
 
+@dataclass
+class CacheView:
+    """What a reader that must not wait on a refresh can show.
+
+    One decision for the SessionStart hook and preflight: each branched
+    over the cache and the lock itself, and they drifted, the hook saying
+    "refresh started" while a refresh was already running.
+    """
+
+    report: DepReport | None  # fresh, else the last known, else None
+    checked_at: float | None  # set for a last-known report only
+    state: str  # "fresh", "running" (a refresh holds the lock) or "due"
+
+    @property
+    def refresh(self) -> str:
+        """The refresh this result waits on. For "due" the caller starts
+        one (the hook) or computes instead (preflight)."""
+        return "refresh in progress" if self.state == "running" else "refresh started"
+
+    @property
+    def label(self) -> str:
+        """The suffix for a stale report's summary; empty when fresh."""
+        if self.state == "fresh" or self.checked_at is None:
+            return ""
+        return f" ({as_of(self.checked_at)}; {self.refresh})"
+
+
+def cache_view(
+    root: Path, *, now: float, pid_alive: Callable[[int], bool]
+) -> CacheView:
+    report = cached(root, now=now)
+    if report is not None:
+        return CacheView(report, None, "fresh")
+    running = refresh_running(root, now=now, pid_alive=pid_alive)
+    known = last_known(root) or (None, None)
+    return CacheView(*known, "running" if running else "due")
+
+
 def check(
     root: Path,
     *,
@@ -818,12 +859,12 @@ def check(
     manifest = _manifest(root)
     if manifest is None:
         return _blank(False, "")
-    if not refresh and (report := cached(root, now=now)) is not None:
-        return report
     cache_path = _cache_path(root)
     previous = _read_json(cache_path)
-    acked = _acked(previous)
     stamp = _stamp(root, manifest)
+    if not refresh and (report := _fresh(previous, stamp, now)) is not None:
+        return report
+    acked = _acked(previous)
     same_lock = previous is not None and all(
         previous.get(key) == value for key, value in stamp.items()
     )

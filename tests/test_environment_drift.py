@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -143,6 +144,23 @@ def test_a_stale_cache_shows_its_last_known_findings_dated(
     assert len(spawn.argvs) == 1
     assert "(as of 2026-09-22; refresh started)" in text.splitlines()[0]
     assert "pytorch-gpu -> torch" in text
+
+
+def test_a_running_refresh_is_named_and_not_started_again(quiet, tmp_path, monkeypatch):
+    # This test process is the live holder the real lock probe will find.
+    lock = tmp_path / ".pixi" / "agent-drift" / "refresh.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(str(os.getpid()))
+    monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: None)
+    stale = dep_report(
+        quiet.dep_updates, cross_source=[torch_finding(quiet.dep_updates)]
+    )
+    checked = time.mktime((2026, 9, 22, 12, 0, 0, 0, 0, -1))
+    monkeypatch.setattr(quiet.dep_updates, "last_known", lambda root: (stale, checked))
+    spawn = Spawner()
+    text = context(quiet, tmp_path, spawn)
+    assert spawn.argvs == []
+    assert "(as of 2026-09-22; refresh in progress)" in text.splitlines()[0]
 
 
 def test_a_stale_clean_cache_refreshes_silently(quiet, tmp_path, monkeypatch):

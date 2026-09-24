@@ -252,26 +252,22 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
 
 def _dependency_row(report: Report, root: Path, offline: bool) -> None:
     now = time.time()
-    suffix = " (cached)" if offline else ""
+    view = dep_updates.cache_view(root, now=now, pid_alive=platform_paths.pid_alive)
+    result, suffix = view.report, view.label
     if offline:
-        result = dep_updates.cached(root, now=now)
-        if result is None:
+        if view.state != "fresh":
             report.add(
                 WARN,
                 "dependency updates (cached)",
                 "no cached result (run preflight without --offline)",
             )
             return
-    elif dep_updates.refresh_running(root, now=now, pid_alive=platform_paths.pid_alive):
-        known = dep_updates.last_known(root)
-        if known is None:
-            report.add(
-                WARN, "dependency updates", "refresh in progress; no cached result"
-            )
-            return
-        result, checked_at = known
-        suffix = f" ({dep_updates.as_of(checked_at)}; refresh in progress)"
-    else:
+        suffix = " (cached)"
+    elif view.state == "running" and result is None:
+        report.add(WARN, "dependency updates", f"{view.refresh}; no cached result")
+        return
+    elif view.state == "due":
+        suffix = ""
         result = dep_updates.check(
             root,
             fetch=dep_updates.live_fetch,
