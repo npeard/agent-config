@@ -89,7 +89,7 @@ def test_main_checkout_adapters_are_current_in_a_linked_worktree(
     monkeypatch.chdir(worktree)
     report = preflight.Report()
     preflight.check_instructions(report, worktree, home)
-    assert [(status, label) for status, label, _ in report.rows] == [
+    assert [row[:2] for row in report.rows] == [
         (preflight.OK, "Claude instructions"),
         (preflight.OK, "Codex instructions"),
     ]

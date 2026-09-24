@@ -18,7 +18,7 @@ from pathlib import Path
 import platform_paths
 import preflight
 import pytest
-from conftest import run_git
+from conftest import dep_report, run_git, torch_finding
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -26,11 +26,11 @@ OK, WARN, FAIL = preflight.OK, preflight.WARN, preflight.FAIL
 
 
 def statuses(report: preflight.Report, label: str) -> list[str]:
-    return [s for s, lab, _ in report.rows if lab == label]
+    return [row[0] for row in report.rows if row[1] == label]
 
 
 def details(report: preflight.Report, label: str) -> str:
-    return " ".join(d for _, lab, d in report.rows if lab == label)
+    return " ".join(row[2] for row in report.rows if row[1] == label)
 
 
 def isolate_preflight_home(monkeypatch: pytest.MonkeyPatch, root: Path) -> Path:
@@ -50,28 +50,6 @@ def no_external_effects(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(preflight.dep_updates, "live_fetch", forbidden)
     monkeypatch.setattr(preflight.dep_updates, "live_run", lambda root: forbidden)
     monkeypatch.setattr(preflight.vscode_extensions, "_run_code", lambda argv: None)
-
-
-def dep_report(**changes):
-    dep = preflight.dep_updates
-    report = dep._blank(True, "win-64")
-    for key, value in changes.items():
-        setattr(report, key, value)
-    return report
-
-
-def torch_finding():
-    return preflight.dep_updates.Finding(
-        name="pytorch-gpu",
-        pypi_name="torch",
-        source="conda-forge",
-        locked="2.13.0",
-        candidate="2.14.0",
-        candidate_source="pypi",
-        wheel="win_amd64 cp313 wheel",
-        spec=">=2.13",
-        envs=["default"],
-    )
 
 
 class TestDetailLines:
@@ -138,16 +116,20 @@ class TestDependencies:
         return tmp_path
 
     def test_findings_warn_with_detail_lines(self, project, monkeypatch):
-        found = dep_report(cross_source=[torch_finding()])
+        found = dep_report(
+            preflight.dep_updates, cross_source=[torch_finding(preflight.dep_updates)]
+        )
         monkeypatch.setattr(preflight.dep_updates, "check", lambda *a, **k: found)
         report = preflight.Report()
         preflight.check_dependencies(report, project, offline=False)
         assert statuses(report, "dependency updates (win-64)") == [WARN]
-        assert any("pytorch-gpu -> torch" in line for line in report.lines[0])
+        assert any("pytorch-gpu -> torch" in line for line in report.rows[0][3])
 
     def test_clean_is_ok(self, project, monkeypatch):
         monkeypatch.setattr(
-            preflight.dep_updates, "check", lambda *a, **k: dep_report()
+            preflight.dep_updates,
+            "check",
+            lambda *a, **k: dep_report(preflight.dep_updates),
         )
         report = preflight.Report()
         preflight.check_dependencies(report, project, offline=False)
@@ -159,16 +141,20 @@ class TestDependencies:
         assert report.rows == []
 
     def test_pixi_missing_warns(self, project, monkeypatch):
-        missing = dep_report(pixi_missing=True, platform="")
+        missing = dep_report(preflight.dep_updates, pixi_missing=True, platform="")
         monkeypatch.setattr(preflight.dep_updates, "check", lambda *a, **k: missing)
         report = preflight.Report()
         preflight.check_dependencies(report, project, offline=False)
-        assert [s for s, _, _ in report.rows] == [WARN]
+        assert [row[0] for row in report.rows] == [WARN]
         assert "pixi not found" in details(report, "dependency updates")
 
     def test_offline_reads_the_cache_and_never_fetches(self, project, monkeypatch):
         monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
-        found = dep_report(cross_source=[torch_finding()], from_cache=True)
+        found = dep_report(
+            preflight.dep_updates,
+            cross_source=[torch_finding(preflight.dep_updates)],
+            from_cache=True,
+        )
         monkeypatch.setattr(preflight.dep_updates, "cached", lambda root, now: found)
         report = preflight.Report()
         preflight.check_dependencies(report, project, offline=True)
@@ -185,7 +171,11 @@ class TestDependencies:
     ):
         self.hold_refresh_lock(project)
         monkeypatch.setattr(preflight.dep_updates, "check", forbidden)
-        found = dep_report(cross_source=[torch_finding()], from_cache=True)
+        found = dep_report(
+            preflight.dep_updates,
+            cross_source=[torch_finding(preflight.dep_updates)],
+            from_cache=True,
+        )
         checked = time.mktime((2026, 9, 22, 12, 0, 0, 0, 0, -1))
         monkeypatch.setattr(
             preflight.dep_updates, "last_known", lambda root: (found, checked)
@@ -235,7 +225,7 @@ class TestExtensions:
         report = preflight.Report()
         preflight.check_extensions(report, tmp_path)
         assert statuses(report, "VS Code extensions") == [WARN]
-        assert "missing (required): astral-sh.ty" in report.lines[0]
+        assert "missing (required): astral-sh.ty" in report.rows[0][3]
 
     def test_a_raising_check_is_a_warning_not_an_exception(self, tmp_path, monkeypatch):
         def boom(*args, **kwargs):
@@ -744,7 +734,7 @@ class TestAuditOwed:
         (tmp_path / ".audit-owed").write_text("scripts/x.py\nAGENTS.md\n")
         rows = self.report_for(tmp_path)
         assert len(rows) == 1
-        status, label, detail = rows[0]
+        status, label, detail, _ = rows[0]
         assert status == preflight.WARN and label == "audit"
         assert "2 config asset(s)" in detail and "pixi run audit" in detail
 

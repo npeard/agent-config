@@ -109,17 +109,15 @@ GIT_SECONDS = 20
 
 class Report:
     def __init__(self) -> None:
-        self.rows: list[tuple[str, str, str]] = []
-        # Parallel to rows: the indented lines printed under each one.
-        self.lines: list[list[str]] = []
+        # (status, label, detail, the indented lines printed under the row)
+        self.rows: list[tuple[str, str, str, list[str]]] = []
 
     def add(self, status: str, label: str, detail: str = "", lines=()) -> None:
-        self.rows.append((status, label, detail))
-        self.lines.append(list(lines))
+        self.rows.append((status, label, detail, list(lines)))
 
     def render(self) -> int:
-        width = max(len(s) for s, _, _ in self.rows)
-        for (status, label, detail), lines in zip(self.rows, self.lines, strict=True):
+        width = max(len(row[0]) for row in self.rows)
+        for status, label, detail, lines in self.rows:
             line = f"[{status:<{width}}] {label}"
             print(f"{line}: {detail}" if detail else line)
             for extra in lines:
@@ -226,6 +224,19 @@ def check_upstream(report: Report) -> None:
     )
 
 
+def _guarded(report: Report, label: str, row, *args) -> None:
+    """Run row(report, *args), turning any exception into a WARN row.
+
+    A bug in a drift check must not break preflight's exit 0 without
+    --strict; the traceback goes to stderr for whoever debugs it.
+    """
+    try:
+        row(report, *args)
+    except Exception as exc:
+        log.exception("%s check failed", label)
+        report.add(WARN, label, f"check failed: {exc!r}")
+
+
 def check_dependencies(report: Report, root: Path, offline: bool) -> None:
     """Report dependency updates, same-source and cross-source.
 
@@ -233,17 +244,10 @@ def check_dependencies(report: Report, root: Path, offline: bool) -> None:
     and earlier runs wrote, so it never waits on the network. So does an
     online run that finds a refresh already holding the lock, rather than
     racing it for ~25 s over the same cache. Silent in a project that is
-    not a pixi project. A bug in the check is a warning row, never an
-    exception, since preflight's exit status is 0 without --strict.
+    not a pixi project.
     """
-    if dep_updates is None:
-        return
-    try:
-        _dependency_row(report, root, offline)
-    except Exception as exc:
-        # The traceback goes to stderr for whoever debugs the check.
-        log.exception("dependency check failed")
-        report.add(WARN, "dependency updates", f"check failed: {exc!r}")
+    if dep_updates is not None:
+        _guarded(report, "dependency updates", _dependency_row, root, offline)
 
 
 def _dependency_row(report: Report, root: Path, offline: bool) -> None:
@@ -294,13 +298,8 @@ def check_extensions(report: Report, root: Path) -> None:
     Silent without the standard file (a copied preflight) or without `code`
     (a machine with no VS Code).
     """
-    if vscode_extensions is None or not EXTENSION_STANDARD.is_file():
-        return
-    try:
-        _extension_row(report, root)
-    except Exception as exc:  # a bug here must not break preflight's exit 0
-        log.exception("extension check failed")
-        report.add(WARN, "VS Code extensions", f"check failed: {exc!r}")
+    if vscode_extensions is not None and EXTENSION_STANDARD.is_file():
+        _guarded(report, "VS Code extensions", _extension_row, root)
 
 
 def _extension_row(report: Report, root: Path) -> None:

@@ -663,7 +663,7 @@ def _compute(root, fetch: Fetch, run: Run, now, deadline, locked: dict | None):
         report.cross_source.append(
             Finding(
                 name=pkg["name"],
-                pypi_name=other if conda else pkg["name"],
+                pypi_name=other if conda else None,
                 source=pkg["source"].rstrip("/").rsplit("/", 1)[-1]
                 if conda
                 else "pypi",

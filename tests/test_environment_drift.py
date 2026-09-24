@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 import pytest
+from conftest import dep_report, torch_finding
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "environment-drift.py"
 
@@ -48,32 +49,12 @@ def clean_ext(hook):
     )
 
 
-def dep_report(hook, **changes):
-    report = hook.dep_updates._blank(True, "win-64")
-    report.from_cache = True
-    for key, value in changes.items():
-        setattr(report, key, value)
-    return report
-
-
-def torch(hook):
-    return hook.dep_updates.Finding(
-        name="pytorch-gpu",
-        pypi_name="torch",
-        source="conda-forge",
-        locked="2.13.0",
-        candidate="2.14.0",
-        candidate_source="pypi",
-        wheel="win_amd64 cp313 wheel",
-        spec=">=2.13",
-        envs=["default"],
-    )
-
-
 @pytest.fixture
 def quiet(hook, monkeypatch):
     """A machine and project with nothing to report."""
-    monkeypatch.setattr(hook.dep_updates, "cached", lambda root, now: dep_report(hook))
+    monkeypatch.setattr(
+        hook.dep_updates, "cached", lambda root, now: dep_report(hook.dep_updates)
+    )
     monkeypatch.setattr(
         hook.vscode_extensions, "check", lambda *a, **k: clean_ext(hook)
     )
@@ -98,7 +79,9 @@ def test_silent_when_clean(quiet, tmp_path, monkeypatch, capsys):
 def test_a_finding_is_emitted_as_session_start_context(
     quiet, tmp_path, monkeypatch, capsys
 ):
-    found = dep_report(quiet, cross_source=[torch(quiet)])
+    found = dep_report(
+        quiet.dep_updates, cross_source=[torch_finding(quiet.dep_updates)]
+    )
     monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: found)
     monkeypatch.setattr(quiet, "spawn_refresh", Spawner())
     payload = json.loads(run_main(quiet, monkeypatch, capsys, tmp_path))
@@ -150,7 +133,9 @@ def test_a_stale_cache_shows_its_last_known_findings_dated(
     quiet, tmp_path, monkeypatch
 ):
     monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: None)
-    stale = dep_report(quiet, cross_source=[torch(quiet)])
+    stale = dep_report(
+        quiet.dep_updates, cross_source=[torch_finding(quiet.dep_updates)]
+    )
     checked = time.mktime((2026, 9, 22, 12, 0, 0, 0, 0, -1))
     monkeypatch.setattr(quiet.dep_updates, "last_known", lambda root: (stale, checked))
     spawn = Spawner()
@@ -163,7 +148,9 @@ def test_a_stale_cache_shows_its_last_known_findings_dated(
 def test_a_stale_clean_cache_refreshes_silently(quiet, tmp_path, monkeypatch):
     monkeypatch.setattr(quiet.dep_updates, "cached", lambda root, now: None)
     monkeypatch.setattr(
-        quiet.dep_updates, "last_known", lambda root: (dep_report(quiet), 0.0)
+        quiet.dep_updates,
+        "last_known",
+        lambda root: (dep_report(quiet.dep_updates), 0.0),
     )
     spawn = Spawner()
     assert context(quiet, tmp_path, spawn) is None
