@@ -117,7 +117,11 @@ reference or a number appearing nowhere in the data passes every
 mechanical check, reaches a reader, and costs credibility rather than a
 build. Never invent a number, citation, reference, or attribution. When
 a sentence needs a fact you do not have, ask for it or write the weaker
-sentence you can support.
+sentence you can support. For a research result, a number is necessary
+but not sufficient: the claim also needs a figure that shows it and adds
+what the number cannot -- shape over time, where the error lives, how it
+moves with scale. A table of final metrics is never a section's only
+evidence.
 
 **Notation consistency.** One symbol per quantity across the whole
 document, matching the project's notation file where it has one. This
