@@ -17,6 +17,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
+import pytest
 import vscode_extensions
 
 REPO = Path(__file__).resolve().parent.parent
@@ -284,6 +285,11 @@ class TestIdeCheck:
         )
         assert report.ide is not None
 
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="case folding is Windows-only by design: _normalize_path "
+        "relies on normcase, a no-op on POSIX",
+    )
     def test_windows_lowercased_drive_and_case_still_matches(self, tmp_path):
         """Review Focus 5: a project path containing spaces, matched against
         the lock's workspaceFolders, which Windows lowercases (e.g.
@@ -293,11 +299,7 @@ class TestIdeCheck:
         root.mkdir(parents=True)
         # Simulate what Windows actually writes: a lowercased drive letter
         # and a differently-cased tail, as the plan's captured fact states.
-        raw = str(root.resolve())
-        if len(raw) > 1 and raw[1] == ":":
-            mangled = raw[0].lower() + raw[1:]
-        else:
-            mangled = raw.upper()
+        mangled = str(root.resolve()).lower()
         ide_dir = self.make_lock(tmp_path, 28330, pid=4242, workspace_folders=[mangled])
         standard = make_standard()
         report = vscode_extensions.check(
