@@ -1386,3 +1386,47 @@ The agent-model hook blocked Agent dispatches that omitted `model` three
 times in doqs sessions e0f19169 and 1619c6cc. Each was one round trip,
 corrected at once. This is the hook doing its job.
 """
+
+[[decision]]
+class = "research-spec-written-without-clarifying-questions"
+source = "observed"
+date = "2026-09-28"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+On an open-ended research task the orchestrator wrote the spec from stated
+assumptions and asked no clarifying questions; the user interrupted to ask
+for them, and four questions (models, geometry, rescue scope, budget) then
+changed the plan. The AGENTS.md override covers brainstorming's
+per-section approval gates, not its clarifying-questions step, which the
+brainstorming skill already requires. The rule exists and was misread as
+covered by the override, so restating it would change nothing; one
+incident, accepted.
+"""
+
+[[decision]]
+class = "subagent-report-file-write-blocked"
+source = "observed"
+date = "2026-09-28"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+A subagent drafting the user-requested REPORT.md was refused a Write with
+"Subagents should return findings as text, not write report files". The
+refusal names itself where it happens, the subagent stopped and handed the
+draft back, and the orchestrator wrote the file; one round trip.
+"""
+
+[[decision]]
+class = "usage-limit-kills-long-subagent-mid-run"
+source = "observed"
+date = "2026-09-28"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+Two long GPU-phase subagents were terminated by account usage limits while
+their child training jobs kept running. Resuming worked because each phase
+kept a handoff note and atomic outputs, which compute-job-safety already
+asks for; checking for surviving children before resuming caught a live
+run both times. Nothing to add.
+"""
