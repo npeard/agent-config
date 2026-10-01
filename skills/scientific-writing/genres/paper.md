@@ -19,13 +19,11 @@ referee's attention on what they already know.
 - **Related work is positioned, not surveyed.** Each citation earns its
   place by saying what this paper does that the cited work does not, or
   what it builds on. A paragraph listing who did what is a survey.
-- **Abstract and introduction run context, gap, claim** (Mensh & Kording
-  2017): what the field knows, the specific thing it does not, and what
-  this paper establishes. The claim is a result, not a topic: "we show
-  X", not "we study X".
-- **Derivations: state the result, defer the derivation**, per `math`'s
-  "Derive once, then refer". The main text keeps the result and a
-  pointer.
+- **Abstract and introduction move from context to content to
+  conclusion** (Mensh & Kording 2017). The context ends on the specific
+  gap this paper fills, and the conclusion is a result, not a topic: "we
+  show X", not "we study X".
+- **Derivation placement**: `math`'s "Derive once, then refer".
 
 ## Budgets
 

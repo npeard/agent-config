@@ -16,8 +16,7 @@ Name the genre, then read `genres/<genre>.md` (`paper`, `talk`,
 
 ## 1. Claim ledger first
 
-No prose before the section's ledger rows exist. One row per paragraph
-(per slide, in a talk):
+No prose before the section's ledger rows exist. One row per paragraph:
 
 | Column                    | Content                                  |
 | ------------------------- | ---------------------------------------- |
@@ -29,9 +28,9 @@ No prose before the section's ledger rows exist. One row per paragraph
 
 **Revising starts with a reverse outline.** Write one ledger row per
 existing paragraph -- its claim, and where its evidence actually is --
-before changing a word. This holds in every ceremony class, Pass
-included: a line edit polishes recited evidence, while the outline
-exposes it, and a repeated claim shows up as two rows with one claim.
+before changing a word -- in every ceremony class, Pass included. A line
+edit polishes recited evidence; the outline exposes it, and a repeated
+claim as two rows with one claim.
 
 ## 2. Evidence routing
 
@@ -42,18 +41,16 @@ Pick the single medium that shows the evidence most directly:
 - exact values a reader will look up -- a table;
 - prose, only when none of those can.
 
-**Inspect the artifact, not its source.** Open the rendered figure, the
-typeset equation, the built table, and ask one question: *is the
+**Inspect the rendered artifact, not its source**, and ask: *is the
 evidence visible enough that explaining it in prose, in the body or the
 caption, would be repetitive?* Matching the prose's numbers to the plot
 is not this question.
 
 - **Yes**: the prose states the claim and points to the artifact.
-- **No**: change the artifact until the answer is yes. A power law gets
-  log axes and a reference slope; a threshold crossing gets labelled
-  ticks; a real-versus-imaginary distinction gets colour; a panel that
-  shows nothing claimed gets removed; an equation gets rearranged so the
-  dependence is explicit.
+- **No**: change the artifact until the answer is yes -- log axes and a
+  reference slope for a power law, labelled ticks for a threshold,
+  colour for real versus imaginary, a panel removed, an equation
+  rearranged so the dependence is explicit.
 - **Cannot change it** (no plotting code, out of scope): record the
   change in the medium cell -- "Fig. 2, CHANGE: integer m ticks" -- and
   report it. The prose still states only the claim.
@@ -79,7 +76,7 @@ is `math`'s "Derive once, then refer".
 ## 3. Paragraphs and sentences
 
 The topic sentence is the claim; setup and procedure follow it. One
-claim per paragraph -- a second argument starts a second paragraph.
+claim per paragraph.
 
 From Strunk 1918, with its rule numbers:
 
@@ -96,7 +93,7 @@ Part I usage rules and the White-era additions are excluded on purpose
 
 ## 4. Numeric budgets
 
-Defaults; a genre file may override them:
+Defaults a genre file may override:
 
 - paragraph: at most 5 sentences or about 120 words;
 - caption beyond its panel key: at most 3 sentences;
@@ -118,7 +115,6 @@ gate.
 - **Fix an overclaim by scoping it**, with a pointer: "is insensitive to
   the choice of target (Fig. 2)". Never by reciting more of the plot.
 - **Hedge only where uncertainty is real**, and name it.
-- **Never set up a fact to retract it.** State what holds.
 
 ## 6. Review checks
 
@@ -128,9 +124,9 @@ Reviewers run these per section:
 - **Removal test**: the sufficiency check, per paragraph.
 - **Repetition audit**: each claim stated once in the body; a caption
   restates it only as its lead sentence.
-- **Fresh expert reader**: a subagent given the genre's reader, and only
-  the rendered text and figures, says what each section established and
-  lists every sentence it would skip.
+- **Fresh expert reader**: a subagent playing the genre's reader, given
+  only the rendered text and figures, says what each section established
+  and which sentences it would skip.
 - **`prose-metrics`** before and after, delta reported. Each shared
   numeric needs a reason the figure cannot show the value.
 
@@ -145,4 +141,3 @@ Quoted from the no-skill baseline.
 | "The figure shows OBC about 20-30x above PBC, with the same slope. The old text never mentioned this, so I added a sentence stating it." | Shown by the figure, so not said in prose. If it matters and is not obvious, annotate the figure. |
 | "adds a sentence covering panels F and G, and states the C_YZ exception."                                                                | A contradicting panel means the claim is scoped wrong. Narration hides it.                        |
 | (Opened the figure only to check the prose's numbers)                                                                                    | Ask the visibility question instead.                                                              |
-| "that bond is \\emph{imaginary}"                                                                                                         | Colour real against imaginary in the figure.                                                      |
