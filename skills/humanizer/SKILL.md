@@ -55,8 +55,8 @@ rewrite process in every mode.
 For a paper, talk or thesis, `scientific-writing` governs structure and
 this skill is the final lint. Two overrides:
 
-- **Pattern 1**: fix an inflated claim by scoping it and pointing to its
-  evidence, never by reciting the evidence.
+- **Pattern 1**: fix an inflated claim as `scientific-writing` section 5
+  directs.
 - **Pattern 7 and the false-positive list**: a standard term of art is
   not an overused word or jargon. Do not replace it.
 

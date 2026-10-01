@@ -121,9 +121,8 @@ and the body. It does not gate.
 Per section:
 
 - **Skim test**: the topic sentences alone reconstruct the argument.
-- **Removal test**: the sufficiency check, per paragraph.
-- **Repetition audit**: each claim stated once in the body; a caption
-  restates it only as its lead sentence.
+- **Removal test**: section 2's sufficiency check, per paragraph.
+- **Repetition audit**: section 2's caption-and-body rule, per claim.
 - **Fresh expert reader**: a subagent playing the genre's reader, given
   only the rendered text and figures, says what each section established
   and which sentences it would skip.
