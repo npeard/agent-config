@@ -12,6 +12,7 @@ install path cannot rot.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -30,6 +31,13 @@ MARKER = ".audit-owed"
 # AGENT_CONFIG_REPO names the fixture outright, which is why the hook has no
 # second override to keep in step.
 HOME_VAR = "USERPROFILE" if os.name == "nt" else "HOME"
+
+
+def load_hook():
+    spec = importlib.util.spec_from_file_location("audit_owed", HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture
@@ -287,7 +295,7 @@ class TestWiring:
         assert MARKER in (REPO_ROOT / ".gitignore").read_text().split()
 
     def test_the_expanduser_default_is_still_used_without_the_override(
-        self, fake_master, tmp_path
+        self, fake_master, tmp_path, monkeypatch
     ):
         """The override exists for portability and for these tests; the
         documented install path must keep working without it.
@@ -297,19 +305,16 @@ class TestWiring:
         does not substitute HOME itself: Git Bash exports it, sometimes in
         POSIX form or on a mapped drive, and preferring it there made the
         hook resolve to a directory that does not exist and never fire.
+
+        Asserted in-process on master_repo() rather than by running the hook:
+        a subprocess under a fresh HOME makes the first macOS git call cold,
+        and under load it outran the hook's git timeout, so the hook declined
+        and the test failed for a reason unrelated to path resolution.
         """
-        commit(fake_master, "scripts/x.py")
-        env = {**os.environ, HOME_VAR: str(tmp_path)}
-        env.pop("AGENT_CONFIG_REPO", None)
-        result = subprocess.run(
-            [sys.executable, str(HOOK)],
-            input=json.dumps(payload(fake_master)),
-            capture_output=True,
-            text=True,
-            check=True,
-            env=env,
-        )
-        assert fired(result.stdout.strip())
+        monkeypatch.setenv(HOME_VAR, str(tmp_path))
+        monkeypatch.delenv("AGENT_CONFIG_REPO", raising=False)
+        monkeypatch.delenv("CLAUDE_CONFIG_REPO", raising=False)
+        assert load_hook().master_repo() == os.path.realpath(fake_master)
 
     @pytest.mark.skipif(
         os.name != "nt",
@@ -317,7 +322,7 @@ class TestWiring:
         "second variable that could disagree with it.",
     )
     def test_a_git_bash_style_home_does_not_disable_the_hook(
-        self, fake_master, tmp_path
+        self, fake_master, tmp_path, monkeypatch
     ):
         """Git Bash and MSYS2 export HOME, often in a form no Windows API can
         open ("/c/Users/npeard") or on a domain-mapped drive that differs from
@@ -326,18 +331,11 @@ class TestWiring:
         never fired -- the exact failure its comment warns about. Whatever
         HOME says, USERPROFILE must decide.
         """
-        commit(fake_master, "scripts/x.py")
-        env = {**os.environ, HOME_VAR: str(tmp_path), "HOME": "/c/nonexistent"}
-        env.pop("AGENT_CONFIG_REPO", None)
-        result = subprocess.run(
-            [sys.executable, str(HOOK)],
-            input=json.dumps(payload(fake_master)),
-            capture_output=True,
-            text=True,
-            check=True,
-            env=env,
-        )
-        assert fired(result.stdout.strip())
+        monkeypatch.setenv(HOME_VAR, str(tmp_path))
+        monkeypatch.setenv("HOME", "/c/nonexistent")
+        monkeypatch.delenv("AGENT_CONFIG_REPO", raising=False)
+        monkeypatch.delenv("CLAUDE_CONFIG_REPO", raising=False)
+        assert load_hook().master_repo() == os.path.realpath(fake_master)
 
 
 class TestCommitActuallyHappened:
@@ -695,16 +693,8 @@ class TestTransientSpawnFailure:
     isolation. Asserted structurally rather than by trying to reproduce the
     load."""
 
-    def load_hook(self):
-        import importlib.util
-
-        spec = importlib.util.spec_from_file_location("audit_owed", HOOK)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
     def test_a_transient_spawn_failure_is_retried(self, monkeypatch, git_repo):
-        hook = self.load_hook()
+        hook = load_hook()
         real = hook.subprocess.run
         calls = []
 
@@ -722,7 +712,7 @@ class TestTransientSpawnFailure:
         assert len(calls) == 2
 
     def test_a_permanent_failure_still_declines(self, monkeypatch, git_repo):
-        hook = self.load_hook()
+        hook = load_hook()
         calls = []
 
         def always(argv, **kwargs):
@@ -759,7 +749,7 @@ class TestTransientSpawnFailure:
         raising would be a certainly-lost entry every time, on a hook whose
         whole job is not to forget.
         """
-        hook = self.load_hook()
+        hook = load_hook()
         target = tmp_path / "m.txt"
         target.write_text("seed\n")
 
@@ -789,7 +779,7 @@ class TestTransientSpawnFailure:
         asset scan ever runs. Found as the cause of TestConcurrentWrites
         failing intermittently under load.
         """
-        hook = self.load_hook()
+        hook = load_hook()
         real = hook.subprocess.run
         calls = []
 
@@ -806,7 +796,7 @@ class TestTransientSpawnFailure:
         assert len(calls) == 2
 
     def test_a_permanent_rev_parse_failure_still_declines(self, monkeypatch, git_repo):
-        hook = self.load_hook()
+        hook = load_hook()
         calls = []
 
         def always(argv, **kwargs):
@@ -827,7 +817,7 @@ class TestTransientSpawnFailure:
         which would make this directory a subdirectory of a real repo and the
         expected answer a valid checkout.
         """
-        hook = self.load_hook()
+        hook = load_hook()
         loose = tmp_path / "not-a-repo"
         loose.mkdir()
         assert hook.checkout_and_branch(str(loose)) == ("", "")
