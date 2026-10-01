@@ -51,8 +51,19 @@ LATEX_REFS = re.compile(
 TYPST_REFS = re.compile(r"@[\w:.-]+")
 INLINE_MATH = re.compile(r"\$[^$]*\$|\\\(.*?\\\)")
 LATEX_COMMAND = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?")
+LATEX_ENV_MARKER = re.compile(r"\\(?:begin|end)\{[^}]*\}")
+LATEX_LINE_BREAK = re.compile(r"\\\\(?:\[[^\]]*\])?")
+TYPST_SETUP = re.compile(r"^[ \t]*#(?:set|show|import|let)\b")
 TYPST_COMMAND = re.compile(r"#[A-Za-z][\w.]*")
-LATEX_FLOATS = ("figure", "table")
+LATEX_FLOATS = (
+    "figure",
+    "table",
+    "wrapfigure",
+    "wraptable",
+    "sidewaysfigure",
+    "sidewaystable",
+    "subfigure",
+)
 LATEX_DISPLAY_MATH = (
     "equation",
     "align",
@@ -68,34 +79,48 @@ def latex_envs(names: tuple[str, ...]) -> str:
     return rf"\\begin\{{((?:{'|'.join(names)})\*?)\}}.*?\\end\{{\1\}}"
 
 
+# `\\[2pt]` is a line break, not the start of display math. A dropped block
+# takes its own line ending with it and leaves a space, so one inside a
+# paragraph does not split it; real paragraph breaks keep their blank lines.
 LATEX_DROPPED = re.compile(
-    latex_envs(LATEX_FLOATS + LATEX_DISPLAY_MATH) + r"|\\\[.*?\\\]|\$\$.*?\$\$",
-    re.DOTALL,
+    r"(?:^[ \t]*)?(?:"
+    + latex_envs(LATEX_FLOATS + LATEX_DISPLAY_MATH)
+    + r"|(?<!\\)\\\[.*?\\\]|\$\$.*?\$\$)(?:[ \t]*$\n?)?",
+    re.DOTALL | re.MULTILINE,
 )
-TYPST_DISPLAY_MATH = re.compile(r"^[ \t]*\$[^$]*\$[ \t]*$", re.DOTALL | re.MULTILINE)
-MD_FENCE = re.compile(r"^(```|~~~).*?^\1[ \t]*$", re.DOTALL | re.MULTILINE)
+TYPST_DISPLAY_MATH = re.compile(r"^[ \t]*\$[^$]*\$[ \t]*$\n?", re.DOTALL | re.MULTILINE)
+MD_FENCE = re.compile(r"^(```|~~~).*?^\1[ \t]*$\n?", re.DOTALL | re.MULTILINE)
 LATEX_ENV = re.compile(latex_envs(LATEX_FLOATS), re.DOTALL)
 TYPST_LABEL = re.compile(r"^[ \t]*<[\w:.-]+>")
 LATEX_LABEL = re.compile(r"\\label\{([^}]*)\}")
-LATEX_COMMENT = re.compile(r"(?<!\\)%.*")
-TYPST_COMMENT = re.compile(r"(?<!:)//.*")
+# Group 1 is the comment-only line, removed whole so it cannot split a
+# paragraph; a trailing comment leaves its line's text.
+LATEX_COMMENT = re.compile(r"^[ \t]*(?<!\\)%.*\n?|(?<!\\)%.*", re.MULTILINE)
+TYPST_COMMENT = re.compile(r"^[ \t]*//.*\n?|(?<!:)//.*", re.MULTILINE)
 
 HEADINGS = {
-    LATEX: re.compile(r"\\(?:sub){0,2}section\*?(?:\[[^\]]*\])?\{(?P<t>[^}]*)\}"),
-    TYPST: re.compile(r"^={1,2}\s+(?P<t>.*)$"),
-    MARKDOWN: re.compile(r"^#{1,2}\s+(?P<t>.*)$"),
+    LATEX: re.compile(
+        r"\\(?:(?:sub){0,2}section|chapter)\*?(?:\[[^\]]*\])?\{(?P<t>[^}]*)\}"
+    ),
+    TYPST: re.compile(r"^=+\s+(?P<t>.*)$"),
+    MARKDOWN: re.compile(r"^#{1,6}\s+(?P<t>.*)$"),
 }
 
 
 def balanced(text: str, start: int, opener: str, closer: str) -> tuple[str, int]:
     """The text inside a delimiter pair opened just before `start`, and its end.
 
-    Raises ValueError when the pair never closes, which main reports as a parse
-    failure rather than silently measuring a truncated caption.
+    Brackets inside `$...$` do not count (`$[0, 1)$`). Raises ValueError when
+    the pair never closes; callers decide what an unclosed pair means.
     """
     depth = 1
+    math_end = -1
     for i in range(start, len(text)):
-        if text[i] == opener:
+        if i < math_end:
+            continue
+        if text[i] == "$" and text[i - 1] != "\\":
+            math_end = text.find("$", i + 1) + 1
+        elif text[i] == opener:
             depth += 1
         elif text[i] == closer:
             depth -= 1
@@ -125,17 +150,30 @@ def body_of(text: str, kind: str) -> str:
     return text
 
 
+def caption_at(
+    body: str, m: re.Match[str], opener: str, closer: str
+) -> list[tuple[int, str]]:
+    """The caption opened by match `m`, or nothing when it never closes.
+
+    An unclosed caption is skipped rather than raised: the report is exit 0
+    whenever the file is readable.
+    """
+    try:
+        inner, _ = balanced(body, m.end(), opener, closer)
+    except ValueError:
+        return []
+    return [(m.start(), inner)]
+
+
 def captions_of(body: str, kind: str) -> list[tuple[int, str]]:
     """(offset, raw text) for every caption."""
     found: list[tuple[int, str]] = []
     if kind == LATEX:
         for m in re.finditer(r"\\caption\*?(?:\[[^\]]*\])?\{", body):
-            inner, _ = balanced(body, m.end(), "{", "}")
-            found.append((m.start(), inner))
+            found.extend(caption_at(body, m, "{", "}"))
     elif kind == TYPST:
         for m in re.finditer(r"caption:\s*\[", body):
-            inner, _ = balanced(body, m.end(), "[", "]")
-            found.append((m.start(), inner))
+            found.extend(caption_at(body, m, "[", "]"))
     return found
 
 
@@ -160,6 +198,7 @@ def without_refs(text: str) -> str:
 def words(text: str, kind: str) -> int:
     text = INLINE_MATH.sub(" MATH ", without_refs(text))
     if kind == LATEX:
+        text = LATEX_ENV_MARKER.sub(" ", LATEX_LINE_BREAK.sub(" ", text))
         text = LATEX_COMMAND.sub(" ", text).replace("{", " ").replace("}", " ")
         text = text.replace("~", " ")
     elif kind == TYPST:
@@ -173,12 +212,25 @@ def numerics(text: str) -> set[str]:
     }
 
 
-def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[str, str]]]:
-    """Section titles, and (section title, paragraph text) for each paragraph."""
+def without_typst_setup(body: str) -> str:
+    """The body minus `#set`/`#show`/`#import`/`#let` lines and their continuations."""
+    kept: list[str] = []
+    depth = 0
+    for line in body.splitlines():
+        if depth > 0 or TYPST_SETUP.match(line):
+            depth = max(depth + line.count("(") - line.count(")"), 0)
+        else:
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[int, str]]]:
+    """Section titles (index 0 is the untitled lead-in), and (section index,
+    paragraph text) for each paragraph."""
     if kind == LATEX:
-        body = LATEX_DROPPED.sub("\n\n", body)
+        body = LATEX_DROPPED.sub(" ", body)
     elif kind == TYPST:
-        body = TYPST_DISPLAY_MATH.sub("\n\n", body)
+        body = without_typst_setup(TYPST_DISPLAY_MATH.sub(" ", body))
         while (m := re.search(r"#figure\(", body)) is not None:
             try:
                 _, end = balanced(body, m.end(), "(", ")")
@@ -187,26 +239,24 @@ def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[str, str]]
                 body = body[: m.start()]
                 break
             rest = TYPST_LABEL.sub("", body[end:], count=1)
-            body = body[: m.start()] + "\n\n" + rest
+            body = body[: m.start()] + " " + rest.removeprefix("\n")
     else:
-        body = MD_FENCE.sub("\n\n", body)
+        body = MD_FENCE.sub(" ", body)
     heading = HEADINGS[kind]
-    titles: list[str] = []
-    blocks: list[tuple[str, str]] = []
-    title = ""
+    titles: list[str] = [""]
+    blocks: list[tuple[int, str]] = []
     current: list[str] = []
 
     def flush() -> None:
         if current:
-            blocks.append((title, " ".join(current)))
+            blocks.append((len(titles) - 1, " ".join(current)))
             current.clear()
 
     for line in body.splitlines():
         h = heading.search(line) if kind == LATEX else heading.match(line)
         if h:
             flush()
-            title = h.group("t").strip()
-            titles.append(title)
+            titles.append(h.group("t").strip())
         elif line.strip():
             current.append(line.strip())
         else:
@@ -217,15 +267,18 @@ def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[str, str]]
 
 def analyze(text: str, kind: str) -> dict[str, Any]:
     body = body_of(text, kind)
-    titles, paragraphs = prose_blocks(body, kind)
+    titles, found = prose_blocks(body, kind)
+    # A paragraph with no words is markup alone (`\maketitle`), not prose.
+    paragraphs = [(i, p) for i, p in found if words(p, kind)]
     counts = [words(p, kind) for _, p in paragraphs]
     sentences = [len(SENTENCE_END.split(p)) for _, p in paragraphs]
     captions = [c for _, c in captions_of(body, kind)]
     caption_numbers: set[str] = set().union(*(numerics(c) for c in captions))
     body_numbers: set[str] = set().union(*(numerics(p) for _, p in paragraphs))
-    section_words = dict.fromkeys(titles, 0)
-    for (title, _), n in zip(paragraphs, counts, strict=True):
-        section_words[title] = section_words.get(title, 0) + n
+    section_words = [0] * len(titles)
+    for (index, _), n in zip(paragraphs, counts, strict=True):
+        section_words[index] += n
+    has_lead_in = any(index == 0 for index, _ in paragraphs)
     return {
         "paragraphs": {
             "count": len(counts),
@@ -245,7 +298,11 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
             for label, c in zip(caption_labels(body, kind), captions, strict=True)
         ],
         "shared_numerics": sorted(caption_numbers & body_numbers),
-        "sections": [{"title": t, "words": n} for t, n in section_words.items()],
+        "sections": [
+            {"title": t, "words": n}
+            for i, (t, n) in enumerate(zip(titles, section_words, strict=True))
+            if i > 0 or has_lead_in
+        ],
     }
 
 
@@ -284,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         data = analyze(path.read_text(encoding="utf-8"), path.suffix)
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         print(f"{path}: cannot parse ({exc})", file=sys.stderr)
         return 1
     print(json.dumps(data, indent=2) if args.json else format_report(data))
