@@ -28,8 +28,7 @@ judged half, and the judged half needs a reviewer rather than a command.
 
 ## Classification picks the spine, not the toolbox
 
-Choosing this skill does not put the coding skills out of reach, and it
-must not:
+Choosing this skill does not put the coding skills out of reach:
 
 - A LaTeX build that fails is a bug. Use
   `superpowers:systematic-debugging`, exactly as for code.
@@ -61,16 +60,16 @@ so, re-classify. Nothing downgrades mid-task.
 
 ## What each step means
 
-| Step         | For code                                         | For prose                                                                                                                                                                                                                                    |
-| ------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                                                                                                                      |
-| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end. Take the `scientific-writing` section 4 baseline. Documentation: name the reader, what they know, what to define |
-| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                                                                                                                   |
-| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                                                                                                                    |
-| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre. The reviewer reads that section and the ledger                                                                                                                    |
-| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; report that delta from step 1                                                                                                            |
-| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build                                                                                                                                                               |
-| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                                                                                                                    |
+| Step         | For code                                         | For prose                                                                                                                                                                                                                                                                         |
+| ------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                                                                                                                                                           |
+| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end. Take the `scientific-writing` section 4 baseline; step 5 reports the delta against it. Documentation: name the reader, what they know, what to define |
+| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                                                                                                                                                        |
+| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                                                                                                                                                         |
+| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre. The drafter reports artifact changes made or needed (`scientific-writing` section 2); the reviewer reads that section and the ledger                                                                   |
+| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; report the `prose-metrics` delta from step 1                                                                                                                                  |
+| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build                                                                                                                                                                                                    |
+| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                                                                                                                                                         |
 
 **A revision replaces the claim it revises.** When a phase overturns an
 earlier conclusion, the spec says *replace claim X with Y* -- never *add
@@ -89,10 +88,8 @@ warnings-as-errors flag. So a Typst project needs a build gate rather
 than an eyeball -- a page-count or overflow check the build runs -- and
 "it compiled" is not evidence. Where a project has that gate, trust it
 and say what it reported; where it does not, that gate is the first
-thing to add. Copy the conventions already in the document: a repo with
-a working theme has already decided the table idiom and the ASCII rule,
-and matching them is both cheaper and more consistent than deriving
-markup from LaTeX habits.
+thing to add. Copy the document's existing conventions (table idiom,
+ASCII rule) rather than deriving markup from LaTeX habits.
 
 **A markup conversion is a distinct task shape.** Porting a document
 between markup languages -- LaTeX to Typst, Markdown to LaTeX -- is not
@@ -123,19 +120,18 @@ whole-document pass sees it.
 **Genre fit.** For a paper, talk or thesis, the file under
 `scientific-writing/genres/` fixes the reader and where depth goes; for
 documentation, the reader step 1 named. Judge the section against it.
-Derivation placement is `math`'s, not decided here.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
-including inspecting the rendered figures. Report the `prose_metrics.py`
-delta (command in `scientific-writing` section 4).
+including inspecting the rendered figures.
 
 ## Red flags
 
-| Thought                                          | Reality                                                                                                                                         |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| "I'll draft it and see how it reads"             | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
-| "The build passes, so the section is done"       | That is the mechanical half of verify. The judged half has not run.                                                                             |
-| "This citation is probably right"                | Probably is not a citation. Check it or cut the sentence.                                                                                       |
-| "It's only a wording pass"                       | If the wording carries the argument, it is a Document. Re-classify.                                                                             |
-| "I'll make the notation consistent at the end"   | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
-| "humanizer is for papers, not for this codebase" | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
+| Thought                                                              | Reality                                                                                                                                         |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| "I'll draft it and see how it reads"                                 | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
+| "The build passes, so the section is done"                           | That is the mechanical half of verify. The judged half has not run.                                                                             |
+| "This citation is probably right"                                    | Probably is not a citation. Check it or cut the sentence.                                                                                       |
+| "It's only a wording pass"                                           | If the wording carries the argument, it is a Document. Re-classify.                                                                             |
+| "Pass: line edits, argument unchanged" (to skip the reverse outline) | The ledger runs in every class; see `scientific-writing` section 1.                                                                             |
+| "I'll make the notation consistent at the end"                       | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
+| "humanizer is for papers, not for this codebase"                     | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
