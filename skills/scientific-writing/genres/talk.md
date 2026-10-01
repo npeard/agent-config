@@ -8,7 +8,7 @@ title.
 
 ## Rules
 
-- **One key idea.** Peyton Jones: "if you remember nothing else,
+- **One key idea.** Peyton Jones 2016: "if you remember nothing else,
   remember this". Name it in the ledger before any slide exists; every
   slide either supports it or is cut.
 - **The opening answers Heilmeier questions 1 to 4** with no jargon:
@@ -16,10 +16,10 @@ title.
   is new and why it will work, and who cares. Check the opening with
   And-But-Therefore: context *and* context, *but* the gap, *therefore*
   this work. An opening that is all "and" has no problem to solve.
-- **Assertion titles over visual evidence** (Alley). Each content
-  slide's title is a full-sentence claim of at most two lines, and the
-  body is the figure or equation that supports it. A topic label
-  ("Results", "Convergence") is not a title.
+- **Assertion titles over visual evidence** (Alley's assertion-evidence
+  approach). Each content slide's title is a full-sentence claim of at
+  most two lines, and the body is the figure or equation that supports
+  it. A topic label ("Results", "Convergence") is not a title.
 - **Examples before the general case.** Show one concrete instance, then
   generalise.
 - **Omit** an outline slide first, a related-work survey, and apologies

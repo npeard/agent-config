@@ -24,8 +24,3 @@ referee's attention on what they already know.
   gap this paper fills, and the conclusion is a result, not a topic: "we
   show X", not "we study X".
 - **Derivation placement**: `math`'s "Derive once, then refer".
-
-## Budgets
-
-The core defaults hold: at most 5 sentences or about 120 words per
-paragraph, at most 3 caption sentences beyond the panel key.

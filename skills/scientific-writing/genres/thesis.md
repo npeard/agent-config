@@ -20,7 +20,6 @@ introduced where a paper would cite them.
 
 ## Budgets
 
-The core paragraph and caption defaults hold. Inline derivations do not
-count against the paragraph budget: displayed equations are excluded
-from `prose-metrics` paragraphs, and the prose between them states each
-step's warrant.
+Displayed equations do not count against the paragraph budget: they are
+excluded from `prose-metrics` paragraphs, and the prose between them
+states each step's warrant.
