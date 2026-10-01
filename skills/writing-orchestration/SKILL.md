@@ -52,11 +52,8 @@ and a code repository does not make the writing skills wrong.
 | Section  | A new subsection into a document whose argument already exists           | Ledger rows in chat, get a nod, draft                   |
 | Document | A new chapter or paper, or a restructure that changes the argument       | The full spine                                          |
 
-For a scientific genre the claim ledger exists in every class, Pass
-included: `scientific-writing` requires a reverse outline before any
-revision, because a revision labelled a line edit is how recited
-evidence survives. The class sets the ceremony around the ledger --
-gates and spec -- not whether it exists.
+For a scientific genre the class sets the gates and the spec, not
+whether the `scientific-writing` ledger exists.
 
 When torn between two classes, take the heavier one. Discovering that a
 "pass" is actually rewriting the argument upgrades the class: stop, say
@@ -64,16 +61,16 @@ so, re-classify. Nothing downgrades mid-task.
 
 ## What each step means
 
-| Step         | For code                                         | For prose                                                                                                                                                                          |
-| ------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                                                            |
-| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end                                                         |
-| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                                                         |
-| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                                                          |
-| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre, and the drafter reports artifact changes made or needed. The reviewer reads that section and the ledger |
-| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; `pixi run prose-metrics` before the edit                                       |
-| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build and run `pixi run prose-metrics`                                                                    |
-| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                                                          |
+| Step         | For code                                         | For prose                                                                                                                                            |
+| ------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                              |
+| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end                           |
+| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                           |
+| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                            |
+| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre. The reviewer reads that section and the ledger                            |
+| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; take the `prose-metrics` baseline before editing |
+| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build                                                                       |
+| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                            |
 
 **A revision replaces the claim it revises.** When a phase overturns an
 earlier conclusion, the spec says *replace claim X with Y* -- never *add
@@ -99,16 +96,11 @@ markup from LaTeX habits.
 
 **A markup conversion is a distinct task shape.** Porting a document
 between markup languages -- LaTeX to Typst, Markdown to LaTeX -- is not
-drafting. Its contract is that only the markup changed, so the three
-review axes below do not apply to text carried across, and `humanizer`
-must not run on it. Verify a conversion by diffing the two *renderings*,
-not by re-judging the prose. Newly drafted sections inside a converted
-document are ordinary prose and take the full step 6.
-
-Step 2 is where prose most often goes wrong. A list of section *topics*
-has decided nothing; a ledger that states each paragraph's claim and
-where its evidence lives has done the thinking, and drafting from it is
-transcription.
+drafting. Its contract is that only the markup changed, so the review
+axes below do not apply to text carried across, and `humanizer` must not
+run on it. Verify a conversion by diffing the two *renderings*, not by
+re-judging the prose. Newly drafted sections inside a converted document
+are ordinary prose and take the full step 6.
 
 ## The four review axes
 
@@ -121,11 +113,7 @@ reference or a number appearing nowhere in the data passes every
 mechanical check, reaches a reader, and costs credibility rather than a
 build. Never invent a number, citation, reference, or attribution. When
 a sentence needs a fact you do not have, ask for it or write the weaker
-sentence you can support. For a research result, a number is necessary
-but not sufficient: the claim also needs a figure that shows it and adds
-what the number cannot -- shape over time, where the error lives, how it
-moves with scale. A table of final metrics is never a section's only
-evidence.
+sentence you can support.
 
 **Notation consistency.** One symbol per quantity across the whole
 document, matching the project's notation file where it has one. This
@@ -138,18 +126,16 @@ Judge the section against it. Derivation placement is `math`'s, not
 decided here.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
-including inspecting the rendered figures, and report the
-`prose-metrics` delta.
+including inspecting the rendered figures. Report the
+`pixi run prose-metrics` delta.
 
 ## Red flags
 
-| Thought                                             | Reality                                                                                                                                         |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| "I'll draft it and see how it reads"                | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
-| "The build passes, so the section is done"          | That is the mechanical half of verify. The judged half has not run.                                                                             |
-| "This citation is probably right"                   | Probably is not a citation. Check it or cut the sentence.                                                                                       |
-| "It's only a wording pass"                          | If the wording carries the argument, it is a Document. Re-classify. Even a true Pass starts with the reverse outline.                           |
-| "The prose matches the figure's numbers"            | Matching is not routing. Inspect the render and ask whether the figure shows it without help.                                                   |
-| "I'll make the notation consistent at the end"      | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
-| "The outline lists the sections, so step 2 is done" | Topics are not claims. Only a ledger row per paragraph is the spec.                                                                             |
-| "humanizer is for papers, not for this codebase"    | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
+| Thought                                          | Reality                                                                                                                                         |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| "I'll draft it and see how it reads"             | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
+| "The build passes, so the section is done"       | That is the mechanical half of verify. The judged half has not run.                                                                             |
+| "This citation is probably right"                | Probably is not a citation. Check it or cut the sentence.                                                                                       |
+| "It's only a wording pass"                       | If the wording carries the argument, it is a Document. Re-classify.                                                                             |
+| "I'll make the notation consistent at the end"   | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
+| "humanizer is for papers, not for this codebase" | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
