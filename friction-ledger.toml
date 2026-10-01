@@ -1430,3 +1430,21 @@ kept a handoff note and atomic outputs, which compute-job-safety already
 asks for; checking for surviving children before resuming caught a live
 run both times. Nothing to add.
 """
+
+[[decision]]
+class = "new-skill-not-linked"
+source = "observed"
+date = "2026-09-30"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+A skill added on a branch is not in ~/.claude/skills until ./install.sh runs,
+so the three subagents told to "use scientific-writing" got a Skill-tool
+refusal and read SKILL.md from the repo path instead. Content was identical,
+so nothing was lost, but a less resourceful subagent would have drafted
+without it. preflight already reports "not linked: scientific-writing
+(./install.sh)"; it was simply not re-run between adding the skill and
+dispatching the pressure test. A hook that links on skill creation was
+rejected: linking writes outside the repo, which install.sh deliberately
+owns, and one re-run of preflight closes the gap.
+"""
