@@ -17,24 +17,23 @@ Name the genre, then read `genres/<genre>.md` (`paper`, `talk`,
 ## 1. Claim ledger first
 
 No prose before the section's ledger rows exist. One row per paragraph:
+**claim** (one sentence); **evidence**; **medium + location** (Fig. 3b,
+Eq. (7), Table I, or prose); **deferred detail + pointer** (what moves
+where); **transition** (what the claim licenses in the next row).
 
-| Column                    | Content                                  |
-| ------------------------- | ---------------------------------------- |
-| claim                     | one sentence                             |
-| evidence                  | what supports the claim                  |
-| medium + location         | Fig. 3b, Eq. (7), Table I, or prose      |
-| deferred detail + pointer | what moves elsewhere, and where          |
-| transition                | what this claim licenses in the next row |
+**Revising starts with a reverse outline**, in every ceremony class,
+Pass included: one row per existing paragraph -- its claim, and where
+its evidence actually is -- before changing a word. It exposes what a
+line edit polishes: recited evidence, and a repeated claim as two rows.
+Each row ends kept, moved (where), or cut for a reason: redundant,
+textbook for the genre's reader, or contradicted by the artifact. Moving
+evidence to a figure never cuts the claim it supports.
 
-**Revising starts with a reverse outline.** Write one ledger row per
-existing paragraph -- its claim, and where its evidence actually is --
-before changing a word -- in every ceremony class, Pass included. A line
-edit polishes recited evidence; the outline exposes it, and a repeated
-claim as two rows with one claim.
+A summary, ranking or comparison is a claim: own row, own evidence.
 
 ## 2. Evidence routing
 
-Pick the single medium that shows the evidence most directly:
+Pick the one medium that shows the evidence most directly:
 
 - a trend, comparison or shape -- a figure;
 - an exact relation or scaling -- an equation;
@@ -44,7 +43,8 @@ Pick the single medium that shows the evidence most directly:
 **Inspect the rendered artifact, not its source**, and ask: *is the
 evidence visible enough that explaining it in prose, in the body or the
 caption, would be repetitive?* Matching the prose's numbers to the plot
-is not this question.
+is not this question. Read the pointed panel itself: a pointer to a
+panel that does not show the claim is a claim-integrity error.
 
 - **Yes**: the prose states the claim and points to the artifact.
 - **No**: change the artifact until the answer is yes -- log axes and a
@@ -62,11 +62,10 @@ scoping down or a better artifact.
 
 **Caption and body share a claim, not words.** The caption's lead
 sentence states what the figure establishes; the rest carries only what
-the plot cannot -- panel key, symbols, conditions, method. Captions
-explain "provided they do not repeat information that is being shown in
-the figure" (Caltech Hixon Writing Center). The body states the claim in
-the argument's terms: what it licenses next, what it qualifies, or where
-it breaks. A value the figure shows appears in neither.
+the plot cannot -- panel key, symbols, conditions, method. The body
+states the claim in the argument's terms: what it licenses next, what it
+qualifies, or where it breaks. A value the figure shows appears in
+neither.
 
 **Depth goes behind a pointer** -- extra figures, robustness sweeps, a
 derivation that would interrupt the arc between adjacent claims. A
@@ -88,8 +87,7 @@ From Strunk 1918, with its rule numbers:
 - **15, 16, 18**: parallel form; related words together; emphasis at the
   end.
 
-Part I usage rules and the White-era additions are excluded on purpose
--- contested or copyrighted.
+Part I and White-era rules are excluded: contested or copyrighted.
 
 ## 4. Numeric budgets
 
@@ -112,13 +110,15 @@ gate.
   excitation", "the defect") reads as several objects.
 - **A coined term needs a reason in the ledger**: every use costs the
   reader a definition.
+- **Claim-first never strengthens a claim** beyond what the pointed
+  artifact shows; a question the original posed stays one until it does.
 - **Fix an overclaim by scoping it**, with a pointer: "is insensitive to
   the choice of target (Fig. 2)". Never by reciting more of the plot.
 - **Hedge only where uncertainty is real**, and name it.
 
 ## 6. Review checks
 
-Reviewers run these per section:
+Per section:
 
 - **Skim test**: the topic sentences alone reconstruct the argument.
 - **Removal test**: the sufficiency check, per paragraph.
@@ -132,7 +132,7 @@ Reviewers run these per section:
 
 ## 7. Red flags
 
-Quoted from the no-skill baseline.
+Quoted from no-skill and skill runs.
 
 | Thought                                                                                                                                  | Reality                                                                                           |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -141,3 +141,5 @@ Quoted from the no-skill baseline.
 | "The figure shows OBC about 20-30x above PBC, with the same slope. The old text never mentioned this, so I added a sentence stating it." | Shown by the figure, so not said in prose. If it matters and is not obvious, annotate the figure. |
 | "adds a sentence covering panels F and G, and states the C_YZ exception."                                                                | A contradicting panel means the claim is scoped wrong. Narration hides it.                        |
 | (Opened the figure only to check the prose's numbers)                                                                                    | Ask the visibility question instead.                                                              |
+| "...and the engineered program transports it as the target does"                                                                         | Panel H shows it 1.5-2 sites off; the original asked whether.                                     |
+| "which makes it the hardest target here"                                                                                                 | A ranking with no ledger row or evidence.                                                         |
