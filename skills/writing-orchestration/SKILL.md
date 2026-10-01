@@ -126,8 +126,8 @@ Judge the section against it. Derivation placement is `math`'s, not
 decided here.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
-including inspecting the rendered figures. Report the
-`pixi run prose-metrics` delta.
+including inspecting the rendered figures. Report the `prose_metrics.py`
+delta (command in `scientific-writing` section 4).
 
 ## Red flags
 

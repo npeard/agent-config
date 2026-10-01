@@ -1,7 +1,7 @@
 ---
 name: scientific-writing
 description: Use when drafting, revising, or reviewing a scientific paper, talk, or thesis section -- including when paragraphs recite what a figure or equation shows, captions repeat body numbers, a claim recurs across text, captions and appendix, or a revision is called "just a line edit".
-compatibility: Before/after measurement uses this repository's `pixi run prose-metrics`. Figure inspection needs the rendered figure, not only its source.
+compatibility: Before/after measurement uses `prose_metrics.py`, run as section 4 gives. Figure inspection needs the rendered figure, not only its source.
 ---
 
 # Scientific writing
@@ -97,9 +97,9 @@ Defaults a genre file may override:
 - caption beyond its panel key: at most 3 sentences;
 - section: a word budget, set atop the ledger.
 
-`pixi run prose-metrics <file> [--json]` reports these sizes plus
-`shared_numerics`, numbers in both a caption and the body. It does not
-gate.
+`python3 ~/Documents/Projects/agent-config/scripts/prose_metrics.py FILE [--json]`
+reports these sizes plus `shared_numerics`, numbers in both a caption
+and the body. It does not gate.
 
 ## 5. Precision
 
