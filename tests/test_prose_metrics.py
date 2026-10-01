@@ -8,6 +8,7 @@ from typing import Any
 
 import prose_metrics
 import pytest
+from conftest import write
 
 FIXTURES = Path(__file__).parent / "fixtures" / "prose_metrics"
 MARKUP = [FIXTURES / "sample.tex", FIXTURES / "sample.typ", FIXTURES / "sample.md"]
@@ -16,12 +17,6 @@ MARKUP = [FIXTURES / "sample.tex", FIXTURES / "sample.typ", FIXTURES / "sample.m
 def report(path: Path, capsys) -> dict[str, Any]:
     assert prose_metrics.main([str(path), "--json"]) == 0
     return json.loads(capsys.readouterr().out)
-
-
-def write(tmp_path: Path, name: str, body: str) -> Path:
-    path = tmp_path / name
-    path.write_text(body, encoding="utf-8")
-    return path
 
 
 @pytest.mark.parametrize("path", MARKUP, ids=lambda p: p.suffix)
@@ -54,17 +49,18 @@ class TestCaptions:
         assert report(path, capsys)["shared_numerics"] == ["3.5"]
 
 
-def test_latex_caption_is_labelled(capsys):
-    captions = report(MARKUP[0], capsys)["captions"]
-    assert captions[0]["label_or_index"] == "fig:12"
-
-
-def test_typst_caption_falls_back_to_index(capsys):
-    assert report(MARKUP[1], capsys)["captions"][0]["label_or_index"] == 1
-
-
-def test_markdown_has_no_captions(capsys):
-    assert report(MARKUP[2], capsys)["captions"] == []
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (MARKUP[0], ["fig:12"]),  # the LaTeX \\label in its float
+        (MARKUP[1], [1]),  # Typst has no labels here, so the index
+        (MARKUP[2], []),  # Markdown has no captions
+    ],
+    ids=["latex", "typst", "markdown"],
+)
+def test_caption_labels(path: Path, expected, capsys):
+    captions = report(path, capsys)["captions"]
+    assert [c["label_or_index"] for c in captions] == expected
 
 
 def test_inline_math_is_one_word_and_commands_keep_arguments(tmp_path, capsys):
@@ -98,17 +94,19 @@ def test_human_report_exits_zero(capsys):
 
 
 @pytest.mark.parametrize(
-    "heading",
+    ("name", "heading"),
     [
-        "\\section*{Intro}",
-        "\\section[Short]{Intro}",
-        "\\subsubsection{Intro}",
-        "\\subsection*{Intro}",
+        ("a.tex", "\\section*{Intro}"),
+        ("a.tex", "\\section[Short]{Intro}"),
+        ("a.tex", "\\subsubsection{Intro}"),
+        ("a.tex", "\\subsection*{Intro}"),
+        ("a.tex", "\\chapter{Intro}"),
+        ("a.typ", "=== Intro"),
+        ("a.md", "### Intro"),
     ],
 )
-def test_latex_heading_forms_are_headings_not_body(heading, tmp_path, capsys):
-    path = write(tmp_path, "a.tex", f"{heading}\nBody words here.\n")
-    data = report(path, capsys)
+def test_heading_forms_are_headings_not_body(name, heading, tmp_path, capsys):
+    data = report(write(tmp_path, name, f"{heading}\nBody words here.\n"), capsys)
     assert data["sections"] == [{"title": "Intro", "words": 3}]
     assert data["paragraphs"]["count"] == 1
 
@@ -194,19 +192,6 @@ def test_untitled_lead_in_comes_first(tmp_path, capsys):
     body = "Lead in.\n\n\\section{A}\nBody.\n"
     sections = report(write(tmp_path, "a.tex", body), capsys)["sections"]
     assert sections == [{"title": "", "words": 2}, {"title": "A", "words": 1}]
-
-
-@pytest.mark.parametrize(
-    ("name", "heading"),
-    [
-        ("a.tex", "\\chapter{Deep}"),
-        ("a.typ", "=== Deep"),
-        ("a.md", "### Deep"),
-    ],
-)
-def test_deeper_headings_are_headings(name, heading, tmp_path, capsys):
-    data = report(write(tmp_path, name, f"{heading}\nBody words.\n"), capsys)
-    assert data["sections"] == [{"title": "Deep", "words": 2}]
 
 
 def test_zero_word_paragraphs_are_dropped(tmp_path, capsys):

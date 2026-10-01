@@ -100,7 +100,7 @@ TYPST_COMMENT = re.compile(r"^[ \t]*//.*\n?|(?<!:)//.*", re.MULTILINE)
 
 HEADINGS = {
     LATEX: re.compile(
-        r"\\(?:(?:sub){0,2}section|chapter)\*?(?:\[[^\]]*\])?\{(?P<t>[^}]*)\}"
+        r"^[ \t]*\\(?:(?:sub){0,2}section|chapter)\*?(?:\[[^\]]*\])?\{(?P<t>[^}]*)\}"
     ),
     TYPST: re.compile(r"^=+\s+(?P<t>.*)$"),
     MARKDOWN: re.compile(r"^#{1,6}\s+(?P<t>.*)$"),
@@ -165,8 +165,12 @@ def caption_at(
     return [(m.start(), inner)]
 
 
-def captions_of(body: str, kind: str) -> list[tuple[int, str]]:
-    """(offset, raw text) for every caption."""
+def captions_of(body: str, kind: str) -> list[tuple[str | int, str]]:
+    """(label, raw text) for every caption.
+
+    The label is the LaTeX \\label in the caption's float environment, else
+    the caption's 1-based index.
+    """
     found: list[tuple[int, str]] = []
     if kind == LATEX:
         for m in re.finditer(r"\\caption\*?(?:\[[^\]]*\])?\{", body):
@@ -174,21 +178,19 @@ def captions_of(body: str, kind: str) -> list[tuple[int, str]]:
     elif kind == TYPST:
         for m in re.finditer(r"caption:\s*\[", body):
             found.extend(caption_at(body, m, "[", "]"))
-    return found
-
-
-def caption_labels(body: str, kind: str) -> list[str | int]:
-    """A label for each caption: the LaTeX \\label in its environment, else its index."""
     envs = [m.span() for m in LATEX_ENV.finditer(body)] if kind == LATEX else []
-    labels: list[str | int] = []
-    for index, (offset, _) in enumerate(captions_of(body, kind), start=1):
-        label = None
-        for lo, hi in envs:
-            if lo <= offset < hi:
-                m = LATEX_LABEL.search(body[lo:hi])
-                label = m.group(1) if m else None
-        labels.append(label if label is not None else index)
-    return labels
+    captions: list[tuple[str | int, str]] = []
+    for index, (offset, text) in enumerate(found, start=1):
+        label = next(
+            (
+                m.group(1)
+                for lo, hi in envs
+                if lo <= offset < hi and (m := LATEX_LABEL.search(body[lo:hi]))
+            ),
+            index,
+        )
+        captions.append((label, text))
+    return captions
 
 
 def without_refs(text: str) -> str:
@@ -253,8 +255,7 @@ def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[int, str]]
             current.clear()
 
     for line in body.splitlines():
-        h = heading.search(line) if kind == LATEX else heading.match(line)
-        if h:
+        if h := heading.match(line):
             flush()
             titles.append(h.group("t").strip())
         elif line.strip():
@@ -269,16 +270,15 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
     body = body_of(text, kind)
     titles, found = prose_blocks(body, kind)
     # A paragraph with no words is markup alone (`\maketitle`), not prose.
-    paragraphs = [(i, p) for i, p in found if words(p, kind)]
-    counts = [words(p, kind) for _, p in paragraphs]
-    sentences = [len(SENTENCE_END.split(p)) for _, p in paragraphs]
-    captions = [c for _, c in captions_of(body, kind)]
-    caption_numbers: set[str] = set().union(*(numerics(c) for c in captions))
-    body_numbers: set[str] = set().union(*(numerics(p) for _, p in paragraphs))
+    paragraphs = [(i, p, n) for i, p in found if (n := words(p, kind))]
+    counts = [n for _, _, n in paragraphs]
+    sentences = [len(SENTENCE_END.split(p)) for _, p, _ in paragraphs]
+    captions = captions_of(body, kind)
+    caption_numbers: set[str] = set().union(*(numerics(c) for _, c in captions))
+    body_numbers: set[str] = set().union(*(numerics(p) for _, p, _ in paragraphs))
     section_words = [0] * len(titles)
-    for (index, _), n in zip(paragraphs, counts, strict=True):
+    for index, _, n in paragraphs:
         section_words[index] += n
-    has_lead_in = any(index == 0 for index, _ in paragraphs)
     return {
         "paragraphs": {
             "count": len(counts),
@@ -294,14 +294,13 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
             "budget": SENTENCE_BUDGET,
         },
         "captions": [
-            {"label_or_index": label, "words": words(c, kind)}
-            for label, c in zip(caption_labels(body, kind), captions, strict=True)
+            {"label_or_index": label, "words": words(c, kind)} for label, c in captions
         ],
         "shared_numerics": sorted(caption_numbers & body_numbers),
         "sections": [
             {"title": t, "words": n}
             for i, (t, n) in enumerate(zip(titles, section_words, strict=True))
-            if i > 0 or has_lead_in
+            if i > 0 or section_words[0]
         ],
     }
 

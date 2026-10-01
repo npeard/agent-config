@@ -13,15 +13,10 @@ from types import SimpleNamespace
 
 import check_ascii
 import pytest
+from conftest import write
 
 EM_DASH = "\u2014"
 MARKER = "<!-- check-ascii: allow - demonstrates the punctuation it teaches -->"
-
-
-def write(tmp_path: Path, name: str, body: str) -> Path:
-    path = tmp_path / name
-    path.write_text(body, encoding="utf-8")
-    return path
 
 
 class TestMarkerSkipsTheFile:
