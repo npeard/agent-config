@@ -90,6 +90,7 @@ pixi run preflight                  # Step 0 environment check
 pixi run format                     # ruff (py) + mdformat (md), autofix
 pixi run lint                       # ruff check
 pixi run ascii                      # scripts/check_ascii.py
+pixi run prose-metrics FILE        # paragraph/caption/section metrics for a .tex, .typ or .md
 pixi run spell                      # codespell
 pixi run friction                   # recurring friction from transcripts
 pixi run burn                       # where a session's tokens went
@@ -423,11 +424,11 @@ and pricing remain separate and unchanged.
   `brew install terminal-notifier` is the fix for a missing banner.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `burn.py`, `toolgaps.py`, `validate_skills.py`,
-  `suppressions.py`, `thresholds.py`) meant to be copied into new
-  projects rather than rewritten from scratch. Copied alone each one
-  runs; `preflight.py` skips its two link-related checks unless
-  `platform_paths.py` is copied beside it, and says so rather than
-  failing to start. Plus `register_hooks.py` and `audit_assets.py`,
+  `suppressions.py`, `thresholds.py`, `prose_metrics.py`) meant to be
+  copied into new projects rather than rewritten from scratch. Copied
+  alone each one runs; `preflight.py` skips its two link-related checks
+  unless `platform_paths.py` is copied beside it, and says so rather
+  than failing to start. Plus `register_hooks.py` and `audit_assets.py`,
   which are specific to this repo -- the first to its install, the
   second because it knows this layout rather than describing a
   capability every project has. `audit_assets.py` also owns the
@@ -436,7 +437,10 @@ and pricing remain separate and unchanged.
   definition of each number. `check_ascii.py` lets a single file opt out
   with a reason-bearing `check-ascii: allow` marker in its first ten
   lines; a marker with no reason fails rather than skipping, so the
-  exemption is documented rather than silent.
+  exemption is documented rather than silent. `prose_metrics.py` reports
+  paragraph, sentence, caption and section sizes for a LaTeX, Typst or
+  Markdown file, so prose density is measured rather than judged by eye;
+  it is a report, not a gate.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either
