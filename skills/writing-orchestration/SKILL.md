@@ -61,16 +61,16 @@ so, re-classify. Nothing downgrades mid-task.
 
 ## What each step means
 
-| Step         | For code                                         | For prose                                                                                                                                            |
-| ------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                              |
-| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end                           |
-| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                           |
-| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                            |
-| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre. The reviewer reads that section and the ledger                            |
-| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; take the `prose-metrics` baseline before editing |
-| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build                                                                       |
-| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                            |
+| Step         | For code                                         | For prose                                                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                                                                                                       |
+| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end. Take the `prose-metrics` baseline. Documentation: name the reader, what they know, what to define |
+| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                                                                                                    |
+| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                                                                                                     |
+| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre. The reviewer reads that section and the ledger                                                                                                     |
+| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; report the `prose-metrics` delta from step 1                                                                              |
+| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build                                                                                                                                                |
+| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                                                                                                     |
 
 **A revision replaces the claim it revises.** When a phase overturns an
 earlier conclusion, the spec says *replace claim X with Y* -- never *add
@@ -120,10 +120,10 @@ document, matching the project's notation file where it has one. This
 drifts silently because every section is locally consistent; only a
 whole-document pass sees it.
 
-**Genre fit.** The paper, talk or thesis file under
-`scientific-writing/genres/` fixes the reader and where depth goes.
-Judge the section against it. Derivation placement is `math`'s, not
-decided here.
+**Genre fit.** For a paper, talk or thesis, the file under
+`scientific-writing/genres/` fixes the reader and where depth goes; for
+documentation, the reader step 1 named. Judge the section against it.
+Derivation placement is `math`'s, not decided here.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
 including inspecting the rendered figures. Report the `prose_metrics.py`
