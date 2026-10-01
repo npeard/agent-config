@@ -56,10 +56,11 @@ def fired(payload: dict, state: Path) -> bool:
     parsed = json.loads(out)
     assert parsed["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
     context = parsed["hookSpecificOutput"]["additionalContext"]
-    # Naming both skills is the point of the hook: an advisory that says
+    # Naming each skill is the point of the hook: an advisory that says
     # "consider the writing workflow" without naming what to invoke is a
     # reminder the reader cannot act on.
     assert "writing-orchestration" in context
+    assert "scientific-writing" in context
     assert "humanizer" in context
     return True
 

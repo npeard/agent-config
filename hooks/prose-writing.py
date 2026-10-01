@@ -347,10 +347,9 @@ def resolve_destination(path: str, base: str) -> str:
 
 MESSAGE = (
     "About to write prose{target}. Invoke the writing-orchestration skill "
-    "for the spine -- it carries what preflight, verify and review mean when "
-    "no test can assert the deliverable is correct -- and invoke the "
-    "humanizer skill before returning prose you drafted. Name the audience "
-    "before drafting. Do not invent a number, citation, reference, or "
+    "for the spine. For a paper, talk or thesis also invoke "
+    "scientific-writing, naming the genre, to draft. Run the humanizer skill "
+    "last as a lint. Do not invent a number, citation, reference, or "
     "attribution: that is the one error a reader cannot check for you."
 )
 
