@@ -231,7 +231,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "ff04f0de38e8d8bd2605533dfa221087c5455afe994acb6310e2d1fc4ce2c47b"
+asset_sha = "3962e8c32efe82dbb9aafc265d1cbd3b51fa8a00aa195eca6e175c47f1ae464e"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -273,6 +273,12 @@ Windows paths and made the hook fire on the master repo's own files. This
 changes how tool_input.command is tokenized, not what the tokens are used for
 -- the Bash branch still names no file and quotes no part of the command, so
 the boundary above is unaffected.
+
+Re-granted after adding ".typ" to SUFFIXES and rewording the fixed
+MESSAGE to name scientific-writing. Both are literals this repo authored:
+one more suffix widens which paths can match, and the matched path still
+reaches context only through the same interpolation the note above
+describes, so the boundary is unaffected.
 """
 
 [[decision]]
