@@ -18,6 +18,22 @@ look for, so reading this end to end buys nothing.
 > established in 1989, part of a wider decentralization of
 > administrative functions in Spain.
 
+**Scientific prose.** Scope the claim and point to the figure; do not
+recite it.
+
+**Before:**
+
+> The error demonstrates the robustness of our approach.
+
+**Bad after:**
+
+> The error stays below $10^{-3}$ beyond roughly $m = 5$ for every
+> target we drew.
+
+**After:**
+
+> The error is insensitive to the choice of target (Fig. 2).
+
 ### 2. Name-dropping to prove importance
 
 **Before:**

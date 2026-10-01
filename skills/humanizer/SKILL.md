@@ -50,6 +50,16 @@ The input type controls what you return. See
 [How to return the result](#how-to-return-the-result). Use the same
 rewrite process in every mode.
 
+## Scientific prose
+
+For a paper, talk or thesis, `scientific-writing` governs structure and
+this skill is the final lint. Two overrides:
+
+- **Pattern 1**: fix an inflated claim by scoping it and pointing to its
+  evidence, never by reciting the evidence.
+- **Pattern 7 and the false-positive list**: a standard term of art is
+  not an overused word or jargon. Do not replace it.
+
 ## Match the writer's voice
 
 If the user provides a writing sample (their own previous writing),
