@@ -159,6 +159,12 @@ and pricing remain separate and unchanged.
   (which the compiler already teaches) from silent ones (which need a
   rule), and states what to verify in the render rather than the exit
   code. Claims are marked verified-on-0.15.1 or reported.
+- `skills/scientific-writing/` -- the craft skill section drafters and
+  reviewers load for a paper, talk or thesis: a claim ledger before
+  prose, one medium per piece of evidence, and changing a figure that
+  does not show its claim rather than explaining it in prose. Exists
+  because drafters had no craft guidance and recited figures; `genres/`
+  holds what differs per reader.
 - `install.py` -- creates/repairs both host adapters and skill links,
   then registers the current Claude Code and Codex lifecycle hooks; the
   actual installer behind both shims below.
