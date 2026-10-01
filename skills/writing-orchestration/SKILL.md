@@ -46,11 +46,17 @@ and a code repository does not make the writing skills wrong.
 
 ## Ceremony scales
 
-| Class    | Meaning                                                                  | Sequence                                                   |
-| -------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| Pass     | Line edits to prose that already exists; the argument is not in question | Edit, then report what changed and why                     |
-| Section  | A new subsection into a document whose argument already exists           | State the claim and its evidence in chat, get a nod, draft |
-| Document | A new chapter or paper, or a restructure that changes the argument       | The full spine                                             |
+| Class    | Meaning                                                                  | Sequence                                                |
+| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Pass     | Line edits to prose that already exists; the argument is not in question | Reverse outline, edit, then report what changed and why |
+| Section  | A new subsection into a document whose argument already exists           | Ledger rows in chat, get a nod, draft                   |
+| Document | A new chapter or paper, or a restructure that changes the argument       | The full spine                                          |
+
+For a scientific genre the claim ledger exists in every class, Pass
+included: `scientific-writing` requires a reverse outline before any
+revision, because a revision labelled a line edit is how recited
+evidence survives. The class sets the ceremony around the ledger --
+gates and spec -- not whether it exists.
 
 When torn between two classes, take the heavier one. Discovering that a
 "pass" is actually rewriting the argument upgrades the class: stop, say
@@ -58,16 +64,16 @@ so, re-classify. Nothing downgrades mid-task.
 
 ## What each step means
 
-| Step         | For code                                         | For prose                                                                                               |
-| ------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next |
-| 1 Understand | A quantifiable success metric                    | The claim, the audience, the venue's page or word limit, and what a reader must believe by the end      |
-| 2 Specify    | Interfaces and the tests that fix them           | An outline at paragraph granularity: each section's claim, its evidence, and its transition             |
-| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                               |
-| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; the reviewer reads that section and the outline, not the whole document            |
-| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst      |
-| 6 Review     | code-review, then standards-and-spec-review      | The three axes below, then `humanizer`, then re-verify the build                                        |
-| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                               |
+| Step         | For code                                         | For prose                                                                                                                                                                          |
+| ------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Preflight  | Tests green, clean tree, default branch          | The document builds today, clean tree, default branch. A build already broken hides what you break next                                                                            |
+| 1 Understand | A quantifiable success metric                    | The claim, the genre and the specific reader, the venue's page or word limit, and what that reader must believe by the end                                                         |
+| 2 Specify    | Interfaces and the tests that fix them           | The claim ledger from `scientific-writing`, with a word budget per section                                                                                                         |
+| 3 Isolate    | Feature branch; worktree when phases parallelise | Unchanged                                                                                                                                                                          |
+| 4 Implement  | A subagent per phase, a fresh reviewer per phase | A draft per section; every brief names `scientific-writing` and the genre, and the drafter reports artifact changes made or needed. The reviewer reads that section and the ledger |
+| 5 Verify     | Run the command, read the output                 | Builds clean, every reference and citation resolves, inside the page budget -- see below for Typst; `pixi run prose-metrics` before the edit                                       |
+| 6 Review     | code-review, then standards-and-spec-review      | The four axes below, then `humanizer` last as a lint, then re-verify the build and run `pixi run prose-metrics`                                                                    |
+| 7 Integrate  | PR or merge, then reflect                        | Unchanged                                                                                                                                                                          |
 
 **A revision replaces the claim it revises.** When a phase overturns an
 earlier conclusion, the spec says *replace claim X with Y* -- never *add
@@ -99,16 +105,14 @@ must not run on it. Verify a conversion by diffing the two *renderings*,
 not by re-judging the prose. Newly drafted sections inside a converted
 document are ordinary prose and take the full step 6.
 
-Step 2 is where prose most often goes wrong. An outline that lists
-section *topics* has decided nothing; one that states each section's
-claim and the evidence for it has done the actual thinking, and drafting
-from it is transcription. If the outline cannot say what a section is
-for, drafting it will not discover the answer.
+Step 2 is where prose most often goes wrong. A list of section *topics*
+has decided nothing; a ledger that states each paragraph's claim and
+where its evidence lives has done the thinking, and drafting from it is
+transcription.
 
-## The three review axes
+## The four review axes
 
-`code-review` has no prose equivalent -- there is no compiler for a
-claim -- so these replace it at step 6.
+`code-review` has no prose equivalent, so these replace it at step 6.
 
 **Claim integrity.** Every claim traces to a citation, a figure, a
 derivation, or the author's own result. This is the axis with no code
@@ -128,30 +132,24 @@ document, matching the project's notation file where it has one. This
 drifts silently because every section is locally consistent; only a
 whole-document pass sees it.
 
-**Audience fit.** Name the audience before drafting, and say what naming
-it licenses -- what may be assumed, what must be defined, what may be
-cited instead of explained. A thesis committee, a referee, and a
-colleague in another field need different amounts of the same argument.
-Left unstated, the audience defaults to the writer, who already knows
-everything and therefore needs nothing explained.
+**Genre fit.** The paper, talk or thesis file under
+`scientific-writing/genres/` fixes the reader and where depth goes.
+Judge the section against it. Derivation placement is `math`'s, not
+decided here.
 
-The dial that moves most is **where a derivation goes**, and the
-document class sets it, not taste. A paper states the result and defers
-the long derivation to an appendix, because a referee wants the claim
-and the means to check it. A thesis works the derivation inline, because
-a committee and the next student are reading to learn the method, and a
-chapter that cites its own appendix at every step teaches nothing. Same
-author, same voice, opposite placement -- so read it off the document
-class, and do not carry one document's habit into the other.
+**Evidence routing.** Run the review checks in `scientific-writing`,
+including inspecting the rendered figures, and report the
+`prose-metrics` delta.
 
 ## Red flags
 
 | Thought                                             | Reality                                                                                                                                         |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| "I'll draft it and see how it reads"                | Drafting is where an unnamed audience becomes expensive. Name it first.                                                                         |
+| "I'll draft it and see how it reads"                | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
 | "The build passes, so the section is done"          | That is the mechanical half of verify. The judged half has not run.                                                                             |
 | "This citation is probably right"                   | Probably is not a citation. Check it or cut the sentence.                                                                                       |
-| "It's only a wording pass"                          | If the wording carries the argument, it is a Document. Re-classify.                                                                             |
+| "It's only a wording pass"                          | If the wording carries the argument, it is a Document. Re-classify. Even a true Pass starts with the reverse outline.                           |
+| "The prose matches the figure's numbers"            | Matching is not routing. Inspect the render and ask whether the figure shows it without help.                                                   |
 | "I'll make the notation consistent at the end"      | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
-| "The outline lists the sections, so step 2 is done" | Topics are not claims. An outline that decided nothing has not been written.                                                                    |
+| "The outline lists the sections, so step 2 is done" | Topics are not claims. Only a ledger row per paragraph is the spec.                                                                             |
 | "humanizer is for papers, not for this codebase"    | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
