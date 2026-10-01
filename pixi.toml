@@ -6,7 +6,7 @@ platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
 python = ">=3.13"
 
 [feature.dev.dependencies]
-ruff = "*"
+ruff = ">=0.16.9,<0.17"
 codespell = "*"
 pre-commit = "*"
 mdformat = "*"
