@@ -94,6 +94,7 @@ class TestFiresOnProse:
             f"{THESIS}/biblio.bib",
             f"{THESIS}/notes/idea.txt",
             f"{PAPER}/main.tex",
+            f"{PAPER}/main.typ",
         ],
     )
     def test_fires(self, path: str, tmp_path: Path):

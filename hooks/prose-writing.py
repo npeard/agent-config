@@ -81,7 +81,7 @@ def canonical(path: str) -> str:
 
 
 MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/agent-config"))
-SUFFIXES = (".tex", ".bib", ".md", ".txt", ".rst")
+SUFFIXES = (".tex", ".typ", ".bib", ".md", ".txt", ".rst")
 
 # Files that are prose-shaped but are bookkeeping or configuration. OUTLINE.md
 # is deliberately absent: an outline is the argument, so writing one is prose
