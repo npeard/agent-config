@@ -34,13 +34,16 @@ import re
 import statistics
 import sys
 from pathlib import Path
+from typing import Any
 
 PARAGRAPH_BUDGET_WORDS = 120
 SENTENCE_BUDGET = 5
 
 LATEX, TYPST, MARKDOWN = ".tex", ".typ", ".md"
 
-NUMERIC = re.compile(r"-?\d+(?:\.\d+)?(?:[eE]-?\d+)?")
+# A "-" is a sign only when no digit, "-", "}" or ")" precedes it, so "3--5" is
+# a range of 3 and 5 while "10^{-3}" keeps -3.
+NUMERIC = re.compile(r"(?:(?<![\d\-})])-)?\d+(?:\.\d+)?(?:[eE]-?\d+)?")
 SENTENCE_END = re.compile(r"(?<=[.?!])\s+(?=[A-Z\\])")
 LATEX_REFS = re.compile(
     r"\\(?:ref|label|cite\w*|eqref|autoref|cref)\*?(?:\[[^\]]*\])?\{[^}]*\}"
@@ -49,21 +52,36 @@ TYPST_REFS = re.compile(r"@[\w:.-]+")
 INLINE_MATH = re.compile(r"\$[^$]*\$|\\\(.*?\\\)")
 LATEX_COMMAND = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?")
 TYPST_COMMAND = re.compile(r"#[A-Za-z][\w.]*")
+LATEX_FLOATS = ("figure", "table")
+LATEX_DISPLAY_MATH = (
+    "equation",
+    "align",
+    "gather",
+    "multline",
+    "eqnarray",
+    "subequations",
+)
+
+
+def latex_envs(names: tuple[str, ...]) -> str:
+    """Regex source matching a whole environment, starred or not."""
+    return rf"\\begin\{{((?:{'|'.join(names)})\*?)\}}.*?\\end\{{\1\}}"
+
+
 LATEX_DROPPED = re.compile(
-    r"\\begin\{(equation|align|figure|table)(\*?)\}.*?\\end\{\1\2\}"
-    r"|\\\[.*?\\\]|\$\$.*?\$\$",
+    latex_envs(LATEX_FLOATS + LATEX_DISPLAY_MATH) + r"|\\\[.*?\\\]|\$\$.*?\$\$",
     re.DOTALL,
 )
 TYPST_DISPLAY_MATH = re.compile(r"^[ \t]*\$[^$]*\$[ \t]*$", re.DOTALL | re.MULTILINE)
 MD_FENCE = re.compile(r"^(```|~~~).*?^\1[ \t]*$", re.DOTALL | re.MULTILINE)
-LATEX_ENV = re.compile(r"\\begin\{(figure|table)\*?\}.*?\\end\{\1\*?\}", re.DOTALL)
+LATEX_ENV = re.compile(latex_envs(LATEX_FLOATS), re.DOTALL)
 TYPST_LABEL = re.compile(r"^[ \t]*<[\w:.-]+>")
 LATEX_LABEL = re.compile(r"\\label\{([^}]*)\}")
 LATEX_COMMENT = re.compile(r"(?<!\\)%.*")
 TYPST_COMMENT = re.compile(r"(?<!:)//.*")
 
 HEADINGS = {
-    LATEX: re.compile(r"\\(?:sub)?section\*?\{(?P<t>[^}]*)\}"),
+    LATEX: re.compile(r"\\(?:sub){0,2}section\*?(?:\[[^\]]*\])?\{(?P<t>[^}]*)\}"),
     TYPST: re.compile(r"^={1,2}\s+(?P<t>.*)$"),
     MARKDOWN: re.compile(r"^#{1,2}\s+(?P<t>.*)$"),
 }
@@ -155,19 +173,25 @@ def numerics(text: str) -> set[str]:
     }
 
 
-def prose_blocks(body: str, kind: str) -> list[tuple[str, str]]:
-    """(section title, paragraph text) for each body paragraph, in order."""
+def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Section titles, and (section title, paragraph text) for each paragraph."""
     if kind == LATEX:
         body = LATEX_DROPPED.sub("\n\n", body)
     elif kind == TYPST:
         body = TYPST_DISPLAY_MATH.sub("\n\n", body)
         while (m := re.search(r"#figure\(", body)) is not None:
-            _, end = balanced(body, m.end(), "(", ")")
+            try:
+                _, end = balanced(body, m.end(), "(", ")")
+            except ValueError:
+                # An unclosed call swallows the rest of the file, as Typst would.
+                body = body[: m.start()]
+                break
             rest = TYPST_LABEL.sub("", body[end:], count=1)
             body = body[: m.start()] + "\n\n" + rest
     else:
         body = MD_FENCE.sub("\n\n", body)
     heading = HEADINGS[kind]
+    titles: list[str] = []
     blocks: list[tuple[str, str]] = []
     title = ""
     current: list[str] = []
@@ -182,28 +206,24 @@ def prose_blocks(body: str, kind: str) -> list[tuple[str, str]]:
         if h:
             flush()
             title = h.group("t").strip()
-            blocks.append((title, ""))  # a heading marker, dropped below
+            titles.append(title)
         elif line.strip():
             current.append(line.strip())
         else:
             flush()
     flush()
-    return blocks
+    return titles, blocks
 
 
-def analyze(text: str, kind: str) -> dict:
+def analyze(text: str, kind: str) -> dict[str, Any]:
     body = body_of(text, kind)
-    blocks = prose_blocks(body, kind)
-    paragraphs = [(t, p) for t, p in blocks if p]
+    titles, paragraphs = prose_blocks(body, kind)
     counts = [words(p, kind) for _, p in paragraphs]
     sentences = [len(SENTENCE_END.split(p)) for _, p in paragraphs]
     captions = [c for _, c in captions_of(body, kind)]
     caption_numbers: set[str] = set().union(*(numerics(c) for c in captions))
     body_numbers: set[str] = set().union(*(numerics(p) for _, p in paragraphs))
-    section_words: dict[str, int] = {}
-    for title, p in blocks:
-        if not p:
-            section_words.setdefault(title, 0)
+    section_words = dict.fromkeys(titles, 0)
     for (title, _), n in zip(paragraphs, counts, strict=True):
         section_words[title] = section_words.get(title, 0) + n
     return {
@@ -229,7 +249,7 @@ def analyze(text: str, kind: str) -> dict:
     }
 
 
-def format_report(data: dict) -> str:
+def format_report(data: dict[str, Any]) -> str:
     p, s = data["paragraphs"], data["sentences_per_paragraph"]
     lines = [
         (

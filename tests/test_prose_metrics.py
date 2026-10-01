@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import prose_metrics
 import pytest
@@ -12,7 +13,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "prose_metrics"
 MARKUP = [FIXTURES / "sample.tex", FIXTURES / "sample.typ", FIXTURES / "sample.md"]
 
 
-def report(path: Path, capsys) -> dict:
+def report(path: Path, capsys) -> dict[str, Any]:
     assert prose_metrics.main([str(path), "--json"]) == 0
     return json.loads(capsys.readouterr().out)
 
@@ -93,3 +94,46 @@ def test_unbalanced_caption_is_a_parse_failure(tmp_path, capsys):
 def test_human_report_exits_zero(capsys):
     assert prose_metrics.main([str(MARKUP[0])]) == 0
     assert "paragraphs" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "\\section*{Intro}",
+        "\\section[Short]{Intro}",
+        "\\subsubsection{Intro}",
+        "\\subsection*{Intro}",
+    ],
+)
+def test_latex_heading_forms_are_headings_not_body(heading, tmp_path, capsys):
+    path = write(tmp_path, "a.tex", f"{heading}\nBody words here.\n")
+    data = report(path, capsys)
+    assert data["sections"] == [{"title": "Intro", "words": 3}]
+    assert data["paragraphs"]["count"] == 1
+
+
+@pytest.mark.parametrize("env", ["gather", "multline", "eqnarray", "subequations"])
+def test_more_display_math_environments_are_dropped(env, tmp_path, capsys):
+    body = f"\\begin{{{env}*}}\nx = y\n\\end{{{env}*}}\n\nBody here.\n"
+    path = write(tmp_path, "a.tex", body)
+    assert report(path, capsys)["paragraphs"]["count"] == 1
+
+
+def _shared(tmp_path, capsys, literal):
+    body = f"\\caption{{Value {literal} here.}}\n\nValue {literal} here.\n"
+    return report(write(tmp_path, "a.tex", body), capsys)["shared_numerics"]
+
+
+def test_range_dashes_are_not_signs(tmp_path, capsys):
+    assert _shared(tmp_path, capsys, "13--15") == ["13", "15"]
+    assert _shared(tmp_path, capsys, "13-15") == ["13", "15"]
+
+
+def test_a_leading_minus_is_a_sign(tmp_path, capsys):
+    assert _shared(tmp_path, capsys, "-0.5") == ["-0.5"]
+    assert _shared(tmp_path, capsys, "$10^{-31}$") == ["-31", "10"]
+
+
+def test_unmatched_typst_figure_still_reports(tmp_path, capsys):
+    path = write(tmp_path, "a.typ", 'Before it.\n\n#figure(image("x.png"\n\nLost.\n')
+    assert report(path, capsys)["paragraphs"]["count"] == 1
