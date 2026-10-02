@@ -7,3 +7,10 @@ __pycache__/
 .nightly-brief
 .nightly-log
 .claude/worktrees/
+# LaTeX build output, e.g. an editor compiling a .tex test fixture in place
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+tests/fixtures/**/*.pdf
