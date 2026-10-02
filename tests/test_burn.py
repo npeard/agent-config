@@ -17,6 +17,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import burn
@@ -389,10 +390,13 @@ class TestCli:
         on the developer having used Claude recently: it passed locally and
         failed on every CI runner, where `burn` correctly reports that there is
         nothing to price. A test that cannot run on a clean checkout is testing
-        the machine.
+        the machine. The turn is stamped now, not with turn()'s fixed default,
+        because main() applies the default window relative to today, so a
+        fixed date ages out of it and the test starts failing on the calendar.
         """
         path = tmp_path / "-proj" / "s.jsonl"
-        write_transcript(path, [turn(out=1000)])
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        write_transcript(path, [turn(out=1000, timestamp=now)])
         monkeypatch.setattr(burn, "transcript_files", lambda project: [(path, False)])
         assert burn.main([]) == 0
         assert "rates per Mtok" in capsys.readouterr().out
