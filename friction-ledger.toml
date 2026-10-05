@@ -526,7 +526,7 @@ deleted, which is the whole failure that check exists to catch.
 """
 
 [[decision]]
-class = "cross-project-scripts-not-wired-into-smi"
+class = "cross-project-scripts-not-wired-into-a-project"
 source = "observed"
 date = "2026-09-11"
 cause = "asset-not-adopted"
@@ -830,7 +830,7 @@ superseded belief. Landed as CODING_STANDARDS rule 11, with an AGENTS.md
 trigger.
 
 The reason it needed a second home is the diagnosis: the spec *ordered* it.
-Project A's michelson-units-audit-spec.md has a section headed "Specific claims to
+Project A's units-audit spec has a section headed "Specific claims to
 retract or rewrite", so the agent was following its brief correctly. The
 orchestrator-facing half is in writing-orchestration -- specify "replace
 claim X with Y", never "add a retraction of X" -- because the brief is what
@@ -896,10 +896,10 @@ NOTES.md reported that code comments explain why a previous method was
 discarded rather than why the current one is right. Partly confirmed and not
 worth an artifact.
 
-Real instances exist -- Project B's plots/PaperFigures.py has a
+Real instances exist -- Project B's plotting module has a
 function body replaced by a note about retrieving code from a previous
 commit, and project C has a systemic dialect of six-plus sites explaining
-themselves by reference to "the period the Floqtimizer constructor used to
+themselves by reference to "the period the optimizer constructor used to
 apply implicitly". But the majority of past-tense comments surveyed are
 legitimate bounds or justify a present abstraction, and several are
 exemplary "why not the obvious alternative" writing.
@@ -923,7 +923,7 @@ substantiated as stated.
 
 Assistant message length: median 171 characters over 862 messages in one
 project, 249 over 169 in another; only 5.2% exceed 1800 characters. The
-dispersion paper's prose is dense and causally ordered, and the nine SDD
+paper draft's prose is dense and causally ordered, and the nine SDD
 task reports are long because they enumerate verifications, which is the
 point of the artifact.
 
@@ -1108,8 +1108,10 @@ reads and edits 404 on /api/collaboration while code execution keeps
 working, so the failure presents as a permissions problem rather than a
 missing package.
 
-Filed as an actionable entry in agent-config's own TASKS.md rather than
-edited into the skill from a different repo's session. The general lesson
+Filed as a follow-up in agent-config's own TASKS.md rather than edited
+into the skill from a different repo's session. TASKS.md was retired on
+2026-10-05 with that follow-up -- a notebook-channel check in toolgaps.py
+-- still unbuilt; reopen it here if notebook friction recurs. The general lesson
 the skill should carry above the specific server: on any notebook MCP
 server, a success return is not evidence the write landed -- confirm on
 disk.
@@ -1300,9 +1302,9 @@ date = "2026-09-23"
 cause = "agent-config-gap"
 outcome = "tier-2"
 note = """
-One session ran `git checkout -b obc-direct-rkky-cos
-origin/draft-august`, which makes the shared branch the new branch's
-upstream. Commits then reached draft-august on GitHub in two repos. The
+One session ran `git checkout -b my-feature
+origin/shared-draft`, which makes the shared branch the new branch's
+upstream. Commits then reached shared-draft on GitHub in two repos. The
 agent never ran `git push` before the user reported it, so the push is
 unexplained; the likeliest candidate is a VS Code Sync to the configured
 upstream. Recovery took two force-pushes and a cross-repo revert.
