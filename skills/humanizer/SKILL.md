@@ -5,6 +5,7 @@ description: |-
   vague sources, repetitive structure, stock AI words, passive voice, filler,
   or chatbot artifacts -- rewrites AI-sounding text so it reads naturally
   without changing what it says. Based on Wikipedia's "Signs of AI writing."
+license: MIT, adapted from blader/humanizer; see LICENSE in this directory.
 ---
 
 # Humanizer: remove AI writing patterns
@@ -198,7 +199,9 @@ Return the result required by
 
 ## Source
 
-This skill is based on
+Adapted from [blader/humanizer](https://github.com/blader/humanizer) by
+Siqi Chen, under the MIT license reproduced in this directory's
+`LICENSE`. That skill, and so this one, is based on
 [Wikipedia: Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing),
 maintained by WikiProject AI Cleanup. Its patterns come from reviews of
 AI-generated text on Wikipedia.

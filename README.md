@@ -574,3 +574,9 @@ and pricing remain separate and unchanged.
   corrupts skill frontmatter or GFM tables.
 - `docs/superpowers/` -- brainstorming specs and plans for this repo's
   own evolution (gitignored, local-only).
+
+## License
+
+MIT; see `LICENSE`. `skills/humanizer/` is adapted from
+[blader/humanizer](https://github.com/blader/humanizer) and carries its
+own MIT notice in `skills/humanizer/LICENSE`.
