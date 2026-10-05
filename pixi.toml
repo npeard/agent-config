@@ -1,4 +1,6 @@
 [workspace]
+name = "agent-config"
+description = "Shared agent guidance, skills and hooks for Claude Code and Codex"
 channels = ["conda-forge"]
 platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
 
@@ -6,7 +8,7 @@ platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
 python = ">=3.13"
 
 [feature.dev.dependencies]
-ruff = ">=0.16.9,<0.17"
+ruff = ">=0.16.10,<0.17"
 codespell = "*"
 pre-commit = "*"
 mdformat = "*"
