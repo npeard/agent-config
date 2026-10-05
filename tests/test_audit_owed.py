@@ -43,7 +43,7 @@ def load_hook():
 @pytest.fixture
 def fake_master(tmp_path: Path, git_repo_factory) -> Path:
     """A repo at the path the hook computes from a patched HOME."""
-    repo = tmp_path / "Documents" / "Projects" / "agent-config"
+    repo = tmp_path / ".agents" / "agent-config"
     repo.parent.mkdir(parents=True)
     git_repo_factory(repo)
     return repo
@@ -86,9 +86,7 @@ def run_hook(payload, home: Path, repo: Path | None = None) -> str:
     # whose variable differs by platform, so a home patch would be one more
     # thing to keep in step for no gain.
     env = {**os.environ}
-    env["AGENT_CONFIG_REPO"] = str(
-        repo if repo else home / "Documents/Projects/agent-config"
-    )
+    env["AGENT_CONFIG_REPO"] = str(repo if repo else home / ".agents/agent-config")
     result = subprocess.run(
         [sys.executable, str(HOOK)],
         input=payload if isinstance(payload, str) else json.dumps(payload),
@@ -401,7 +399,7 @@ class TestCommitShapes:
 
     def test_a_root_commit_is_seen(self, tmp_path):
         """A parentless commit reports no paths without --root."""
-        repo = tmp_path / "Documents" / "Projects" / "agent-config"
+        repo = tmp_path / ".agents" / "agent-config"
         repo.mkdir(parents=True)
         run_git(repo, "init", "-q", "-b", "main", ".")
         run_git(repo, "config", "user.email", "t@e.invalid")

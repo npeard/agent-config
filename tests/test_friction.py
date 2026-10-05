@@ -724,6 +724,22 @@ class TestLedgerLocation:
         assert friction.ledger_path().name == "friction-ledger.toml"
 
 
+class TestRepoResolution:
+    def test_env_override_beats_the_installed_link(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+        monkeypatch.setenv("AGENT_CONFIG_REPO", str(tmp_path / "override"))
+        monkeypatch.delenv("CLAUDE_CONFIG_REPO", raising=False)
+        assert friction.resolve_agent_config() == (tmp_path / "override").resolve()
+        monkeypatch.delenv("AGENT_CONFIG_REPO")
+        assert (
+            friction.resolve_agent_config()
+            == (tmp_path / "home" / ".agents" / "agent-config").resolve()
+        )
+
+
 class TestUndatedRecords:
     def test_a_record_without_a_timestamp_is_counted_not_dropped(self, tmp_path: Path):
         """Empty string sorts before every date, so testing an absent

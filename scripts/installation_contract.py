@@ -30,3 +30,8 @@ def instruction_adapters(repo: Path, home: Path) -> tuple[tuple[Path, str], ...]
 
 def skill_destinations(home: Path) -> tuple[Path, Path]:
     return (home / ".claude" / "skills", home / ".agents" / "skills")
+
+
+def repo_link(home: Path) -> Path:
+    """The stable locator for the checkout the installer ran from."""
+    return home / ".agents" / "agent-config"

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import tomllib
@@ -37,7 +38,21 @@ CODEX_CAPTURE_DIR = Path.home() / ".agents" / "analytics" / "codex-exec" / "v1"
 # relative to this file instead would give a copy of this script in another
 # project no ledger at all, and it would re-propose classes already decided
 # here while reading the very same evidence.
-AGENT_CONFIG = Path.home() / "Documents" / "Projects" / "agent-config"
+
+
+def resolve_agent_config() -> Path:
+    return Path(
+        os.path.realpath(
+            os.path.expanduser(
+                os.environ.get("AGENT_CONFIG_REPO")
+                or os.environ.get("CLAUDE_CONFIG_REPO")
+                or "~/.agents/agent-config"
+            )
+        )
+    )
+
+
+AGENT_CONFIG = resolve_agent_config()
 
 # Only friction from the recent past is actionable. Lifetime counts mean a
 # class that crossed the bar once stays over it forever, so a fixed problem

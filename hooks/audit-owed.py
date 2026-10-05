@@ -71,10 +71,10 @@ def master_repo() -> str:
     """Where this config lives, resolved.
 
     AGENT_CONFIG_REPO wins when set, with CLAUDE_CONFIG_REPO honored after
-    it so an existing override keeps working across the rename. The default
-    is the path the README's install instructions use, but hardcoding only
-    that makes the hook dead for anyone who cloned elsewhere -- and the
-    override is also how the tests point it at a fixture.
+    it so an existing override keeps working across the rename. Without
+    either, the ~/.agents/agent-config link the installer writes names the
+    checkout wherever it was cloned; the override is also how the tests point
+    it at a fixture.
 
     "~" is left to os.path.expanduser, which prefers USERPROFILE on Windows.
     Substituting HOME ahead of it was tried and reverted: Git Bash and MSYS2
@@ -84,14 +84,13 @@ def master_repo() -> str:
     silently never fires, the exact failure it is supposed to avoid.
 
     expanduser wraps the whole expression rather than only the default: an
-    AGENT_CONFIG_REPO of "~/Documents/Projects/agent-config" -- the form
-    the README's own install path invites -- would otherwise resolve to a
+    AGENT_CONFIG_REPO of "~/src/agent-config" would otherwise resolve to a
     literal "~" directory and the hook would silently never fire.
     """
     path = (
         os.environ.get("AGENT_CONFIG_REPO")
         or os.environ.get("CLAUDE_CONFIG_REPO")
-        or "~/Documents/Projects/agent-config"
+        or "~/.agents/agent-config"
     )
     return os.path.realpath(os.path.expanduser(path))
 

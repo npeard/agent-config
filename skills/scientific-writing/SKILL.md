@@ -97,7 +97,7 @@ Defaults a genre file may override:
 - caption beyond its panel key: at most 3 sentences;
 - section: a word budget, set atop the ledger.
 
-`pixi run --manifest-path ~/Documents/Projects/agent-config/pixi.toml prose-metrics ABSOLUTE_FILE [--json]`
+`pixi run --manifest-path ~/.agents/agent-config/pixi.toml prose-metrics ABSOLUTE_FILE [--json]`
 reports these sizes plus `shared_numerics`, numbers in both a caption
 and the body. It does not gate.
 

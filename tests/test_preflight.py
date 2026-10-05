@@ -983,6 +983,41 @@ class TestInstructionAdapters:
         assert str(claude_adapter) in details(report, "Claude instructions")
 
 
+class TestRepoLinked:
+    def check(self, root: Path, home: Path) -> preflight.Report:
+        report = preflight.Report()
+        preflight.check_repo_link(report, root, home)
+        return report
+
+    def test_ok_when_the_link_names_this_checkout(self, tmp_path: Path):
+        (tmp_path / "repo").mkdir()
+        root = make_installable_project(tmp_path / "repo")
+        dest = preflight.installation_contract.repo_link(tmp_path / "home")
+        dest.parent.mkdir(parents=True)
+        platform_paths.link_dir(root, dest)
+        assert statuses(self.check(root, tmp_path / "home"), "repo linked") == [OK]
+
+    def test_warns_when_missing(self, tmp_path: Path):
+        (tmp_path / "repo").mkdir()
+        root = make_installable_project(tmp_path / "repo")
+        report = self.check(root, tmp_path / "home")
+        assert statuses(report, "repo linked") == [WARN]
+        assert "missing" in details(report, "repo linked")
+        assert "install" in details(report, "repo linked")
+
+    def test_warns_when_pointing_elsewhere(self, tmp_path: Path):
+        (tmp_path / "repo").mkdir()
+        root = make_installable_project(tmp_path / "repo")
+        other = tmp_path / "other"
+        other.mkdir()
+        dest = preflight.installation_contract.repo_link(tmp_path / "home")
+        dest.parent.mkdir(parents=True)
+        platform_paths.link_dir(other, dest)
+        report = self.check(root, tmp_path / "home")
+        assert statuses(report, "repo linked") == [WARN]
+        assert str(other.resolve()) in details(report, "repo linked")
+
+
 class TestSkillDestinationOrchestration:
     def test_main_checks_both_skill_destinations(
         self,

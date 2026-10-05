@@ -26,7 +26,15 @@ def canonical(path: str) -> str:
     return os.path.realpath(os.path.normpath(path)).replace(os.sep, "/").lower()
 
 
-MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/agent-config"))
+# Same resolution order as audit-owed.py: the env overrides, then the link the
+# installer writes, so the hook works from any clone path.
+MASTER_REPO = canonical(
+    os.path.expanduser(
+        os.environ.get("AGENT_CONFIG_REPO")
+        or os.environ.get("CLAUDE_CONFIG_REPO")
+        or "~/.agents/agent-config"
+    )
+)
 PATTERNS = (
     "*/agents.md",
     "*/claude.md",
@@ -232,7 +240,7 @@ MESSAGE = (
     "You just wrote an AGENTS.md, CLAUDE.md, memory, or skill file. Check: is this "
     "preference or skill general engineering or workflow taste that holds "
     "across projects, rather than local domain or tooling detail? If "
-    "general, also add it to ~/Documents/Projects/agent-config (master "
+    "general, also add it to ~/.agents/agent-config (master "
     "AGENTS.md or skills/) and commit there."
 )
 

@@ -19,23 +19,25 @@ import platform_paths_helper as pp
 import pytest
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "promotion-check.py"
-# Derived, not hardcoded: the hook computes its master-repo path from
-# expanduser("~/..."), so a literal /Users/<name> here would disagree with it
-# on any other machine -- including the "Install (new machine)" path the
-# README documents -- and every self-guard case would fail while the hook was
-# behaving correctly.
+# run_hook pins the hook's master repo to MASTER through AGENT_CONFIG_REPO, so
+# the self-guard cases do not depend on whether this machine has the config
+# installed at ~/.agents/agent-config.
 PROJECTS = Path.home() / "Documents" / "Projects"
 MASTER = str(PROJECTS / "agent-config")
 OTHER = str(PROJECTS / "other-project")
 
 
 def run_hook(payload: dict, home: Path | None = None) -> str:
-    env = None
+    env = os.environ | {"AGENT_CONFIG_REPO": MASTER}
     if home is not None:
-        # The hook derives MASTER_REPO from expanduser("~/..."), so pointing
-        # both names at a scratch home lets a test build the whole scenario
-        # instead of testing whatever this machine happens to have installed.
-        env = os.environ | {"HOME": str(home), "USERPROFILE": str(home)}
+        # With no override the hook finds the master repo through
+        # ~/.agents/agent-config, so a scratch home lets a test build the
+        # whole scenario instead of testing whatever this machine has installed.
+        env = {k: v for k, v in env.items() if k != "AGENT_CONFIG_REPO"} | {
+            "CLAUDE_CONFIG_REPO": "",
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+        }
     result = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps(payload),
@@ -169,7 +171,7 @@ class TestInstalledSymlinkPaths:
         would notice. link_dir is the installer's own primitive -- a junction
         on Windows, a symlink elsewhere -- and needs elevation on neither.
         """
-        master = tmp_path / "Documents" / "Projects" / "agent-config"
+        master = tmp_path / ".agents" / "agent-config"
         (master / "skills" / "quantikz").mkdir(parents=True)
         (master / "skills" / "quantikz" / "SKILL.md").write_text("x", encoding="utf-8")
         installed = tmp_path / ".claude" / "skills"
@@ -177,10 +179,38 @@ class TestInstalledSymlinkPaths:
         pp.link_dir(master / "skills" / "quantikz", installed / "quantikz")
         assert not fired(write(str(installed / "quantikz" / "SKILL.md")), home=tmp_path)
 
+    def test_env_override_beats_the_installed_link(self, tmp_path: Path):
+        """Resolution order: AGENT_CONFIG_REPO first, the link second."""
+        linked = tmp_path / ".agents" / "agent-config"
+        override = tmp_path / "clone"
+        for repo in (linked, override):
+            (repo / "skills" / "x").mkdir(parents=True)
+            (repo / "skills" / "x" / "SKILL.md").write_text("x", encoding="utf-8")
+        env = os.environ | {
+            "AGENT_CONFIG_REPO": str(override),
+            "HOME": str(tmp_path),
+            "USERPROFILE": str(tmp_path),
+        }
+
+        def fires(path: Path) -> bool:
+            return bool(
+                subprocess.run(
+                    [sys.executable, str(HOOK)],
+                    input=json.dumps(write(str(path / "skills" / "x" / "SKILL.md"))),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    env=env,
+                ).stdout.strip()
+            )
+
+        assert not fires(override)
+        assert fires(linked)
+
     def test_still_fires_for_a_link_outside_the_master_repo(self, tmp_path: Path):
         """The other half of the same contract: resolving links must not turn
         into resolving them away, or the hook goes silent for everything."""
-        master = tmp_path / "Documents" / "Projects" / "agent-config"
+        master = tmp_path / ".agents" / "agent-config"
         master.mkdir(parents=True)
         elsewhere = tmp_path / "other-project" / "skills" / "quantikz"
         elsewhere.mkdir(parents=True)

@@ -21,10 +21,9 @@ from pathlib import Path
 import pytest
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "prose-writing.py"
-# Derived, not hardcoded: the hook computes its master-repo path from
-# expanduser("~/..."), so a literal /Users/<name> here would disagree with it
-# on any other machine and every self-guard case would fail while the hook was
-# behaving correctly.
+# run_hook pins the hook's master repo to MASTER through AGENT_CONFIG_REPO, so
+# the self-guard cases do not depend on whether this machine has the config
+# installed at ~/.agents/agent-config.
 PROJECTS = Path.home() / "Documents" / "Projects"
 MASTER = str(PROJECTS / "agent-config")
 THESIS = str(PROJECTS / "stanford-thesis")
@@ -43,7 +42,7 @@ def run_hook(payload: dict, state: Path) -> str:
         capture_output=True,
         text=True,
         check=True,
-        env={**os.environ, "TMPDIR": str(state)},
+        env={**os.environ, "TMPDIR": str(state), "AGENT_CONFIG_REPO": MASTER},
     )
     return result.stdout.strip()
 
@@ -288,7 +287,7 @@ class TestPayloadHandling:
             capture_output=True,
             text=True,
             check=False,
-            env={**os.environ, "TMPDIR": str(state)},
+            env={**os.environ, "TMPDIR": str(state), "AGENT_CONFIG_REPO": MASTER},
         )
         assert result.returncode == 0, result.stderr
         assert not result.stdout.strip()

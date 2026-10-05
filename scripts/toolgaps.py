@@ -27,14 +27,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-# Where cross-project tooling lives, by this setup's convention. Absent on a
-# machine that has not cloned it, which is not an error.
-AGENT_CONFIG = Path.home() / "Documents" / "Projects" / "agent-config"
+# Where cross-project tooling lives: the env overrides, else the link the
+# installer writes, so any clone path works. Absent
+# on a machine that has not installed it, which is not an error.
+
+
+def resolve_agent_config() -> Path:
+    return Path(
+        os.path.realpath(
+            os.path.expanduser(
+                os.environ.get("AGENT_CONFIG_REPO")
+                or os.environ.get("CLAUDE_CONFIG_REPO")
+                or "~/.agents/agent-config"
+            )
+        )
+    )
+
+
+AGENT_CONFIG = resolve_agent_config()
 
 # Capability -> substrings that evidence it. Matched against a blob built
 # from filenames, pre-commit hook ids, and task/dependency names, so one

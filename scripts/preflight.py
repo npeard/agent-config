@@ -907,6 +907,34 @@ def check_skills(
     )
 
 
+def check_repo_link(report: Report, root: Path, home: Path) -> None:
+    """Report whether the stable repo locator names this checkout.
+
+    Hooks and prose find the repo through it, so a missing or misdirected
+    link silently disables them. Silent in projects with no installer.
+    """
+    if (
+        installation_contract is None
+        or platform_paths is None
+        or not (root / "install.py").is_file()
+    ):
+        return
+    dest = installation_contract.repo_link(home)
+    expected = platform_paths.installation_checkout(root, timeout=GIT_SECONDS)
+    target = platform_paths.link_target(dest)
+    if target == expected.resolve():
+        report.add(OK, "repo linked", f"{dest} -> {expected}")
+    elif target is None:
+        problem = "not a link" if dest.exists() else "missing"
+        report.add(WARN, "repo linked", f"{dest}: {problem} ({_install_hint()})")
+    else:
+        report.add(
+            WARN,
+            "repo linked",
+            f"{dest}: points at {target}, not {expected} ({_install_hint()})",
+        )
+
+
 def detect_test_command(root: Path) -> str | None:
     for filename, command, defines_test in TEST_RUNNERS:
         path = root / filename
@@ -989,6 +1017,7 @@ def main(argv: list[str]) -> int:
             strict=True,
         ):
             check_skills(report, root, installed, label=label)
+    check_repo_link(report, root, Path.home())
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)

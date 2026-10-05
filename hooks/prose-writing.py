@@ -80,7 +80,15 @@ def canonical(path: str) -> str:
     return resolve(path).lower()
 
 
-MASTER_REPO = canonical(os.path.expanduser("~/Documents/Projects/agent-config"))
+# Same resolution order as audit-owed.py: the env overrides, then the link the
+# installer writes, so the hook works from any clone path.
+MASTER_REPO = canonical(
+    os.path.expanduser(
+        os.environ.get("AGENT_CONFIG_REPO")
+        or os.environ.get("CLAUDE_CONFIG_REPO")
+        or "~/.agents/agent-config"
+    )
+)
 SUFFIXES = (".tex", ".typ", ".bib", ".md", ".txt", ".rst")
 
 # Files that are prose-shaped but are bookkeeping or configuration. OUTLINE.md

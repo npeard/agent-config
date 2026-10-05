@@ -306,6 +306,40 @@ class TestBackups:
             assert not list(skills.glob("*.bak"))
 
 
+class TestRepoLink:
+    """~/.agents/agent-config is how hooks and prose find the checkout."""
+
+    def link(self, home):
+        return install.installation_contract.repo_link(home)
+
+    def test_the_link_names_this_checkout(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert pp.link_target(self.link(tmp_path)) == REPO.resolve()
+
+    def test_rerunning_is_idempotent(self, tmp_path):
+        assert run(tmp_path) == 0
+        assert run(tmp_path) == 0
+        assert not list(self.link(tmp_path).parent.glob("agent-config.*.bak"))
+
+    def test_a_stale_link_is_replaced(self, tmp_path):
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        self.link(tmp_path).parent.mkdir(parents=True)
+        pp.link_dir(elsewhere, self.link(tmp_path))
+        assert run(tmp_path) == 0
+        assert pp.link_target(self.link(tmp_path)) == REPO.resolve()
+        assert elsewhere.is_dir()
+
+    def test_a_real_directory_is_backed_up_not_destroyed(self, tmp_path):
+        dest = self.link(tmp_path)
+        dest.mkdir(parents=True)
+        (dest / "mine.txt").write_text("mine", encoding="utf-8")
+        assert run(tmp_path) == 0
+        (backup,) = dest.parent.glob("agent-config.*.bak")
+        assert (backup / "mine.txt").read_text(encoding="utf-8") == "mine"
+        assert pp.link_target(dest) == REPO.resolve()
+
+
 class TestSkillLinks:
     def test_a_stale_repo_link_is_pruned_from_both_hosts(self, tmp_path):
         assert run(tmp_path) == 0

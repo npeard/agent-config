@@ -126,29 +126,34 @@ def install_instructions(home: Path) -> None:
         install_generated_file(dest, expected)
 
 
+def install_link(src: Path, dest: Path) -> str | None:
+    """Link dest to src and verify it; return a problem description or None."""
+    if (
+        platform_paths.verify_link(dest, src)
+        and platform_paths.link_target(dest) == src.resolve()
+    ):
+        return None
+    clear(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        platform_paths.link_dir(src, dest)
+    except OSError as exc:
+        return str(exc)
+    # Verified, not trusted: a copy reports success just as loudly.
+    if not platform_paths.verify_link(dest, src):
+        return "produced a copy rather than a link"
+    print(f"Linked {dest} -> {src}")
+    return None
+
+
 def install_skills(installed: Path) -> list[str]:
     """Link every skill this repo carries, and verify each one landed."""
     source = REPO / "skills"
     installed.mkdir(parents=True, exist_ok=True)
     problems = []
     for src in sorted(p for p in source.iterdir() if p.is_dir()):
-        dest = installed / src.name
-        if (
-            platform_paths.verify_link(dest, REPO)
-            and platform_paths.link_target(dest) == src.resolve()
-        ):
-            continue
-        clear(dest)
-        try:
-            platform_paths.link_dir(src, dest)
-        except OSError as exc:
-            problems.append(f"{src.name}: {exc}")
-            continue
-        # Verified, not trusted: a copy reports success just as loudly.
-        if not platform_paths.verify_link(dest, REPO):
-            problems.append(f"{src.name}: produced a copy rather than a link")
-            continue
-        print(f"Linked {dest} -> {src}")
+        if problem := install_link(src, installed / src.name):
+            problems.append(f"{src.name}: {problem}")
     return problems
 
 
@@ -214,6 +219,10 @@ def main(argv=None) -> int:
             f"{installed}: {problem}" for problem in install_skills(installed)
         )
         prune(installed)
+    # The one stable path hooks and prose use to find this checkout, wherever
+    # it was cloned.
+    if problem := install_link(REPO, installation_contract.repo_link(args.home)):
+        problems.append(f"{installation_contract.repo_link(args.home)}: {problem}")
     if problems:
         for p in problems:
             print(f"error: {p}", file=sys.stderr)

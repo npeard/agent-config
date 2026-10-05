@@ -159,10 +159,9 @@ Flag a diff that re-fixes something already fixed before without adding
 the check that would have caught it.
 
 Generic tools worth reusing across projects live in
-`~/Documents/Projects/agent-config/scripts/`. Copy from there rather
-than rewriting one that has already been built and tested; if more than
-one looks relevant, check whether they duplicate a concept before
-adopting both.
+`~/.agents/agent-config/scripts/`. Copy from there rather than rewriting
+one that has already been built and tested; if more than one looks
+relevant, check whether they duplicate a concept before adopting both.
 
 ## 11. A correction replaces the claim it corrects
 
