@@ -15,43 +15,58 @@ Project-local instruction files stay in their own repos and add only
 what is local to that project (build commands, architecture, domain
 conventions); they should not repeat what is here.
 
-## Philosophy
+## What changes day to day
 
-The design follows from a few convictions. They are stated in full in
-`AGENTS.md`; this is the short version, so the rest of the repo makes
-sense.
+The features below are the ones you notice in ordinary use. Hooks are
+registered for Claude Code; the guidance and skills work in Codex too.
 
-- **Context is a cost, so the config is budgeted like code.** Every line
-  of always-loaded guidance is re-read on every turn of every session.
-  `AGENTS.md` therefore stays short and names rules rather than
-  restating them; the detail lives in skills, which load only when a
-  task calls for them. `pixi run audit` enforces ceilings on
-  always-loaded text, and a test fails when one is crossed.
-- **Prefer the cheapest mechanism that works.** When an agent keeps
-  making the same mistake, the fix is chosen from a ladder: do nothing,
-  then a hook, then a script, then a skill, and only last a new rule in
-  `AGENTS.md`. A hook acts whether or not the agent remembers it, which
-  a rule cannot. Most hooks here replaced a rule that was being ignored.
-- **Measure friction instead of noticing it.** `pixi run friction` and
-  `pixi run burn` read the agent's own session transcripts off disk to
-  find recurring failures and where tokens actually went. Decisions
-  about each finding are recorded in `friction-ledger.toml`, so a
-  settled question is not reopened unless the evidence doubles.
-- **One workflow, with gates in two places.** Non-trivial tasks follow a
-  single spine -- understand, specify, isolate, implement, verify,
-  review, integrate -- built on the
-  [superpowers](https://github.com/obra/superpowers) skills. The agent
-  stops for you at the finished spec and at the final report and acts on
-  its own in between. Prose deliverables (papers, chapters, talks) use
-  the same spine with the substitutions in `writing-orchestration`,
-  because a reader rather than a test judges whether prose is correct.
-- **Evidence before claims.** An agent runs the command and reads the
-  output before reporting success. It does not claim a speedup from
-  profiler percentages alone, and it does not report a tool missing
-  without saying which check it ran.
-- **One source, many hosts.** `AGENTS.md` and the skills are written
-  once. Each host gets an adapter generated from them (see
-  `docs/PORTABILITY.md`), so Claude Code and Codex cannot drift apart.
+- **You hear when the agent needs you.** `hooks/notify.py` plays a sound
+  and posts a desktop notification when a turn finishes, when a tool
+  needs permission, or when the agent asks you a question, on macOS,
+  Linux and Windows. It stays quiet while background subagents are still
+  working, so a long orchestrated task pings once at the end rather than
+  once per subagent. If background work is still running after ten
+  minutes, it tells you once that the task may be stuck. You can leave a
+  task running and do something else.
+- **Long tasks run without check-ins.** For non-trivial work the agent
+  follows one sequence -- understand, write a spec, branch, implement
+  with subagents, verify, review, integrate -- built on the
+  [superpowers](https://github.com/obra/superpowers) skills. It stops
+  for you at exactly two points, the finished spec and the final report,
+  and works on its own in between instead of asking for approval at
+  every step. Papers, thesis chapters and talks use the same sequence,
+  adapted in `writing-orchestration` for work that a reader rather than
+  a test has to judge.
+- **The agent knows your project's commands.** At session start,
+  `hooks/task-list.py` gives the agent the project's own `pixi run`
+  tasks, so it runs `pixi run test` or `pixi run format` instead of
+  inventing commands or calling the system Python.
+- **Stale dependencies come to you.** `hooks/environment-drift.py`
+  reports, at session start, dependency updates available on conda-forge
+  *and* PyPI. It checks both because a package can be missing on one and
+  released on the other. It also reports VS Code extensions that differ
+  from `vscode-extensions.toml`. It says nothing when there is nothing
+  to report and never blocks on the network.
+- **Subagents do not default to the most expensive model.**
+  `hooks/agent-model.py` refuses a generic subagent dispatch that does
+  not name a model. Without it, every delegated search or file edit
+  silently runs on the session's model.
+- **Writing tasks get writing guidance.** "Tighten section 3" does not
+  read as a writing task, so the first time in a session the agent is
+  about to write a `.tex`, `.typ`, `.md` or similar prose file,
+  `hooks/prose-writing.py` points it at `writing-orchestration`,
+  `scientific-writing` (papers, talks and thesis chapters) and `humanizer`
+  (removes AI-sounding prose). The `math` skill (where each equation
+  came from and what was checked) and the `typst` skill load on their
+  own when the task calls for them.
+- **Domain skills for research code.** `compute-job-safety` covers
+  stopping and restarting long GPU and cluster jobs without orphaned
+  processes or overwritten results. `notebooks` covers editing `.ipynb`
+  files reliably, and `quantikz` covers quantum circuit diagrams in
+  LaTeX.
+- **A cost report.** `pixi run burn` reads your session transcripts off
+  disk and reports where the tokens and dollars went, without spending
+  any model context to find out.
 
 ## Prerequisites
 
