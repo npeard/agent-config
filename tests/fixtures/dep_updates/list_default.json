@@ -10,7 +10,7 @@
   "url": "https://conda.anaconda.org/conda-forge/noarch/cuda-version-13.0-hc7b4dd1_3.conda"
  },
  {
-  "name": "doqs",
+  "name": "myproject",
   "version": null,
   "kind": "pypi",
   "source": "./",

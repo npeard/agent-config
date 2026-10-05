@@ -3,8 +3,8 @@
 """Tell the session about dependency updates and VS Code extension drift.
 
 Both were found by the user rather than by tooling: an agent said "no torch
-2.14 anywhere" after querying only conda-forge while PyPI had it (doqs
-session e0f19169), and an unwanted notebook extension reported writes that
+2.14 anywhere" after querying only conda-forge while PyPI had it (one
+research project), and an unwanted notebook extension reported writes that
 never reached disk. preflight reports the same rows, but only when someone
 runs it; this puts them in front of every session.
 
@@ -14,7 +14,7 @@ cannot disagree. Silent when there is nothing to report, following
 task-list.py: an always-present block teaches the reader to skip it.
 
 It never waits on the network. A cold dependency check takes ~25 s on
-doqs, most of it `pixi list`, so the hook reads only the cache and, when
+a research project, most of it `pixi list`, so the hook reads only the cache and, when
 that is stale or absent and no refresh holds the lock, starts
 `dep_updates.py --refresh` detached. A stale cache's findings are still
 shown, dated, since last week's torch update is more use than nothing; an

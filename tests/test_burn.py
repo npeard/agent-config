@@ -453,8 +453,8 @@ class TestUntrustedNames:
 
     def test_ordinary_identifiers_pass_through_unharmed(self):
         assert burn.safe("claude-opus-5[1m]") == "claude-opus-5[1m]"
-        assert burn.safe("-Users-me-Documents-Projects-doqs") == (
-            "-Users-me-Documents-Projects-doqs"
+        assert burn.safe("-Users-me-Documents-Projects-myproject") == (
+            "-Users-me-Documents-Projects-myproject"
         )
 
     def test_output_is_bounded(self):
@@ -761,7 +761,7 @@ class TestSafeCommand:
         than truncates: cut from the front, three of the five rows in the
         first real run read as a `cd` and the conclusion drawn from them was
         wrong. Cut from the back, the command name goes instead."""
-        command = "cd /Users/someone/Documents/Projects/doqs && cat notes.md"
+        command = "cd /Users/someone/Documents/Projects/myproject && cat notes.md"
         got = burn.safe_command(command, 32)
         assert len(got) == 32
         assert got.startswith("cd /Users")

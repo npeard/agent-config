@@ -54,8 +54,8 @@ def tokenize(request):
     return MODULES[request.param].tokenize
 
 
-WINDOWS_PATH = r"C:\Users\npeard\Documents\Projects\agent-config\AGENTS.md"
-POSIX_PATH = "/home/npeard/Documents/Projects/agent-config/AGENTS.md"
+WINDOWS_PATH = r"C:\Users\me\Documents\Projects\agent-config\AGENTS.md"
+POSIX_PATH = "/home/me/Documents/Projects/agent-config/AGENTS.md"
 
 
 def test_native_windows_path_survives_as_one_token(tokenize):
@@ -116,7 +116,7 @@ def test_windows_path_survives_even_with_balanced_quotes(tokenize):
 def test_a_quoted_windows_path_containing_a_space_stays_one_token(tokenize):
     """The doubling is applied to runs that stop at whitespace, so a quoted
     path with a space in it is two runs. The quotes must still rejoin them."""
-    spaced = r"C:\Users\npeard\My Documents\CLAUDE.md"
+    spaced = r"C:\Users\me\My Documents\CLAUDE.md"
     assert tokenize(f'cat "{spaced}"') == ["cat", spaced]
 
 
