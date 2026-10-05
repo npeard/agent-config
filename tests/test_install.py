@@ -131,15 +131,17 @@ class TestEnvironmentAndHookRegistration:
             )
             if registrar is None:
                 return real_run(argv, **kwargs)
-            # Given --settings so it writes under the temp home; without it
-            # the default is the real ~/.claude/settings.json.
             order.append(registrar)
+            # install.py must pass --settings under --home itself; the
+            # registrars' default is the real home. Refuse rather than run,
+            # so a regression fails here instead of writing ~/.claude.
             settings = (
                 home / ".claude" / "settings.json"
                 if registrar == "claude-register"
                 else home / ".codex" / "hooks.json"
             )
-            return real_run([*argv, "--settings", str(settings)], **kwargs)
+            assert argv[-2:] == ["--settings", str(settings)], argv
+            return real_run(argv, **kwargs)
 
         monkeypatch.setattr(install, "materialize_env", fake_materialize)
         monkeypatch.setattr(install.subprocess, "run", run)

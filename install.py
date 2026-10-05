@@ -243,9 +243,15 @@ def main(argv=None) -> int:
         print("       registering hooks that cannot start.", file=sys.stderr)
         return 1
 
-    for registrar in ("register_hooks.py", "register_codex_hooks.py"):
+    # --settings is passed explicitly because each registrar defaults to the
+    # real home, which would make --home write hooks outside the home named.
+    registrars = (
+        ("register_hooks.py", args.home / ".claude" / "settings.json"),
+        ("register_codex_hooks.py", args.home / ".codex" / "hooks.json"),
+    )
+    for registrar, settings in registrars:
         result = subprocess.run(
-            [str(py), str(REPO / "scripts" / registrar)],
+            [str(py), str(REPO / "scripts" / registrar), "--settings", str(settings)],
             check=False,
         )
         if result.returncode != 0:
