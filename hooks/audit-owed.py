@@ -78,7 +78,7 @@ def master_repo() -> str:
 
     "~" is left to os.path.expanduser, which prefers USERPROFILE on Windows.
     Substituting HOME ahead of it was tried and reverted: Git Bash and MSYS2
-    routinely export HOME, sometimes in POSIX form ("/c/Users/npeard") or on
+    routinely export HOME, sometimes in POSIX form ("/c/Users/me") or on
     a domain-mapped drive that differs from USERPROFILE, and either makes
     master_repo() name a directory that does not exist -- so the hook
     silently never fires, the exact failure it is supposed to avoid.

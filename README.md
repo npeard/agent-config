@@ -55,10 +55,10 @@ registered for Claude Code; the guidance and skills work in Codex too.
   read as a writing task, so the first time in a session the agent is
   about to write a `.tex`, `.typ`, `.md` or similar prose file,
   `hooks/prose-writing.py` points it at `writing-orchestration`,
-  `scientific-writing` (papers, talks and thesis chapters) and `humanizer`
-  (removes AI-sounding prose). The `math` skill (where each equation
-  came from and what was checked) and the `typst` skill load on their
-  own when the task calls for them.
+  `scientific-writing` (papers, talks and thesis chapters) and
+  `humanizer` (removes AI-sounding prose). The `math` skill (where each
+  equation came from and what was checked) and the `typst` skill load on
+  their own when the task calls for them.
 - **Domain skills for research code.** `compute-job-safety` covers
   stopping and restarting long GPU and cluster jobs without orphaned
   processes or overwritten results. `notebooks` covers editing `.ipynb`
@@ -82,23 +82,25 @@ registered for Claude Code; the guidance and skills work in Codex too.
 
 ## Install
 
-macOS and Linux:
+Clone anywhere, then run the installer from the clone. macOS and Linux:
 
 ```
-git clone https://github.com/npeard/agent-config.git ~/Documents/Projects/agent-config
-~/Documents/Projects/agent-config/install.sh
+git clone https://github.com/npeard/agent-config.git
+agent-config/install.sh
 ```
 
 Windows (PowerShell):
 
 ```
-git clone https://github.com/npeard/agent-config.git ~/Documents/Projects/agent-config
-~\Documents\Projects\agent-config\install.ps1
+git clone https://github.com/npeard/agent-config.git
+agent-config\install.ps1
 ```
 
-**Clone to exactly that path.** `AGENTS.md`, two skills and three hooks
-refer to `~/Documents/Projects/agent-config` by name. A clone elsewhere
-installs without complaint, but those references then point at nothing.
+The installer links `~/.agents/agent-config` to your clone, and every
+hook, script and instruction that needs the repo finds it through that
+link, so the clone's own location never matters. Set `AGENT_CONFIG_REPO`
+to point them somewhere else instead. `pixi run preflight` reports a
+missing or stale link.
 
 To update later, `git pull` and re-run the installer.
 
@@ -112,8 +114,9 @@ Read this before installing over an existing setup:
   they are moved to `<file>.<timestamp>.bak`, and from then on they are
   no longer loaded. Fold anything you want to keep into your fork's
   `AGENTS.md`.
-- Each skill is linked into `~/.claude/skills/` and `~/.agents/skills/`.
-  Other skills already there are left alone.
+- Each skill is linked into `~/.claude/skills/` and `~/.agents/skills/`,
+  and the repo itself into `~/.agents/agent-config`. Other skills
+  already there are left alone.
 - Hooks are added to `~/.claude/settings.json` (backed up first) and
   `~/.codex/hooks.json`. Other settings are preserved. Codex hooks do
   not run until you review and trust each one through Codex `/hooks`.
@@ -193,7 +196,7 @@ It also reports dependency updates (`scripts/dep_updates.py`, cached per
 project for 24 h; `--offline` reads the cache only), VS Code extension
 drift against `vscode-extensions.toml`, and a branch whose upstream is a
 branch of another name -- the precondition for a VS Code Sync pushing
-onto a shared branch, which happened in doqs session 3d220b2c.
+onto a shared branch, which has happened.
 
 Hooks in `~/.claude/settings.json` must therefore name this repo's
 environment python explicitly, not `python3`. The installer writes that
@@ -494,9 +497,10 @@ and pricing remain separate and unchanged.
   `pixi run audit --clear-owed` is what ends it -- by stamping each
   obligation with the hash it was discharged against rather than
   deleting it, so an audit run too early re-opens by itself when the
-  asset next changes. `AGENT_CONFIG_REPO` overrides the install path for
-  a clone kept elsewhere (`CLAUDE_CONFIG_REPO` is still honored, so an
-  override predating the rename keeps working).
+  asset next changes. Like every hook, it finds the repo through
+  `AGENT_CONFIG_REPO`, then `CLAUDE_CONFIG_REPO` (honored so an override
+  predating the rename keeps working), then the installer's
+  `~/.agents/agent-config` link.
 - `hooks/agent-model.py` -- denies an `Agent` dispatch that omits
   `model` when the agent type is a catch-all (`general-purpose`,
   `claude`, or absent), because those inherit the session model and this

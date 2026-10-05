@@ -323,7 +323,7 @@ class TestWiring:
         self, fake_master, tmp_path, monkeypatch
     ):
         """Git Bash and MSYS2 export HOME, often in a form no Windows API can
-        open ("/c/Users/npeard") or on a domain-mapped drive that differs from
+        open ("/c/Users/me") or on a domain-mapped drive that differs from
         USERPROFILE. Preferring it over expanduser's own lookup made
         master_repo() name a nonexistent directory, and the hook silently
         never fired -- the exact failure its comment warns about. Whatever

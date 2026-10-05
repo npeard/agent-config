@@ -200,8 +200,8 @@ def check_upstream(report: Report) -> None:
     """Warn when the branch's upstream is a branch of another name.
 
     `git checkout -b X origin/Y` sets Y as X's upstream, and a VS Code Sync
-    (or a bare `git push`) then updates the shared branch Y: in doqs session
-    3d220b2c that put commits on draft-august in two repos. The name is read
+    (or a bare `git push`) then updates the shared branch Y: in one session
+    that put commits on a shared draft branch in two repos. The name is read
     from the merge ref rather than split off `@{u}`, which cannot tell a
     remote called `a/b` from a branch called `b/c`.
     """

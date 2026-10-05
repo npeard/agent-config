@@ -26,8 +26,8 @@ HOOK = Path(__file__).resolve().parent.parent / "hooks" / "prose-writing.py"
 # installed at ~/.agents/agent-config.
 PROJECTS = Path.home() / "Documents" / "Projects"
 MASTER = str(PROJECTS / "agent-config")
-THESIS = str(PROJECTS / "stanford-thesis")
-PAPER = str(PROJECTS / "dispersion-engineering")
+THESIS = str(PROJECTS / "thesis")
+PAPER = str(PROJECTS / "paper")
 
 
 def run_hook(payload: dict, state: Path) -> str:
@@ -187,7 +187,7 @@ class TestMasterRepoSelfGuard:
 def prose_project(tmp_path: Path) -> Path:
     """A git-rooted project with a chapter subdirectory.
 
-    Built here rather than pointed at ~/Documents/Projects/stanford-thesis,
+    Built here rather than pointed at a real thesis checkout,
     because "same project" means "same git root": against a real repo the
     grouping tests below pass on this machine and fail on one where that
     checkout does not exist, which is the fresh-machine install the README

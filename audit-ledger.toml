@@ -31,7 +31,7 @@ principle = 5
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "6431dfc56904fb37e8264db195d572e6be68415e674adb4ae1ff4401e031e033"
+asset_sha = "dbcab70ceadf213d766bfd28d9cca2c0519939e264665a56301f87c351b2d828"
 note = """
 The one genuine untrusted-content path in the repo: 400 characters of raw
 session transcript printed into agent context. Fixed rather than accepted --
@@ -231,7 +231,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "3962e8c32efe82dbb9aafc265d1cbd3b51fa8a00aa195eca6e175c47f1ae464e"
+asset_sha = "c884cb49103e768d9b3396591804aa6927d3cf4dae1e479435e2a0830bb5af26"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -287,7 +287,7 @@ principle = 5
 date = "2026-08-27"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "4d837d632d56ba1047efad9adcad30e237494bd95b897220b42594f48024e071"
+asset_sha = "894852f9130ea41e45f83bff10c9887a6a1b6c685912d9081e6ddc692eabba51"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -524,7 +524,7 @@ principle = 4
 date = "2026-09-08"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "8e7062ac227a50f580b3485204e033be1e6a58e54b12099422b1574081dfd6c1"
+asset_sha = "3e97831bd79acc7c05ab452c712cefc238ec7ecb17d1957c0f57e880079b8a92"
 note = """
 This module is an import-only contract shared by install.py and preflight.py:
 it defines canonical guidance, generated adapter formats and destination
@@ -619,7 +619,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "6fe65350cefd7e9804cdb9e3e924e64191e017815dc2c52b31cc7518f8cc1ddb"
+asset_sha = "ff5f87e2c42dfe8dfa5690ef2f958a141a10bc9860e44f0fae223b45f249e350"
 note = """
 Reads PyPI JSON, `pixi search`, `pixi list` and the solver's stderr. It prints
 a summary that the SessionStart hook will carry into agent context in every
@@ -670,7 +670,7 @@ principle = 5
 date = "2026-09-23"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "6a26df5420ef02e38ff0554e732aaaa4e499502eb349c312d23a04c4e262bdf6"
+asset_sha = "9fdfa9fe775398e85790f69a4b6416b8c1d14eca1b49f2d13b28d71170c3cd9f"
 note = """
 Emits into SessionStart context in every project, so the check is right to
 flag it. The only subprocess it starts itself is the detached refresh, whose

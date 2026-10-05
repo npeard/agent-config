@@ -69,7 +69,7 @@ class TestDetailLines:
 
 class TestUpstream:
     """A branch whose upstream is a shared branch let a VS Code Sync push
-    commits onto draft-august in two repos (doqs session 3d220b2c)."""
+    commits onto a shared draft branch in two repos."""
 
     @pytest.fixture
     def cloned(self, git_repo: Path, tmp_path: Path, monkeypatch) -> Path:
@@ -77,8 +77,8 @@ class TestUpstream:
         run_git(tmp_path, "init", "-q", "--bare", str(remote))
         run_git(git_repo, "remote", "add", "origin", str(remote))
         run_git(git_repo, "push", "-q", "origin", "main")
-        run_git(git_repo, "branch", "-q", "draft-august")
-        run_git(git_repo, "push", "-q", "origin", "draft-august")
+        run_git(git_repo, "branch", "-q", "shared-draft")
+        run_git(git_repo, "push", "-q", "origin", "shared-draft")
         monkeypatch.chdir(git_repo)
         return git_repo
 
@@ -93,10 +93,10 @@ class TestUpstream:
         assert self.upstream()[0] == [OK]
 
     def test_a_different_name_warns(self, cloned: Path):
-        run_git(cloned, "checkout", "-q", "-b", "obc-direct", "origin/draft-august")
+        run_git(cloned, "checkout", "-q", "-b", "my-feature", "origin/shared-draft")
         status, detail = self.upstream()
         assert status == [WARN]
-        assert "upstream is origin/draft-august" in detail
+        assert "upstream is origin/shared-draft" in detail
         assert "git branch --unset-upstream" in detail
         assert "git push -u origin HEAD" in detail
 
