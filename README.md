@@ -1,41 +1,143 @@
 # agent-config
 
-Personal, cross-project agent configuration: canonical `AGENTS.md` of
-operational preferences (workflow habits, verification philosophy,
-design taste) and personal `skills/`, shared across every project via
-links into each supported host's skill location.
+Cross-project configuration for coding agents (Claude Code and Codex):
+one canonical `AGENTS.md` of working habits, a set of `skills/` that
+agents load on demand, and `hooks/` that enforce what prose alone kept
+failing to. An installer links all of it into each host's config
+directories, so every project on the machine shares it.
+
+It is tuned for research work -- Python projects under Pixi, numerical
+and GPU jobs, notebooks, and papers and thesis chapters in LaTeX or
+Typst -- which is why the skills cover scientific writing and equations
+alongside code review.
 
 Project-local instruction files stay in their own repos and add only
-what's local to that project (build commands, architecture, domain
-conventions) -- they should not repeat what's here.
+what is local to that project (build commands, architecture, domain
+conventions); they should not repeat what is here.
 
-## Install (new machine)
+## Philosophy
+
+The design follows from a few convictions. They are stated in full in
+`AGENTS.md`; this is the short version, so the rest of the repo makes
+sense.
+
+- **Context is a cost, so the config is budgeted like code.** Every line
+  of always-loaded guidance is re-read on every turn of every session.
+  `AGENTS.md` therefore stays short and names rules rather than
+  restating them; the detail lives in skills, which load only when a
+  task calls for them. `pixi run audit` enforces ceilings on
+  always-loaded text, and a test fails when one is crossed.
+- **Prefer the cheapest mechanism that works.** When an agent keeps
+  making the same mistake, the fix is chosen from a ladder: do nothing,
+  then a hook, then a script, then a skill, and only last a new rule in
+  `AGENTS.md`. A hook acts whether or not the agent remembers it, which
+  a rule cannot. Most hooks here replaced a rule that was being ignored.
+- **Measure friction instead of noticing it.** `pixi run friction` and
+  `pixi run burn` read the agent's own session transcripts off disk to
+  find recurring failures and where tokens actually went. Decisions
+  about each finding are recorded in `friction-ledger.toml`, so a
+  settled question is not reopened unless the evidence doubles.
+- **One workflow, with gates in two places.** Non-trivial tasks follow a
+  single spine -- understand, specify, isolate, implement, verify,
+  review, integrate -- built on the
+  [superpowers](https://github.com/obra/superpowers) skills. The agent
+  stops for you at the finished spec and at the final report and acts on
+  its own in between. Prose deliverables (papers, chapters, talks) use
+  the same spine with the substitutions in `writing-orchestration`,
+  because a reader rather than a test judges whether prose is correct.
+- **Evidence before claims.** An agent runs the command and reads the
+  output before reporting success. It does not claim a speedup from
+  profiler percentages alone, and it does not report a tool missing
+  without saying which check it ran.
+- **One source, many hosts.** `AGENTS.md` and the skills are written
+  once. Each host gets an adapter generated from them (see
+  `docs/PORTABILITY.md`), so Claude Code and Codex cannot drift apart.
+
+## Prerequisites
+
+- [Pixi](https://pixi.sh) on `PATH`. Everything else, including Python,
+  comes from the repo's own Pixi environment.
+- [Claude Code](https://claude.com/claude-code) and/or Codex.
+- The **superpowers** plugin. `AGENTS.md` names its skills
+  (`superpowers:brainstorming`, `superpowers:writing-plans`, ...) at
+  every workflow step, and nothing here installs it. In Claude Code:
+  `/plugin install superpowers@claude-plugins-official`. The
+  `code-review` plugin from the same marketplace is recommended for the
+  review step.
+
+## Install
 
 macOS and Linux:
 
 ```
-git clone <remote-url> ~/Documents/Projects/agent-config
+git clone https://github.com/npeard/agent-config.git ~/Documents/Projects/agent-config
 ~/Documents/Projects/agent-config/install.sh
 ```
 
 Windows (PowerShell):
 
 ```
-git clone <remote-url> ~/Documents/Projects/agent-config
+git clone https://github.com/npeard/agent-config.git ~/Documents/Projects/agent-config
 ~\Documents\Projects\agent-config\install.ps1
 ```
 
-Both are thin shims over `install.py`; run that directly with
-`pixi run -e dev python install.py` if you prefer. One command,
+**Clone to exactly that path.** `AGENTS.md`, two skills and three hooks
+refer to `~/Documents/Projects/agent-config` by name. A clone elsewhere
+installs without complaint, but those references then point at nothing.
+
+To update later, `git pull` and re-run the installer.
+
+### What the installer changes on your machine
+
+Read this before installing over an existing setup:
+
+- `~/.claude/CLAUDE.md` is replaced by a one-line `@import` of this
+  repo's `AGENTS.md`, and `~/.codex/AGENTS.md` by a generated copy of
+  it. If you already have your own global instructions in either file,
+  they are moved to `<file>.<timestamp>.bak`, and from then on they are
+  no longer loaded. Fold anything you want to keep into your fork's
+  `AGENTS.md`.
+- Each skill is linked into `~/.claude/skills/` and `~/.agents/skills/`.
+  Other skills already there are left alone.
+- Hooks are added to `~/.claude/settings.json` (backed up first) and
+  `~/.codex/hooks.json`. Other settings are preserved. Codex hooks do
+  not run until you review and trust each one through Codex `/hooks`.
+
+To see the result without touching your real config, run
+`pixi run -e dev python install.py --home /tmp/trial-home --skip-env`
+and inspect `/tmp/trial-home`.
+
+### Making it your own
+
+This config encodes one person's preferences, so fork it rather than
+installing the upstream copy unchanged. These are the parts most likely
+to need changing:
+
+- `AGENTS.md` -- the always-loaded guidance, including when the agent is
+  allowed to stop and ask you.
+- `vscode-extensions.toml` -- one machine's required and forbidden VS
+  Code extensions. `preflight` reports drift against it at every session
+  start, so edit it or empty it.
+- `hooks/agent-model.py` -- refuses a catch-all subagent dispatch that
+  does not name a model, to keep subagents from defaulting to the most
+  expensive model.
+- `hooks/notify.py` -- plays a sound and posts a desktop notification
+  when a turn finishes. `CLAUDE_NOTIFY_OFF=1` mutes it.
+
+The rest of this README is maintainer documentation: what each command
+and file is for, and why it exists.
+
+## Install details
+
+Both install scripts are thin shims over `install.py`; run that directly
+with `pixi run -e dev python install.py` if you prefer. One command,
 deliberately: the installer writes the Claude and Codex instruction
 adapters, links skills for both hosts, materializes the dev environment,
 and registers Claude Code and Codex lifecycle hooks *in that order*.
 Registered hooks name the dev environment's python in their command, so
 registering before the environment exists writes hooks that cannot
-start. The Codex registrar configures `~/.codex/hooks.json`; after
-installation, review each entry and explicitly trust it through Codex
-`/hooks`. Configuration is not trust, so `pixi run preflight` reports
-them separately. Requires `pixi` on PATH.
+start. Configuration is not trust, so `pixi run preflight` reports
+configured and trusted Codex hooks separately.
 
 No elevation and no Developer Mode is required on Windows. Skills are
 linked with directory junctions rather than symlinks, since a junction
