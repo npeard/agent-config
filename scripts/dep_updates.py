@@ -2,8 +2,8 @@
 """Report dependency updates a pixi project could take, from either source.
 
 An agent asked whether a newer torch existed queried only conda-forge, the
-source doqs locks it from, and said no, while PyPI had torch 2.14.0 with a
-wheel for this machine (doqs session e0f19169). ``pixi upgrade`` would not
+source the project locks it from, and said no, while PyPI had torch 2.14.0 with a
+wheel for this machine (one research project). ``pixi upgrade`` would not
 have caught it either: it looks in each package's declared source by design.
 So there are two halves, and pixi owns one of them.
 
@@ -23,7 +23,7 @@ So there are two halves, and pixi owns one of them.
 
 Results are cached per project in ``.pixi/agent-drift/deps.json`` for 24 h,
 and invalidated early when the lock or manifest changes. A cold check costs
-~25 s on doqs, so the SessionStart hook only reads the cache (``cached``)
+~25 s on a research project, so the SessionStart hook only reads the cache (``cached``)
 and, when it is stale, starts ``--refresh`` detached. That refresh holds a
 pid lock next to the cache, so a second one refuses while the first is
 alive, and it kills its own pixi children if it is interrupted. ``--ack``
@@ -91,7 +91,7 @@ RETRY_SECONDS = 3600
 MAPPING_SECONDS = 7 * 24 * 3600
 REQUEST_SECONDS = 5.0
 # The CLI is also the detached refresh the SessionStart hook starts, which
-# nobody waits on, so the budget is generous. A cold run on doqs needs
+# nobody waits on, so the budget is generous. A cold run on a research project needs
 # ~25 s, most of it `pixi list` (see _locked).
 CLI_BUDGET_SECONDS = 120.0
 # A lock older than this is stale whatever its pid says: the pid may have
@@ -388,7 +388,7 @@ def _locked(pool, run: Run, info: dict, platform: str, deadline: float):
     because the platform ``name`` carries any virtual-package suffix
     (``win-64-cuda-13-0``). They are listed in parallel because ``pixi
     list`` is slow on a project with an editable path dependency (~21 s per
-    env on doqs, against 0.2 s without one). One env failing does not
+    env on one project, against 0.2 s without one). One env failing does not
     discard the others.
     """
     jobs = [
@@ -768,7 +768,7 @@ def cached(root: Path, *, now: float) -> DepReport | None:
     """The fresh cached report, or None when a refresh is due.
 
     Never computes: the SessionStart hook cannot wait on the network or on
-    ``pixi list`` (~21 s per env on doqs), so it reads this (through
+    ``pixi list`` (~21 s per env on one project), so it reads this (through
     cache_view) and starts a detached ``--refresh`` when it is None.
     ``preflight --offline`` reads it for the same reason.
     """

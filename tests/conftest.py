@@ -30,7 +30,7 @@ def dep_report(dep_updates, **changes):
 
 
 def torch_finding(dep_updates):
-    """The doqs finding that motivated the check: conda torch, newer on PyPI."""
+    """The myproject finding that motivated the check: conda torch, newer on PyPI."""
     return dep_updates.Finding(
         name="pytorch-gpu",
         pypi_name="torch",

@@ -27,8 +27,8 @@ import pytest
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "spec-retraction-check.py"
 
-SPEC = "/home/u/Documents/smi/docs/superpowers/report-revision-spec.md"
-NOT_A_SPEC = "/home/u/Documents/smi/report/baseline.typ"
+SPEC = "/home/u/Documents/project/docs/superpowers/report-revision-spec.md"
+NOT_A_SPEC = "/home/u/Documents/project/report/baseline.typ"
 
 
 def run_hook(payload: dict, state: Path) -> str:
@@ -50,7 +50,7 @@ def run_hook(payload: dict, state: Path) -> str:
 def write_payload(path: str, content: str, session: str = "s1") -> dict:
     return {
         "session_id": session,
-        "cwd": "/home/u/Documents/smi",
+        "cwd": "/home/u/Documents/project",
         "tool_input": {"file_path": path, "content": content},
     }
 
@@ -129,7 +129,7 @@ class TestDoesNotFireOnBackgroundOrNonSpecs:
         assert not fired(write_payload(SPEC, text), tmp_path)
 
     def test_non_markdown_in_the_spec_dir_does_not_fire(self, tmp_path: Path):
-        path = "/home/u/Documents/smi/docs/superpowers/notes.txt"
+        path = "/home/u/Documents/project/docs/superpowers/notes.txt"
         assert not fired(write_payload(path, "claims to retract"), tmp_path)
 
 
@@ -168,7 +168,7 @@ class TestEditsAndSessionGuard:
         """
         payload = {
             "session_id": "s1",
-            "cwd": "/home/u/Documents/smi",
+            "cwd": "/home/u/Documents/project",
             "tool_input": {
                 "file_path": SPEC,
                 "old_string": "a",

@@ -254,7 +254,7 @@ outcome = "tier-0"
 count_at_decision = 9
 note = """
 Re-decided after the count more than doubled (4 -> 9, 5 sessions), all in one
-project (a physics-research repo, `doqs`). Read all nine rather than
+project (a physics-research repo). Read all nine rather than
 re-stamping the prior note, because the shape underneath had shifted.
 
 Seven of nine are AskUserQuestion calls rejected with "user wants to
@@ -511,8 +511,8 @@ authoring: nothing here touches scripting, bibliographies, cross-references
 or complex tables, so a skill written now would overclaim its scope and
 then mislead whoever reads its description.
 
-Tier 0 for now. The knowledge is not lost: it lives as comments in the smi
-project's report directory -- its Snakefile, its Typst theme module, and its
+Tier 0 for now. The knowledge is not lost: it lives as comments in project A's
+report directory -- its Snakefile, its Typst theme module, and its
 slide-page checker under that project's own scripts directory -- which is
 working code a second project can copy from, a better starting point than
 prose describing it. Build the asset when a second Typst project shows which
@@ -534,9 +534,9 @@ outcome = "tier-2"
 note = """
 The workflow-orchestration spine opens with `pixi run preflight` and closes
 with `pixi run friction` / `pixi run toolgaps`. None of the three exists as a
-task in the smi project, so step 0 and step 7 both failed with "command not
+task in project A, so step 0 and step 7 both failed with "command not
 found" and fell back to running the equivalents by hand. The scripts are here
-in agent-config and are tested; smi simply never adopted them.
+in agent-config and are tested; project A simply never adopted them.
 
 Cause 2, not cause 1: nothing is missing from the ecosystem, it is an
 installation gap in one project. The skill's own text anticipates this ("If
@@ -700,16 +700,16 @@ outcome = "tier-3"
 note = """
 Reopening the 2026-09-11 typst-build-integration-knowledge decision, whose
 stated condition was "build the asset when a second Typst project shows
-which parts actually generalize". Triple-correlation is that second project,
+which parts actually generalize". Project B is that second project,
 so the condition was met and the question was asked again.
 
 Tier 3, skills/typst -- reversing a tier-0 call made earlier the same day
 and recorded here before it was checked.
 
-That call rested on a baseline against smi, which has no bibliography, no
+That call rested on a baseline against project A, which has no bibliography, no
 chevron/vv/bra-ket helpers, no supplement suppression, and pattern-string
 numbering at a single level. It could not have reproduced the frictions it
-was read as evidence against; all of them live in triple-correlation. The
+was read as evidence against; all of them live in project B. The
 re-run there hit a real one immediately -- a sub-equation pair rendering
 (S51)/(S51b) instead of (S51a)/(S51b), invisible at exit 0.
 
@@ -724,8 +724,8 @@ Replaced with the asymmetry that matters -- Typst exits 0 on an unresolved
 citation and on page overflow -- so a Typst project needs a build gate and
 "it compiled" is not evidence.
 
-Still open, and not this repo's work: smi/report and
-triple-correlation/report are near-verbatim duplicates -- identical Snakefile
+Still open, and not this repo's work: project A's report and
+project B's report are near-verbatim duplicates -- identical Snakefile
 header comment, identical theme palette and font stacks, a word-for-word
 identical comment above their figpath helpers, identical pixi task tables.
 That is rule 12 in those projects' own infrastructure, and the refactor
@@ -819,7 +819,7 @@ date = "2026-09-15"
 cause = "rule-not-enforced"
 outcome = "tier-4"
 note = """
-smi/report/slides.typ carries a whole slide titled "Retraction: the model was
+Project A's report/slides.typ carries a whole slide titled "Retraction: the model was
 not the problem, the fit was", and baseline.typ carries the same framing in
 four more places. A reader of that deck never held the 9-38% claim, so the
 slide spends a unit of attention teaching a wrong thing and then unteaching
@@ -830,7 +830,7 @@ superseded belief. Landed as CODING_STANDARDS rule 11, with an AGENTS.md
 trigger.
 
 The reason it needed a second home is the diagnosis: the spec *ordered* it.
-smi's michelson-units-audit-spec.md has a section headed "Specific claims to
+Project A's michelson-units-audit-spec.md has a section headed "Specific claims to
 retract or rewrite", so the agent was following its brief correctly. The
 orchestrator-facing half is in writing-orchestration -- specify "replace
 claim X with Y", never "add a retraction of X" -- because the brief is what
@@ -844,12 +844,12 @@ date = "2026-09-15"
 cause = "rule-not-enforced"
 outcome = "tier-4"
 note = """
-smi/smi/analysis/baseline_fit.py solves one least-squares problem three ways
+Project A's analysis/baseline_fit.py solves one least-squares problem three ways
 -- lstsq on the design matrix, lstsq per window, and batched normal equations
 -- and line 468 comments "Same (a, b) -> phase convention as
 fit_phase_amplitude". A comment that a convention must match across
 implementations is a request for a human to do a compiler's job, and it is
-what silently breaks when one side changes. doqs also has _analytic_tau_k
+what silently breaks when one side changes. Project C also has _analytic_tau_k
 byte-duplicated across two modules.
 
 Tier 4 as CODING_STANDARDS rule 12, sharpening the existing "Duplicated Code"
@@ -896,9 +896,9 @@ NOTES.md reported that code comments explain why a previous method was
 discarded rather than why the current one is right. Partly confirmed and not
 worth an artifact.
 
-Real instances exist -- triple-correlation/plots/PaperFigures.py has a
+Real instances exist -- Project B's plots/PaperFigures.py has a
 function body replaced by a note about retrieving code from a previous
-commit, and doqs has a systemic dialect of six-plus sites explaining
+commit, and project C has a systemic dialect of six-plus sites explaining
 themselves by reference to "the period the Floqtimizer constructor used to
 apply implicitly". But the majority of past-tense comments surveyed are
 legitimate bounds or justify a present abstraction, and several are
@@ -906,7 +906,7 @@ exemplary "why not the obvious alternative" writing.
 
 AGENTS.md and CODING_STANDARDS rule 8 already say comments record the why.
 Restating it louder changes nothing -- this skill's own red flag. Rule 11
-covers the durable-artifact half, which is the part with damage. The doqs
+covers the durable-artifact half, which is the part with damage. The project C
 dialect is project-local and belongs in that repo's instructions.
 """
 
@@ -928,9 +928,9 @@ task reports are long because they enumerate verifications, which is the
 point of the artifact.
 
 What the evidence does show is a different target: agent-authored repo
-meta-documentation. dispersion-engineering's CLAUDE.md is 347 lines and its
+meta-documentation. One paper repo's CLAUDE.md is 347 lines and its
 README 344, for a repo whose source is one 776-line .tex plus three checker
-scripts. doqs carries four top-level READMEs plus a CLAUDE.md.
+scripts. Project C carries four top-level READMEs plus a CLAUDE.md.
 
 Tier 0. A doc-size check is a candidate but it is a different claim about a
 different artifact, and inventing a chat-style rule from an unsupported
@@ -954,9 +954,9 @@ registered in no config file -- so the searched place could never have
 contained it.
 
 Second: a Typst baseline passed and was read as "these frictions no longer
-reproduce". It ran against smi, which has no bibliography, no bra-ket
+reproduce". It ran against project A, which has no bibliography, no bra-ket
 notation and no prefixed multi-level numbering. The re-run on
-triple-correlation, which has all three, hit a silent failure immediately.
+project B, which has all three, hit a silent failure immediately.
 
 Split diagnosis rather than one cause, because the fixes differ.
 
@@ -1015,7 +1015,7 @@ date = "2026-09-15"
 cause = "underspecified-task"
 outcome = "tier-0"
 note = """
-Twice on the triple-correlation infra branch, a commit swept in a concurrent
+Twice on project B's infra branch, a commit swept in a concurrent
 subagent's uncommitted work: once mine (`git add pyproject.toml` while a
 Phase 3 agent was editing it, landing its report-feature tables in a commit
 whose message described only lint-ignore scoping), once a subagent's, which
@@ -1053,7 +1053,7 @@ date = "2026-09-15"
 cause = "working-as-designed"
 outcome = "tier-0"
 note = """
-Bumping triple-correlation from Python 3.12 to 3.14 left the environment with
+Bumping project B from Python 3.12 to 3.14 left the environment with
 a 3.14 conda interpreter and cp312-tagged PyPI extension modules: `pixi
 install` swapped the interpreter and reused the ABI-tagged wheel cache.
 numpy then failed to import. Fix was deleting .pixi/envs/<env> and
@@ -1066,7 +1066,7 @@ nothing was silently wrong. And it is one incident on one bump; a Python
 major bump is rare enough that a standing rule in AGENTS.md would be read
 hundreds of times per use.
 
-Recorded where it will actually be read instead: triple-correlation's
+Recorded where it will actually be read instead: project B's
 CLAUDE.md environment-constraints section, beside the numba-sets-the-ceiling
 note, since that is what the next person bumping Python in that repo opens.
 Reopen as a general rule if a second project hits it, which would make it a
@@ -1139,7 +1139,7 @@ landed; confirm on disk). Adding a separate artifact for the insert-specific
 case would duplicate that intent with a version-scoped detail likely to be
 fixed upstream.
 
-Recorded in doqs's TASKS.md, where whoever next edits those notebooks will
+Recorded in project C's TASKS.md, where whoever next edits those notebooks will
 read it, and noted in the skill entry above as the concrete instance of the
 general rule. Reopen if a second server shows the same shape, which would
 make it a property of the MCP notebook ecosystem rather than one release.
@@ -1207,7 +1207,7 @@ It is not the whole story any more, so this is not a re-stamp.
 The prior batch was AskUserQuestion menus about how to scope an N-hour sweep,
 rejected because a fixed option set drafted before the user's context could
 not contain the real answer. This session (a four-item post-merge cleanup in
-`doqs`) contributed two rejections of a different shape: a batch of tool calls
+a research project) contributed two rejections of a different shape: a batch of tool calls
 was interrupted so the user could redirect the task's premise. The model had
 asserted "there is no torch 2.14" after checking only conda-forge -- the
 project's channel -- and started building on that. The user knew 2.14 existed
@@ -1256,7 +1256,7 @@ date = "2026-09-23"
 cause = "rule-not-enforced"
 outcome = "tier-2"
 note = """
-doqs session e0f19169 said there was "no torch 2.14 ... anywhere on
+One session said there was "no torch 2.14 ... anywhere on
 conda-forge win-64". That was true, but torch 2.14.0 was on PyPI with a
 win_amd64 cp313 wheel, and the user had to correct it. AGENTS.md already
 said "one registry is not the world"; the rule existed and was not
@@ -1300,7 +1300,7 @@ date = "2026-09-23"
 cause = "agent-config-gap"
 outcome = "tier-2"
 note = """
-doqs session 3d220b2c ran `git checkout -b obc-direct-rkky-cos
+One session ran `git checkout -b obc-direct-rkky-cos
 origin/draft-august`, which makes the shared branch the new branch's
 upstream. Commits then reached draft-august on GitHub in two repos. The
 agent never ran `git push` before the user reported it, so the push is
@@ -1321,7 +1321,7 @@ date = "2026-09-23"
 cause = "rule-not-enforced"
 outcome = "tier-1"
 note = """
-claude-config session f9af2b87 (2026-09-15) wrote a bare backslash into a
+A claude-config session (2026-09-15) wrote a bare backslash into a
 triple-quoted note. That is an illegal TOML escape, and it broke the next
 `pixi run friction`. Four calls went to repairing it, two of them sed
 quoting failures. `check-toml` from the existing pre-commit-hooks repo now
@@ -1369,7 +1369,7 @@ date = "2026-09-23"
 cause = "harness-constraint"
 outcome = "tier-0"
 note = """
-smi session b477324b, twice. The agent viewed a file with `sed -n` (which
+One session, twice. The agent viewed a file with `sed -n` (which
 the auto-mode prompt encourages), then Edit refused: "File has not been
 read yet". Each cost one Read. The refusal happens at the point of use and
 names the fix.
@@ -1383,7 +1383,7 @@ cause = "working-as-designed"
 outcome = "tier-0"
 note = """
 The agent-model hook blocked Agent dispatches that omitted `model` three
-times in doqs sessions e0f19169 and 1619c6cc. Each was one round trip,
+times in two sessions. Each was one round trip,
 corrected at once. This is the hook doing its job.
 """
 

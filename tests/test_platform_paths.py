@@ -62,7 +62,7 @@ class TestInterpreter:
 class TestVscodeUserDir:
     def test_windows_layout(self, monkeypatch):
         monkeypatch.setattr(platform_paths, "WINDOWS", True)
-        home = Path("/Users/nolan")
+        home = Path("/Users/me")
         assert platform_paths.vscode_user_dir(home) == (
             home / "AppData" / "Roaming" / "Code" / "User"
         )
@@ -70,7 +70,7 @@ class TestVscodeUserDir:
     def test_macos_layout(self, monkeypatch):
         monkeypatch.setattr(platform_paths, "WINDOWS", False)
         monkeypatch.setattr(platform_paths.sys, "platform", "darwin")
-        home = Path("/Users/nolan")
+        home = Path("/Users/me")
         assert platform_paths.vscode_user_dir(home) == (
             home / "Library" / "Application Support" / "Code" / "User"
         )
@@ -78,7 +78,7 @@ class TestVscodeUserDir:
     def test_linux_layout(self, monkeypatch):
         monkeypatch.setattr(platform_paths, "WINDOWS", False)
         monkeypatch.setattr(platform_paths.sys, "platform", "linux")
-        home = Path("/home/nolan")
+        home = Path("/home/me")
         assert platform_paths.vscode_user_dir(home) == (
             home / ".config" / "Code" / "User"
         )

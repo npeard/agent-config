@@ -2,7 +2,7 @@
 
 Every external call goes through the fake below, so no test touches the
 network or the real pixi. The fixtures under ``fixtures/dep_updates`` are
-trimmed from live doqs captures (2026-09-23), so the JSON shapes are pixi's
+trimmed from live myproject captures (2026-09-23), so the JSON shapes are pixi's
 and PyPI's real ones rather than shapes this module's author imagined.
 """
 
@@ -171,7 +171,7 @@ class TestDoqsShape:
         check(project, fake)
         queried = {PYPI.fullmatch(u)[1] for u in fake.fetches if PYPI.fullmatch(u)}
         assert "torch" in queried
-        assert not queried & {"cuda-version", "python", "pytorch-gpu", "doqs"}
+        assert not queried & {"cuda-version", "python", "pytorch-gpu", "myproject"}
 
     def test_render_matches_the_spec_text(self, project, fake):
         summary, lines = dep_updates.render(check(project, fake), project)
@@ -622,7 +622,7 @@ class TestCache:
     def test_locked_packages_are_reused_while_the_lock_is_unchanged(
         self, project, fake
     ):
-        # `pixi list` takes ~21 s per env on doqs, and its answer is a pure
+        # `pixi list` takes ~21 s per env on myproject, and its answer is a pure
         # function of the lock and manifest, so an expired cache reuses it.
         check(project, fake)
         before = self.lists_run(fake)
