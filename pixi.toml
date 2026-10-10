@@ -23,6 +23,7 @@ dev = { features = ["dev"], solve-group = "default" }
 [tasks]
 ascii = "python scripts/check_ascii.py"
 prose-metrics = "python scripts/prose_metrics.py"
+forward-refs = "python scripts/check_forward_refs.py"
 preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"
 burn = "python scripts/burn.py"

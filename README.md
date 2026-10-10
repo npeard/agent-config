@@ -56,9 +56,9 @@ registered for Claude Code; the guidance and skills work in Codex too.
   about to write a `.tex`, `.typ`, `.md` or similar prose file,
   `hooks/prose-writing.py` points it at `writing-orchestration`,
   `scientific-writing` (papers, talks and thesis chapters) and
-  `humanizer` (removes AI-sounding prose). The `math` skill (where each
-  equation came from and what was checked) and the `typst` skill load on
-  their own when the task calls for them.
+  `humanizer` (removes AI-sounding prose). The `math` skill (what can be
+  checked about an equation, and each step's warrant) and the `typst`
+  skill load on their own when the task calls for them.
 - **Domain skills for research code.** `compute-job-safety` covers
   stopping and restarting long GPU and cluster jobs without orphaned
   processes or overwritten results. `notebooks` covers editing `.ipynb`
@@ -270,9 +270,9 @@ and pricing remain separate and unchanged.
   find the notebook MCP server that no config file lists, and why a
   measured result belongs in cell output rather than markdown prose. The
   baseline that motivated it cost 823 tool calls for one notebook.
-- `skills/math/` -- state each equation's provenance unprompted, know
-  what a CAS can and cannot verify about it, and derive once rather than
-  twice at two rigour levels.
+- `skills/math/` -- what a computer can and cannot verify about an
+  equation, the warrant each step needs, and deriving once -- deferred
+  to an appendix or where the result is used -- rather than twice.
 - `skills/typst/` -- the Typst traps that compile at exit 0 and render
   wrong: numbering patterns that break references, silent overflow,
   `vec` where an arrow was meant, subequations. Split loud failures
@@ -446,6 +446,11 @@ and pricing remain separate and unchanged.
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
+- `hooks/prose-feedback.py` -- after every edit to a `.tex` or `.typ`
+  file, reports forward references (blocking feedback) and
+  sentence-length metrics against the session's first measurement,
+  because advice to keep sentences short loses to the habit of writing
+  long ones and a number does not.
 - `hooks/spec-retraction-check.py` -- fires when a *spec* is written
   with retraction-shaped instructions in it ("claims to retract", "what
   the earlier draft claimed"). `AGENTS.md` and `writing-orchestration`
@@ -567,7 +572,10 @@ and pricing remain separate and unchanged.
   exemption is documented rather than silent. `prose_metrics.py` reports
   paragraph, sentence, caption and section sizes for a LaTeX, Typst or
   Markdown file, so prose density is measured rather than judged by eye;
-  it is a report, not a gate.
+  it is a report, not a gate. `check_forward_refs.py` is the gate: it
+  fails when a LaTeX or Typst document cites a label defined later in
+  reading order (appendices and floats excepted), because a reader
+  cannot yet follow a pointer to text they have not read.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

@@ -22,6 +22,7 @@ def repo(tmp_path: Path) -> Path:
         "environment-drift.py",
         "prose-writing.py",
         "promotion-check.py",
+        "prose-feedback.py",
         "audit-owed.py",
         "notify.py",
     ):
@@ -39,6 +40,7 @@ def test_declared_hooks_are_the_supported_static_mapping(registrar, repo: Path):
         ("environment-drift.py", "SessionStart", None),
         ("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
         ("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
+        ("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),
         ("audit-owed.py", "PostToolUse", "Bash"),
         ("notify.py", "Stop", None),
     ]

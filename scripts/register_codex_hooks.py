@@ -43,6 +43,7 @@ CODEX_HOOKS = (
     HookSpec("environment-drift.py", "SessionStart", None),
     HookSpec("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
     HookSpec("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
+    HookSpec("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),
     HookSpec("audit-owed.py", "PostToolUse", "Bash"),
     HookSpec("notify.py", "Stop", None),
 )

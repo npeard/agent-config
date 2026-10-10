@@ -5,8 +5,11 @@ Usage:
     python scripts/prose_metrics.py FILE [--json]
 
 Reports paragraph and sentence budgets, caption lengths, numeric literals
-shared between captions and body text, and words per section. It is a
-report, not a gate: the exit code is 0 whenever the file parses.
+shared between captions and body text, words and sentences per section, the
+distribution of words per sentence (median, 90th percentile, share over
+``LONG_SENTENCE_WORDS``), the chained-clause rate, and the five longest
+sentences with their source line numbers. It is a report, not a gate: the
+exit code is 0 whenever the file parses.
 
 Deliberately crude, so the numbers are reproducible rather than correct:
 
@@ -21,6 +24,15 @@ Deliberately crude, so the numbers are reproducible rather than correct:
   does not split.
 - A word is a whitespace-separated token with a letter or digit, after
   commands are dropped and their text arguments kept. Inline math is one word.
+- A sentence is chained when, outside inline math and references, it holds
+  ``;``, a lowercase word followed by ``: ``, or a dash (``---``, an em dash,
+  or `` -- `` with spaces). A colon after a capitalised word ("Note: ...")
+  or a bare ``--`` range does not count.
+- The 90th percentile is nearest-rank, so it is always a sentence's own length.
+- A sentence's line is found by searching the source, from the previous
+  sentence onward, for its first few words. A sentence whose opening is split
+  by a comment, or rewritten by dropped math, falls back to the previous
+  sentence's line.
 - Numeric literals inside \\ref, \\label, \\cite or \\eqref arguments (and
   Typst ``@label`` references) are ignored, as are bare single digits 0-9:
   those are too common to signal that a caption repeats the body.
@@ -30,14 +42,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import statistics
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 PARAGRAPH_BUDGET_WORDS = 120
 SENTENCE_BUDGET = 5
+LONG_SENTENCE_WORDS = 30
+LONGEST_SHOWN = 5
 
 LATEX, TYPST, MARKDOWN = ".tex", ".typ", ".md"
 
@@ -49,6 +65,8 @@ LATEX_REFS = re.compile(
     r"\\(?:ref|label|cite\w*|eqref|autoref|cref)\*?(?:\[[^\]]*\])?\{[^}]*\}"
 )
 TYPST_REFS = re.compile(r"@[\w:.-]+")
+# A semicolon, a lowercase word then a colon, or a dash used as punctuation.
+CHAINED = re.compile(r";|(?<!\w)[a-z]\w*:\s|---|\u2014|\s--\s")
 INLINE_MATH = re.compile(r"\$[^$]*\$|\\\(.*?\\\)")
 LATEX_COMMAND = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?")
 LATEX_ENV_MARKER = re.compile(r"\\(?:begin|end)\{[^}]*\}")
@@ -266,6 +284,61 @@ def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[int, str]]
     return titles, blocks
 
 
+def is_chained(sentence: str) -> bool:
+    return CHAINED.search(INLINE_MATH.sub(" ", without_refs(sentence))) is not None
+
+
+def nearest_rank(sorted_values: list[int], fraction: float) -> int:
+    return sorted_values[max(math.ceil(fraction * len(sorted_values)) - 1, 0)]
+
+
+def line_locator(text: str) -> Callable[[str], int]:
+    """A function from successive sentences to their 1-based source lines."""
+    cursor = 0
+    line = 1
+
+    def locate(sentence: str) -> int:
+        nonlocal cursor, line
+        head = sentence.split()[:4]
+        pattern = r"\s+".join(re.escape(t) for t in head)
+        if head and (m := re.compile(pattern).search(text, cursor)):
+            line += text.count("\n", cursor, m.start())
+            cursor = m.end()
+        return line
+
+    return locate
+
+
+def sentence_stats(
+    paragraphs: list[tuple[int, str, int]], text: str, kind: str, n_sections: int
+) -> tuple[dict[str, Any], list[int]]:
+    """Sentence metrics over all paragraphs, and the sentence count per section."""
+    locate = line_locator(text)
+    rows: list[tuple[int, int, str]] = []  # (words, line, text)
+    per_section = [0] * n_sections
+    for index, paragraph, _ in paragraphs:
+        for sentence in SENTENCE_END.split(paragraph):
+            if n := words(sentence, kind):
+                rows.append((n, locate(sentence), sentence))
+                per_section[index] += 1
+    lengths = sorted(n for n, _, _ in rows)
+    count = len(rows)
+    long_count = sum(n > LONG_SENTENCE_WORDS for n in lengths)
+    chained = sum(is_chained(t) for _, _, t in rows)
+    longest = sorted(rows, key=lambda r: (-r[0], r[1]))[:LONGEST_SHOWN]
+    return {
+        "count": count,
+        "median_words": statistics.median(lengths) if lengths else 0,
+        "p90_words": nearest_rank(lengths, 0.9) if lengths else 0,
+        "long_threshold_words": LONG_SENTENCE_WORDS,
+        "over_long_threshold": long_count,
+        "share_over_long_threshold": long_count / count if count else 0,
+        "chained_count": chained,
+        "chained_clause_rate": chained / count if count else 0,
+        "longest": [{"words": n, "line": ln, "text": t} for n, ln, t in longest],
+    }, per_section
+
+
 def analyze(text: str, kind: str) -> dict[str, Any]:
     body = body_of(text, kind)
     titles, found = prose_blocks(body, kind)
@@ -279,6 +352,9 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
     section_words = [0] * len(titles)
     for index, _, n in paragraphs:
         section_words[index] += n
+    sentence_data, section_sentences = sentence_stats(
+        paragraphs, text, kind, len(titles)
+    )
     return {
         "paragraphs": {
             "count": len(counts),
@@ -293,13 +369,16 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
             "over_budget": sum(n > SENTENCE_BUDGET for n in sentences),
             "budget": SENTENCE_BUDGET,
         },
+        "sentences": sentence_data,
         "captions": [
             {"label_or_index": label, "words": words(c, kind)} for label, c in captions
         ],
         "shared_numerics": sorted(caption_numbers & body_numbers),
         "sections": [
-            {"title": t, "words": n}
-            for i, (t, n) in enumerate(zip(titles, section_words, strict=True))
+            {"title": t, "words": n, "sentences": k}
+            for i, (t, n, k) in enumerate(
+                zip(titles, section_words, section_sentences, strict=True)
+            )
             if i > 0 or section_words[0]
         ],
     }
@@ -307,6 +386,7 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
 
 def format_report(data: dict[str, Any]) -> str:
     p, s = data["paragraphs"], data["sentences_per_paragraph"]
+    t = data["sentences"]
     lines = [
         (
             f"paragraphs: {p['count']} (median {p['median_words']} words, "
@@ -316,13 +396,28 @@ def format_report(data: dict[str, Any]) -> str:
             f"sentences per paragraph: median {s['median']}, max {s['max']}, "
             f"{s['over_budget']} paragraphs over {s['budget']}"
         ),
+        (
+            f"sentences: {t['count']} (median {t['median_words']} words, "
+            f"p90 {t['p90_words']}, {t['over_long_threshold']} over "
+            f"{t['long_threshold_words']})"
+        ),
+        (
+            f"chained-clause rate: {t['chained_clause_rate']:.2f} "
+            f"({t['chained_count']} of {t['count']})"
+        ),
+        "longest sentences:",
+        *(
+            f"  line {x['line']}, {x['words']} words: {x['text'][:60]}"
+            for x in t["longest"]
+        ),
         "captions:",
         *(f"  {c['label_or_index']}: {c['words']} words" for c in data["captions"]),
         "shared caption/body numerics: "
         + (", ".join(data["shared_numerics"]) or "none"),
         "sections:",
         *(
-            f"  {x['title'] or '(untitled)'}: {x['words']} words"
+            f"  {x['title'] or '(untitled)'}: {x['words']} words, "
+            f"{x['sentences']} sentences"
             for x in data["sections"]
         ),
     ]

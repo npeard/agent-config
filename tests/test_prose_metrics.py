@@ -28,8 +28,8 @@ class TestEveryFormat:
     def test_section_totals(self, path: Path, capsys):
         sections = report(path, capsys)["sections"]
         assert sections == [
-            {"title": "Intro", "words": 15},
-            {"title": "Detail", "words": 7},
+            {"title": "Intro", "words": 15, "sentences": 2},
+            {"title": "Detail", "words": 7, "sentences": 2},
         ]
 
     def test_sentence_counts(self, path: Path, capsys):
@@ -107,7 +107,7 @@ def test_human_report_exits_zero(capsys):
 )
 def test_heading_forms_are_headings_not_body(name, heading, tmp_path, capsys):
     data = report(write(tmp_path, name, f"{heading}\nBody words here.\n"), capsys)
-    assert data["sections"] == [{"title": "Intro", "words": 3}]
+    assert data["sections"] == [{"title": "Intro", "words": 3, "sentences": 1}]
     assert data["paragraphs"]["count"] == 1
 
 
@@ -183,15 +183,18 @@ def test_duplicate_titles_stay_distinct_in_document_order(tmp_path, capsys):
     body = "\\section{Results}\nOne two.\n\n\\subsection{Results}\nThree.\n"
     sections = report(write(tmp_path, "a.tex", body), capsys)["sections"]
     assert sections == [
-        {"title": "Results", "words": 2},
-        {"title": "Results", "words": 1},
+        {"title": "Results", "words": 2, "sentences": 1},
+        {"title": "Results", "words": 1, "sentences": 1},
     ]
 
 
 def test_untitled_lead_in_comes_first(tmp_path, capsys):
     body = "Lead in.\n\n\\section{A}\nBody.\n"
     sections = report(write(tmp_path, "a.tex", body), capsys)["sections"]
-    assert sections == [{"title": "", "words": 2}, {"title": "A", "words": 1}]
+    assert sections == [
+        {"title": "", "words": 2, "sentences": 1},
+        {"title": "A", "words": 1, "sentences": 1},
+    ]
 
 
 def test_zero_word_paragraphs_are_dropped(tmp_path, capsys):
@@ -232,3 +235,109 @@ def test_brackets_inside_math_do_not_unbalance_a_caption(tmp_path, capsys):
 def test_display_math_in_the_middle_of_a_line_is_dropped(tmp_path, capsys):
     path = write(tmp_path, "a.tex", "Before \\[ x = y \\] after.\n")
     assert report(path, capsys)["paragraphs"]["max_words"] == 2
+
+
+def sentences_of(tmp_path, capsys, body, name="a.md"):
+    return report(write(tmp_path, name, body), capsys)["sentences"]
+
+
+def run_of_words(n: int) -> str:
+    return " ".join(["Word"] * n) + "."
+
+
+def test_sentence_counts_total_and_per_section(tmp_path, capsys):
+    body = "Lead one. Lead two.\n\n# A\nOne. Two. Three.\n"
+    data = report(write(tmp_path, "a.md", body), capsys)
+    assert data["sentences"]["count"] == 5
+    assert [s["sentences"] for s in data["sections"]] == [2, 3]
+
+
+def test_sentence_length_distribution(tmp_path, capsys):
+    # Lengths 1..9 and 31: median 5.5, nearest-rank p90 is the ninth value, 9.
+    body = " ".join(run_of_words(n) for n in [*range(1, 10), 31])
+    s = sentences_of(tmp_path, capsys, body)
+    assert s["count"] == 10
+    assert s["median_words"] == 5.5
+    assert s["p90_words"] == 9
+    assert s["long_threshold_words"] == 30
+    assert s["over_long_threshold"] == 1
+    assert s["share_over_long_threshold"] == 0.1
+
+
+def test_threshold_is_exclusive(tmp_path, capsys):
+    s = sentences_of(tmp_path, capsys, run_of_words(30))
+    assert s["over_long_threshold"] == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "chained"),
+    [
+        ("a.tex", "One; two.", 1),
+        ("a.tex", "We find this: it holds.", 1),
+        ("a.tex", "We find this---it holds.", 1),
+        ("a.typ", "We find this \u2014 it holds.", 1),
+        ("a.md", "We find this \u2014 it holds.", 1),
+        ("a.md", "We find this -- it holds.", 1),
+        ("a.tex", "Plain. Also plain.", 0),
+        ("a.tex", "Range 3--5 is fine.", 0),
+        ("a.tex", "Math $a; b$ and $c: d$ stay.", 0),
+        ("a.typ", "Math $a; b$ stays.", 0),
+        ("a.tex", "See Sec.~\\ref{sec:x} for that.", 0),
+        ("a.tex", "Capital Note: starts here.", 0),
+    ],
+)
+def test_chained_clauses(name, text, chained, tmp_path, capsys):
+    s = sentences_of(tmp_path, capsys, text + "\n", name)
+    assert s["chained_count"] == chained
+    assert s["chained_clause_rate"] == chained / s["count"]
+
+
+def test_longest_sentences_with_source_lines(tmp_path, capsys):
+    body = (
+        "\\section{S}\n"  # line 1
+        "Short one.\n"  # 2
+        "\n"
+        "% comment\n"
+        "A rather longer sentence is here now.\n"  # 5
+        "Mid line starts. This second sentence is the very longest of them all\n"  # 6
+        "and wraps onto line seven.\n"
+        "\n"
+        "Tiny. Another medium sentence here.\n"  # 9
+        "Three more words. Four more words now. Five words. Six.\n"  # 10
+    )
+    longest = sentences_of(tmp_path, capsys, body, "a.tex")["longest"]
+    assert len(longest) == 5
+    assert [(x["words"], x["line"]) for x in longest[:3]] == [(15, 6), (7, 5), (4, 9)]
+    assert longest[0]["text"].startswith("This second sentence")
+
+
+def test_repeated_sentence_gets_its_own_line(tmp_path, capsys):
+    body = "Same words here and there.\n\nSame words here and there.\n"
+    longest = sentences_of(tmp_path, capsys, body)["longest"]
+    assert sorted(x["line"] for x in longest) == [1, 3]
+
+
+def test_no_sentences_reports_zeros(tmp_path, capsys):
+    s = sentences_of(tmp_path, capsys, "")
+    assert (s["count"], s["median_words"], s["p90_words"]) == (0, 0, 0)
+    assert (s["chained_clause_rate"], s["longest"]) == (0, [])
+
+
+def test_human_report_lists_sentence_metrics(capsys):
+    assert prose_metrics.main([str(MARKUP[0])]) == 0
+    out = capsys.readouterr().out
+    assert "sentences: 4" in out
+    assert "chained" in out
+    assert "longest" in out
+
+
+def test_unlocated_sentence_keeps_the_previous_line_and_cursor():
+    # The opening "Bogus opening" is not in the source (say, rewritten by
+    # dropped math). Its first word alone appears two lines on; jumping there
+    # would misplace this sentence and every one after it.
+    locate = prose_metrics.line_locator(
+        "First sentence is here.\nSecond one later.\nThird has Bogus inside.\n"
+    )
+    assert locate("First sentence is here.") == 1
+    assert locate("Bogus opening never in source.") == 1
+    assert locate("Second one later.") == 2

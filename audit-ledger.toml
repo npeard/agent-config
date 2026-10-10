@@ -228,10 +228,10 @@ how a hostile manifest is handled, so the boundary above is unaffected.
 [[decision]]
 asset = "hooks/prose-writing.py"
 principle = 5
-date = "2026-08-27"
+date = "2026-10-09"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "c884cb49103e768d9b3396591804aa6927d3cf4dae1e479435e2a0830bb5af26"
+asset_sha = "99212649b1eabbfaef831325c038aea09234b4dd05208d0ee6327c6138cb2316"
 note = """
 Re-decided after the hook gained a Bash branch, and the previous note has to
 be corrected rather than restamped. It read: "Matches on manifest presence to
@@ -284,10 +284,10 @@ describes, so the boundary is unaffected.
 [[decision]]
 asset = "hooks/audit-owed.py"
 principle = 5
-date = "2026-08-27"
+date = "2026-10-09"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "894852f9130ea41e45f83bff10c9887a6a1b6c685912d9081e6ddc692eabba51"
+asset_sha = "84c961763b989829a52a35e4eb90e2c0baaa9c0cf5dff1062b9f140e693c1eee"
 note = """
 The hook reads `git diff-tree` paths and the marker file, and emits asset
 paths into `additionalContext` -- content this repo did not author reaching
@@ -692,4 +692,23 @@ progress)" label, which cache_view now decides for this hook and preflight
 alike. Re-read again after the loader moved to platform_paths.load_sibling
 and the IDE check's git call got its 2 s timeout; neither widens what is
 emitted.
+"""
+
+[[decision]]
+asset = "hooks/prose-feedback.py"
+principle = 5
+date = "2026-10-09"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "393490f84bbe2082fa945aa4b911b431d05e92b52a4cb54f9e808e30090f795b"
+note = """
+The hook runs check_forward_refs.py and prose_metrics.py as subprocesses, with
+an argument list and no shell, and emits what they report into agent context.
+So text from files this repo did not author reaches the place an instruction
+would be obeyed, through three values: a label name, a sentence excerpt, and a
+file name. Labels and excerpts always go through json.dumps; excerpts are cut
+to 120 characters and at most three are shown. File names print bare only when
+they match [\\w./-]+ and are otherwise json.dumps'd, which matters because a
+Bash write's names come from `git ls-files`. Output is capped at 15 lines.
+Same framing rule as audit-owed.py and friction.py.
 """

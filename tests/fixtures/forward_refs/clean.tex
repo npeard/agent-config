@@ -1,0 +1,24 @@
+\documentclass{article}
+\begin{document}
+\section{Setup}\label{sec:setup}
+% A commented-out forward pointer: \ref{sec:result}
+\begin{equation}\label{eq:first}
+  x = 1
+\end{equation}
+We use Eq.~\eqref{eq:first} and Fig.~\ref{fig:later}.
+Unknown labels such as \ref{elsewhere:label} belong to another file.
+Details are in Appendix~\ref{app:proof}.
+See Table~\ref{tab:later} and Eq.~\ref{eq:in-float}.
+\begin{figure}
+  \caption{A float.}\label{fig:later}
+\end{figure}
+\begin{table}
+  \caption{A table.}\label{tab:later}
+\end{table}
+\begin{figure}
+  \caption{Labelled without a prefix.}\label{eq:in-float}
+\end{figure}
+\appendix
+\section{Proof}\label{app:proof}
+This reuses Sec.~\ref{sec:setup}.
+\end{document}

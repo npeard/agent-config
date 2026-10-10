@@ -185,10 +185,10 @@ def tokenize(line: str) -> "list[str] | None":
     line, so retrying without quote characters recovers it; the alternative was
     a hook that ignored the dominant commit form.
 
-    Duplicated verbatim in promotion-check.py and prose-writing.py: a hook
-    runs standalone under whatever interpreter ~/.claude/settings.json names,
-    stdlib-only and with no sys.path manipulation, so a shared module is not
-    available here.
+    Duplicated in prose-writing.py and promotion-check.py; this copy alone
+    retries without quotes (above). A hook runs standalone under whatever
+    interpreter ~/.claude/settings.json names, stdlib-only and with no sys.path
+    manipulation, so a shared module is not available here.
     """
     doubled = with_doubled_separators(line)
     for attempt in (doubled, doubled.replace('"', " ").replace("'", " ")):

@@ -153,12 +153,13 @@ EXCLUDED_PATHS = (
     "*/.snakemake/*",
 )
 
-# Duplicated verbatim in hooks/promotion-check.py, which needs the same
-# extraction for the same reason. A hook is invoked by absolute path under
-# whatever interpreter ~/.claude/settings.json names and must depend on
+# Duplicated in promotion-check.py and audit-owed.py, which need the same
+# extraction for the same reason (prose-feedback.py observes what changed on
+# disk instead, so it carries no copy). A hook is invoked by absolute path
+# under whatever interpreter ~/.claude/settings.json names and must depend on
 # nothing but the standard library, so a shared module under hooks/ is not
 # available: register_hooks.py registers every hooks/*.py and a test fails on
-# any file there without an event marker. Keep the two copies in step.
+# any file there without an event marker. Keep the copies in step.
 # Shell operators that send output into a file. The fd-prefixed forms (`2>`,
 # `1>>`) tokenize as a separate "2"/"1" word followed by the operator, so they
 # need no entries of their own.
@@ -237,10 +238,10 @@ def tokenize(line: str) -> "list[str] | None":
     could invent a destination that was never written and put a wrong advisory
     into context. Declining is the cheaper error here.
 
-    Duplicated verbatim in promotion-check.py and audit-owed.py: a hook runs
-    standalone under whatever interpreter ~/.claude/settings.json names,
-    stdlib-only and with no sys.path manipulation, so a shared module is not
-    available here.
+    Duplicated in promotion-check.py and audit-owed.py, whose copy alone
+    retries (above). A hook runs standalone under whatever interpreter
+    ~/.claude/settings.json names, stdlib-only and with no sys.path
+    manipulation, so a shared module is not available here.
     """
     lexer = shlex.shlex(
         with_doubled_separators(line), posix=True, punctuation_chars=True
@@ -358,7 +359,9 @@ MESSAGE = (
     "for the spine. For a paper, talk or thesis also invoke "
     "scientific-writing, naming the genre, to draft. Run the humanizer skill "
     "last as a lint. Do not invent a number, citation, reference, or "
-    "attribution: that is the one error a reader cannot check for you."
+    "attribution: that is the one error a reader cannot check for you. "
+    "After each .tex or .typ edit, prose-feedback reports forward references "
+    "and sentence counts; a revision should cut sentences, not add them."
 )
 
 

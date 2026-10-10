@@ -1450,3 +1450,60 @@ dispatching the pressure test. A hook that links on skill creation was
 rejected: linking writes outside the repo, which install.sh deliberately
 owns, and one re-run of preflight closes the gap.
 """
+
+[[decision]]
+class = "isolation-worktree-stale-base"
+source = "observed"
+date = "2026-10-09"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+Agent-tool `isolation: worktree` subagents branched from an older commit
+(b7a7973), not the orchestrator's current feature branch, so their commits
+would not fast-forward and had to be cherry-picked. The fix that worked was
+creating the worktree by hand from the branch tip (`git worktree add -b X
+../dir <branch>`) and naming that path in the brief, which
+superpowers:using-git-worktrees already covers. Revisit if it recurs.
+"""
+
+[[decision]]
+class = "structural-finding-after-correctness-loop"
+source = "observed"
+date = "2026-10-09"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+Three code-review rounds kept patching edge cases in a hook that inferred
+written files by parsing shell text. Only simplify's altitude angle found the
+root cause: observe changed files instead. The spec had fixed the mechanism
+("reuse prose-writing.py's redirect detection") without weighing the
+alternative, so the defect sat upstream of the review loop. One incident.
+If a second branch ends with an altitude finding that retires most of the
+code a correctness loop patched, consider running altitude before the loop.
+"""
+
+[[decision]]
+class = "eval-baseline-context-leak"
+source = "observed"
+date = "2026-10-09"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+A writing-skill baseline/treatment evaluation gave every reviser the current
+main.tex as context, and that file already held the author's rewrite the
+evaluation compared against. Several revisers borrowed from it, biasing both
+arms toward the target. Both arms had the same leak, so the comparison held.
+Next time, give context from the draft's own revision (`git show <rev>:file`).
+"""
+
+[[decision]]
+class = "toml-basic-string-escape"
+source = "observed"
+date = "2026-10-09"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+A regex written into a ledger note's `\"\"\"` basic string with a bare `\\w`
+made the ledger unparsable. The next `pixi run audit` raised TOMLDecodeError
+pointing at the line, and the fix took one edit. The tool caught it.
+"""

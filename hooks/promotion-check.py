@@ -120,10 +120,10 @@ def tokenize(line: str) -> "list[str] | None":
     could invent a destination that was never written and put a wrong advisory
     into context. Declining is the cheaper error here.
 
-    Duplicated verbatim in prose-writing.py and audit-owed.py: a hook runs
-    standalone under whatever interpreter ~/.claude/settings.json names,
-    stdlib-only and with no sys.path manipulation, so a shared module is not
-    available here.
+    Duplicated in prose-writing.py and audit-owed.py, whose copy alone
+    retries (above). A hook runs standalone under whatever interpreter
+    ~/.claude/settings.json names, stdlib-only and with no sys.path
+    manipulation, so a shared module is not available here.
     """
     lexer = shlex.shlex(
         with_doubled_separators(line), posix=True, punctuation_chars=True
