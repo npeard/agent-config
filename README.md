@@ -577,10 +577,14 @@ and pricing remain separate and unchanged.
   and flags new modules with one caller or a read of another module's
   privates, because a LOC diff does not show how many concepts a reader
   must now hold; it is also a report, and the one script that needs a
-  third-party package (`grimp`). `check_forward_refs.py` is the gate: it
-  fails when a LaTeX or Typst document cites a label defined later in
-  reading order (appendices and floats excepted), because a reader
-  cannot yet follow a pointer to text they have not read.
+  third-party package (`grimp`). `trivial_wrappers.py` lists the
+  functions too thin to justify existing -- a one-statement body, or a
+  private or nested helper used once -- as the mechanical half of rule
+  13; a reasoned `wrapper-ok` marker exempts one, and `--gate` makes it
+  fail. `check_forward_refs.py` is the gate: it fails when a LaTeX or
+  Typst document cites a label defined later in reading order
+  (appendices and floats excepted), because a reader cannot yet follow a
+  pointer to text they have not read.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either
