@@ -92,7 +92,7 @@ def test_all_overrides_the_underscore_rule(fixture_repo: Path, capsys):
 
 def test_parent_reexport_is_not_a_single_caller(fixture_repo: Path, capsys):
     write(fixture_repo, "fix/c.py", "shown = 1\n")
-    write(fixture_repo, "fix/a.py", "from fix import c\n\n_x = c.shown\n")
+    # The parent package is c's only importer, so fan-in is 1 without the exemption.
     write(fixture_repo, "fix/__init__.py", "from fix.c import shown\n")
     run_git(fixture_repo, "add", ".")
     run_git(fixture_repo, "commit", "-qm", "c")
