@@ -25,7 +25,8 @@ A finding is a module-level or nested function (methods are excluded) that is
 
 A function that is both reports as a trivial wrapper. A public function
 referenced from the ``if __name__ == "__main__":`` block is an entry point
-and exempt. ``# wrapper-ok: <reason>`` on the ``def`` line silences a
+and exempt, as is any decorated function, ``test_*`` function, or stub
+(``...`` body, e.g. an ``@overload``). Recursive calls are not uses. ``# wrapper-ok: <reason>`` on the ``def`` line silences a
 finding; a marker with no reason is a ``bare-marker`` finding, the same
 convention as scripts/suppressions.py.
 
@@ -111,6 +112,13 @@ def is_trivial(func: FunctionNode) -> bool:
     if len(body) != 1:
         return False
     stmt = body[0]
+    # A stub (`...`) is a placeholder or an @overload signature, not a wrapper.
+    if (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Constant)
+        and stmt.value.value is Ellipsis
+    ):
+        return False
     if isinstance(stmt, ast.Return | ast.Expr | ast.Assign | ast.AnnAssign):
         return isinstance(stmt.value, TRIVIAL_VALUES)
     return False
@@ -148,12 +156,24 @@ def check(source: str) -> list[Finding]:
     }
     found = []
     for func, nested in functions(tree):
-        name, sites = func.name, uses[func.name]
-        marker = MARKER.search(lines[func.lineno - 1])
+        name = func.name
+        # A recursive call is the function using itself, not a caller.
+        own = sum(
+            isinstance(n, ast.Name) and n.id == name and isinstance(n.ctx, ast.Load)
+            for n in ast.walk(func)
+        )
+        sites = uses[name] - own
+        # The marker may sit on any line of a multi-line signature.
+        header = lines[func.lineno - 1 : max(func.lineno, func.body[0].lineno - 1)]
+        marker = next(filter(None, map(MARKER.search, header)), None)
         if marker and not has_reason(marker.group("rest")):
             found.append(Finding(func.lineno, "bare-marker", name, sites))
             continue
-        if marker or (not nested and name in entry_points and name[0] != "_"):
+        # A decorator is a use (registration, fixture, route) and pytest
+        # collects test_* by name, so neither has a visible call site.
+        if marker or func.decorator_list or name.startswith("test_"):
+            continue
+        if not nested and name in entry_points and name[0] != "_":
             continue
         if is_trivial(func):
             found.append(Finding(func.lineno, "trivial-wrapper", name, sites))

@@ -17,10 +17,9 @@ better than a general preference does.
    line length, trailing whitespace, spelling and non-ASCII are owned by
    ruff, codespell, mdformat and `check_ascii.py`. `suppressions.py`
    owns rule 2's "does the suppression say why", `thresholds.py` owns
-   rule 6's detection half, and `surface_area.py` and
-   `trivial_wrappers.py` rule 13's -- run them rather than reading for
-   any of these. A reviewer spending attention there duplicates a hook
-   that cannot be forgotten.
+   rule 6's detection half, and `surface_area.py` rule 13's -- run them
+   rather than reading for any of these. A reviewer spending attention
+   there duplicates a hook that cannot be forgotten.
 
 Note the asymmetry with rule 7: never report formatting itself, but do
 report an author who hand-fixed formatting instead of running the tool.
@@ -227,7 +226,7 @@ examples and one-off scripts, which are transient by design and whose
 readability for a human experimenter outranks factoring -- see the
 notebooks skill for that carve-out.
 
-## 13. Generalize before adding a module or helper; never read another's privates
+## 13. Generalize before adding a module; never read another's privates
 
 A new module, wrapper or helper is a concept a reader must hold, beyond
 its LOC. The defect is not module count but the *shallow* module
@@ -253,26 +252,8 @@ class Graph:
 A module `surface_area.py` flags is a candidate, not a finding: judge
 whether it is shallow before reporting it.
 
-The same weighing applies one level down, to functions. A function whose
-body is one call, attribute, constructor, literal or comprehension, or a
-private or nested helper referenced once, adds a name and a jump and no
-logic. In example and surface-level scripts a reader scans top to
-bottom, a helper must earn its existence by real logic shared across
-call sites; inline the rest.
-
-```python
-# Flag: a one-statement helper with one caller
-def _config(max_epochs):
-    return TrainingConfig(max_epochs=max_epochs, ...)
-
-# Prefer: the constructor at its use, where the values can be read
-config = TrainingConfig(max_epochs=100, ...)
-```
-
-`trivial_wrappers.py` (`pixi run trivial-wrappers`) lists these
-mechanically, and a project may gate on it. As with `surface_area.py`, a
-finding is a candidate: a wrapper that names a unit or a convention
-carries `# wrapper-ok: <reason>` on its `def` line.
+Examples: a function earns its name by shared logic;
+`pixi run trivial-wrappers` lists the rest.
 
 ## Fallback lens: the classic smells
 
@@ -281,29 +262,29 @@ when one applies. All are judgement calls; distinguish a hard violation
 from a matter of taste, and say which you are reporting. From Fowler,
 *Refactoring*, ch. 3.
 
-| Smell                                         | Definition                                                                               | Usual remedy                                          |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Mysterious Name                               | A name that does not reveal what the thing is for                                        | Rename; if no good name exists, the design is wrong   |
-| Duplicated Code                               | The same logic in more than one place                                                    | Extract the shared form                               |
-| Long Function                                 | A function doing several things at several levels of detail                              | Extract until each does one thing                     |
-| Long Parameter List                           | So many parameters the call site is unreadable                                           | Bundle into a type, or pass the object that owns them |
-| Global Data                                   | Mutable state anything can modify from anywhere                                          | Encapsulate behind a narrow accessor                  |
-| Mutable Data                                  | Data updated in place where callers do not expect it                                     | Prefer values; confine mutation                       |
-| Divergent Change                              | One module edited for several unrelated reasons                                          | Split it by reason                                    |
-| Shotgun Surgery                               | One conceptual change requiring edits scattered everywhere                               | Consolidate into one place                            |
-| Feature Envy                                  | A function using another object's data more than its own                                 | Move it next to the data                              |
-| Data Clumps                                   | The same group of fields travelling together repeatedly                                  | Give the group a type                                 |
-| Primitive Obsession                           | A primitive or string standing in for a domain concept                                   | Introduce the domain type                             |
-| Repeated Switches                             | The same switch or if-cascade recurring                                                  | Polymorphism, or one shared map                       |
-| Loops                                         | A loop obscuring what is being computed                                                  | A named pipeline operation                            |
-| Lazy Element                                  | A class or function too thin to justify existing (`trivial_wrappers.py` lists functions) | Inline it                                             |
-| Speculative Generality                        | Abstraction added for a need nobody has stated                                           | Delete it; inline until the need is real              |
-| Temporary Field                               | A field only set some of the time                                                        | Extract the object where it is always set             |
-| Message Chains                                | Long navigation sequences like `a.b().c().d()`                                           | Hide the chain behind one method                      |
-| Middle Man                                    | A class or function that mostly just delegates (`trivial_wrappers.py` lists functions)   | Call the target directly                              |
-| Insider Trading                               | Modules reaching into each other's internals                                             | Move the shared thing, or add a clear interface       |
-| Large Class                                   | A class holding several unrelated responsibilities                                       | Split by responsibility                               |
-| Alternative Classes with Different Interfaces | Interchangeable classes that cannot be swapped                                           | Unify the interface                                   |
-| Data Class                                    | A class with fields and no behaviour, where behaviour exists elsewhere                   | Move the behaviour in (if it belongs)                 |
-| Refused Bequest                               | A subclass ignoring most of what it inherits                                             | Prefer composition                                    |
-| Comments                                      | Comments used to excuse code that should be clearer                                      | Fix the code; keep the why                            |
+| Smell                                         | Definition                                                             | Usual remedy                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- |
+| Mysterious Name                               | A name that does not reveal what the thing is for                      | Rename; if no good name exists, the design is wrong   |
+| Duplicated Code                               | The same logic in more than one place                                  | Extract the shared form                               |
+| Long Function                                 | A function doing several things at several levels of detail            | Extract until each does one thing                     |
+| Long Parameter List                           | So many parameters the call site is unreadable                         | Bundle into a type, or pass the object that owns them |
+| Global Data                                   | Mutable state anything can modify from anywhere                        | Encapsulate behind a narrow accessor                  |
+| Mutable Data                                  | Data updated in place where callers do not expect it                   | Prefer values; confine mutation                       |
+| Divergent Change                              | One module edited for several unrelated reasons                        | Split it by reason                                    |
+| Shotgun Surgery                               | One conceptual change requiring edits scattered everywhere             | Consolidate into one place                            |
+| Feature Envy                                  | A function using another object's data more than its own               | Move it next to the data                              |
+| Data Clumps                                   | The same group of fields travelling together repeatedly                | Give the group a type                                 |
+| Primitive Obsession                           | A primitive or string standing in for a domain concept                 | Introduce the domain type                             |
+| Repeated Switches                             | The same switch or if-cascade recurring                                | Polymorphism, or one shared map                       |
+| Loops                                         | A loop obscuring what is being computed                                | A named pipeline operation                            |
+| Lazy Element                                  | A class or function too thin to justify existing                       | Inline it                                             |
+| Speculative Generality                        | Abstraction added for a need nobody has stated                         | Delete it; inline until the need is real              |
+| Temporary Field                               | A field only set some of the time                                      | Extract the object where it is always set             |
+| Message Chains                                | Long navigation sequences like `a.b().c().d()`                         | Hide the chain behind one method                      |
+| Middle Man                                    | A class or function that mostly just delegates                         | Call the target directly                              |
+| Insider Trading                               | Modules reaching into each other's internals                           | Move the shared thing, or add a clear interface       |
+| Large Class                                   | A class holding several unrelated responsibilities                     | Split by responsibility                               |
+| Alternative Classes with Different Interfaces | Interchangeable classes that cannot be swapped                         | Unify the interface                                   |
+| Data Class                                    | A class with fields and no behaviour, where behaviour exists elsewhere | Move the behaviour in (if it belongs)                 |
+| Refused Bequest                               | A subclass ignoring most of what it inherits                           | Prefer composition                                    |
+| Comments                                      | Comments used to excuse code that should be clearer                    | Fix the code; keep the why                            |

@@ -161,3 +161,31 @@ class TestRealScripts:
     def test_cleaned_example_has_no_findings(self):
         source = (FIXTURES / "nnn_dipolar_xx.py").read_text()
         assert trivial_wrappers.check(source) == []
+
+
+class TestExemptions:
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "@register\ndef _f():\n    return g()\n",
+            "@pytest.fixture\ndef data():\n    return g()\n",
+            "@overload\ndef f(x: int) -> int: ...\n\n\nf(1)\nf(2)\n",
+            "def f(x):\n    ...\n\n\nf(1)\nf(2)\n",
+            'def f(x):\n    """Only a docstring."""\n\n\nf(1)\nf(2)\n',
+            "def f(x):\n    pass\n\n\nf(1)\nf(2)\n",
+            "def test_it():\n    assert g()\n    return g()\n",
+            "def test_thing():\n    g()\n",
+        ],
+    )
+    def test_not_a_wrapper(self, source):
+        assert findings(source) == []
+
+
+class TestMinors:
+    def test_marker_on_closing_line_of_a_multiline_def(self):
+        source = "def f(\n    x,\n):  # wrapper-ok: names the unit\n    return g(x)\n\n\nf(1)\nf(2)\n"
+        assert findings(source) == []
+
+    def test_recursion_is_not_a_use(self):
+        source = "def _f(n):\n    y = n - 1\n    return _f(y)\n\n\ndef run():\n    a = _f(3)\n    return a + 1\n"
+        assert findings(source) == [("single-use-helper", "_f", 1)]
