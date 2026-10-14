@@ -100,25 +100,39 @@ def functions(
             yield from functions(child, nested)
 
 
-def is_trivial(func: FunctionNode) -> bool:
+def statements(func: FunctionNode) -> list[ast.stmt]:
+    """The body without its docstring."""
     body = func.body
     if (
-        body
-        and isinstance(body[0], ast.Expr)
+        isinstance(body[0], ast.Expr)
         and isinstance(body[0].value, ast.Constant)
         and isinstance(body[0].value.value, str)
     ):
-        body = body[1:]
+        return body[1:]
+    return body
+
+
+def is_stub(func: FunctionNode) -> bool:
+    """A placeholder or @overload signature: no statements, `pass` or `...`."""
+    body = statements(func)
+    return not body or (
+        len(body) == 1
+        and (
+            isinstance(body[0], ast.Pass)
+            or (
+                isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and body[0].value.value is Ellipsis
+            )
+        )
+    )
+
+
+def is_trivial(func: FunctionNode) -> bool:
+    body = statements(func)
     if len(body) != 1:
         return False
     stmt = body[0]
-    # A stub (`...`) is a placeholder or an @overload signature, not a wrapper.
-    if (
-        isinstance(stmt, ast.Expr)
-        and isinstance(stmt.value, ast.Constant)
-        and stmt.value.value is Ellipsis
-    ):
-        return False
     if isinstance(stmt, ast.Return | ast.Expr | ast.Assign | ast.AnnAssign):
         return isinstance(stmt.value, TRIVIAL_VALUES)
     return False
@@ -164,14 +178,18 @@ def check(source: str) -> list[Finding]:
         )
         sites = uses[name] - own
         # The marker may sit on any line of a multi-line signature.
-        header = lines[func.lineno - 1 : max(func.lineno, func.body[0].lineno - 1)]
+        # The signature may span lines, and a one-line body shares the line
+        # its colon is on; either way the marker belongs to the def.
+        first = func.body[0]
+        shares_line = ":" in lines[first.lineno - 1][: first.col_offset]
+        header = lines[func.lineno - 1 : first.lineno - (not shares_line)]
         marker = next(filter(None, map(MARKER.search, header)), None)
         if marker and not has_reason(marker.group("rest")):
             found.append(Finding(func.lineno, "bare-marker", name, sites))
             continue
         # A decorator is a use (registration, fixture, route) and pytest
         # collects test_* by name, so neither has a visible call site.
-        if marker or func.decorator_list or name.startswith("test_"):
+        if marker or func.decorator_list or name.startswith("test_") or is_stub(func):
             continue
         if not nested and name in entry_points and name[0] != "_":
             continue

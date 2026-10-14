@@ -189,3 +189,18 @@ class TestMinors:
     def test_recursion_is_not_a_use(self):
         source = "def _f(n):\n    y = n - 1\n    return _f(y)\n\n\ndef run():\n    a = _f(3)\n    return a + 1\n"
         assert findings(source) == [("single-use-helper", "_f", 1)]
+
+
+class TestRound2:
+    @pytest.mark.parametrize("body", ["...", "pass", '"""Doc only."""'])
+    def test_private_stub_used_once_is_not_a_helper(self, body):
+        source = (
+            f"def _f():\n    {body}\n\n\ndef run():\n    a = _f()\n    return a + 1\n"
+        )
+        assert findings(source) == []
+
+    def test_marker_when_one_line_body_is_on_the_closing_line(self):
+        source = "def f(\n    x,\n):  # wrapper-ok: names the unit\n    return g(x)\n"
+        assert findings(source) == []
+        source = "def f(\n    x,\n): return g(x)  # wrapper-ok: names the unit\n"
+        assert findings(source) == []
