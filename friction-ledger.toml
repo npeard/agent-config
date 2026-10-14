@@ -1580,3 +1580,38 @@ lives only in project C's dev/test envs (`-e dev`); the project CLAUDE.md
 already documents the -e form. One implementer round trip. A spec-stage slip, not
 missing tooling: the plan should copy the project's documented command.
 """
+
+[[decision]]
+class = "physics-result-blamed-on-target-not-sequence"
+source = "observed"
+date = "2026-10-14"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+A golden example's weak loss (1e-3) was reported to the user as "the corrected
+target trains poorly; confirm the target", when the real cause was a sign error
+in the control pattern that no dwell times could undo. Training against the
+flipped target took one 10 s run and gave 5e-8. The existing rule (De-risk:
+show results plainly; verification before claims) already covers it: a weak
+outcome was reported as a finding about the spec instead of being diagnosed.
+The repo-level fix landed in project C: a structural test that the toggling
+frames average to the target, which would have failed on the sign. No new
+agent-config artifact; restating the rule would change nothing.
+"""
+
+[[decision]]
+class = "guard-placement-left-exemptions-undecided"
+source = "observed"
+date = "2026-10-14"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+A spec placed a control-only validation in the shared propagation class while
+also stating that targets built through that same class must stay legal; it
+never decided how targets bypass the check. The phase implementer hid the
+conflict by padding ~80 test graphs with a zero-strength term, and two review
+rounds plus a subclass exemption followed. Cause is the spec stage: a guard's
+spec should name every caller of the class it guards and say which are exempt.
+brainstorming's gap-hunting obligation already asks for this; one incident is
+under the bar, so no artifact.
+"""
