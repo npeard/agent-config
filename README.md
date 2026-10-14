@@ -572,7 +572,12 @@ and pricing remain separate and unchanged.
   exemption is documented rather than silent. `prose_metrics.py` reports
   paragraph, sentence, caption and section sizes for a LaTeX, Typst or
   Markdown file, so prose density is measured rather than judged by eye;
-  it is a report, not a gate. `check_forward_refs.py` is the gate: it
+  it is a report, not a gate. `surface_area.py` reports the modules,
+  public symbols and import edges a branch added to a Python package,
+  and flags new modules with one caller or a read of another module's
+  privates, because a LOC diff does not show how many concepts a reader
+  must now hold; it is also a report, and the one script that needs a
+  third-party package (`grimp`). `check_forward_refs.py` is the gate: it
   fails when a LaTeX or Typst document cites a label defined later in
   reading order (appendices and floats excepted), because a reader
   cannot yet follow a pointer to text they have not read.

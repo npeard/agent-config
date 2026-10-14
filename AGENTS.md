@@ -148,6 +148,8 @@ changes there and not here.
 - **A correction replaces the claim it corrects** -- no retraction kept
   in a deliverable. This binds the spec stage, where it starts.
 - **DRY forbids duplicated intent**, not only duplicated lines.
+- **Generalize before adding a module**; never read another module's
+  privates.
 
 ## Verification & perf philosophy
 
