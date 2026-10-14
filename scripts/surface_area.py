@@ -151,7 +151,8 @@ def _symbols(trees: dict[str, ast.Module]) -> set[str]:
 
 
 def _net_loc(repo: str, base: str, head: str, path: str) -> int:
-    numstat = _git(repo, "diff", "--numstat", base, head, "--", path).decode()
+    args = ("diff", "--numstat", "--no-renames", base, head, "--", path)
+    numstat = _git(repo, *args).decode()
     net = 0
     for line in numstat.splitlines():
         added, deleted, name = line.split("\t")

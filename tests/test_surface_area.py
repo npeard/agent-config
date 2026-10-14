@@ -106,3 +106,19 @@ def test_text_report_names_every_section(fixture_repo: Path, capsys):
     for heading in ("New modules", "New public symbols", "New import edges"):
         assert heading in out
     assert "fix.b: reads private a._x (line 3)" in out
+
+
+def test_net_loc_counts_a_renamed_module(git_repo: Path, capsys):
+    # git reports a rename as "fix/{a.py => z.py}", a name that does not end
+    # in .py, so its lines went uncounted.
+    (git_repo / "fix").mkdir()
+    write(git_repo, "fix/__init__.py", "")
+    write(git_repo, "fix/a.py", "".join(f"v{i} = {i}\n" for i in range(10)))
+    run_git(git_repo, "add", ".")
+    run_git(git_repo, "commit", "-qm", "base")
+    run_git(git_repo, "tag", "base")
+    run_git(git_repo, "mv", "fix/a.py", "fix/z.py")
+    write(git_repo, "fix/z.py", "".join(f"v{i} = {i}\n" for i in range(11)))
+    run_git(git_repo, "add", ".")
+    run_git(git_repo, "commit", "-qm", "rename")
+    assert report(git_repo, capsys)["net_loc"] == 1
