@@ -1507,3 +1507,76 @@ A regex written into a ledger note's `\"\"\"` basic string with a bare `\\w`
 made the ledger unparsable. The next `pixi run audit` raised TOMLDecodeError
 pointing at the line, and the fix took one edit. The tool caught it.
 """
+
+[[decision]]
+class = "test-misuse-blamed-on-production"
+source = "observed"
+date = "2026-10-08"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+A project C subagent wrote a test calling a stepper with one time for three
+states, saw run-to-run garbage and segfaults, and reported a "pre-existing
+CPU sparse collocation bug" that was carried into a final-report draft. The
+code-review pass caught it. The root cause was a public entry point that
+accepted malformed input silently; the fix was an input-shape ValueError in
+project C, which makes this class mechanical where it occurred. No
+agent-config artifact: verification-before-completion and the review step
+already exist and worked; the lesson is project code validating its contract.
+"""
+
+[[decision]]
+class = "xdist-collection-race-shared-sqlite"
+source = "observed"
+date = "2026-10-08"
+cause = "missing-tooling"
+outcome = "tier-0"
+note = """
+Project C full-suite runs with -n 6 intermittently die at collection when xdist
+workers race to create a shared sqlite index; every agent re-learned the
+--ignore-glob split for those tests. This is a project C test-fixture
+defect (needs a per-worker DB path or a filelock), not a cross-project
+config gap; raised to the user as a project C task rather than encoded here.
+"""
+
+[[decision]]
+class = "unchained-edit-step-failed-silently"
+source = "observed"
+date = "2026-10-09"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+On a project C feature branch, a bare `python` heredoc edit in Git
+Bash hit the WindowsApps Store stub (exit 49), but it sat on its own line,
+not chained with &&, so format and commit ran and the commit message claimed
+an edit that never happened. Caught before reporting by reading the output.
+The rule (run, read the output, then claim) exists; a hook flagging bare
+`python` would be machine-specific to this Windows box and one incident is
+under the bar. Revisit if it recurs.
+"""
+
+[[decision]]
+class = "code-review-range-misread"
+source = "observed"
+date = "2026-10-09"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+Passing a base branch name as the code-review argument made it review
+main...<that branch> (and check it out briefly) instead of the feature range.
+Re-running with an explicit SHA range fixed it. The tool took the argument as
+a target, as its interface says; pass explicit ranges.
+"""
+
+[[decision]]
+class = "plan-named-wrong-pixi-test-env"
+source = "observed"
+date = "2026-10-09"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+The plan's Global Constraints ran pytest in pixi's default env, but pytest
+lives only in project C's dev/test envs (`-e dev`); the project CLAUDE.md
+already documents the -e form. One implementer round trip. A spec-stage slip, not
+missing tooling: the plan should copy the project's documented command.
+"""
