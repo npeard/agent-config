@@ -1615,3 +1615,25 @@ spec should name every caller of the class it guards and say which are exempt.
 brainstorming's gap-hunting obligation already asks for this; one incident is
 under the bar, so no artifact.
 """
+
+[[decision]]
+class = "trivial-wrapper-helpers-in-examples"
+source = "observed"
+date = "2026-10-14"
+cause = "rule-not-enforced"
+outcome = "tier-2"
+note = """
+Agents kept writing single-statement, single-use helpers (_config, _dipolar,
+_z_rotation, _half_sequence, a nested make_pulse) in a golden example, which
+a reader then had to chase through to find the one constructor call each
+stood for. Rule 13 covered shallow modules only, and the function-level
+smells (Lazy Element, Middle Man) are judgement calls, so the rule existed
+and was not applied.
+
+Tier 2: scripts/trivial_wrappers.py, an AST check modelled on surface_area.py
+and suppressions.py (a reasoned wrapper-ok marker as the escape hatch).
+Rule 13 is extended from modules to functions rather than a new rule, and
+standards-and-spec-review runs the script in branch mode. A project can gate
+on it, which is how the doqs top-level examples use it. No AGENTS.md prose:
+the existing rule-13 trigger line already points at the skill.
+"""
