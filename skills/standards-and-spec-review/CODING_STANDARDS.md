@@ -16,10 +16,10 @@ better than a general preference does.
 2. Skip whatever tooling already enforces. Formatting, import order,
    line length, trailing whitespace, spelling and non-ASCII are owned by
    ruff, codespell, mdformat and `check_ascii.py`. `suppressions.py`
-   owns rule 2's "does the suppression say why", and `thresholds.py`
-   owns rule 6's detection half -- run them rather than reading for
-   either. A reviewer spending attention there duplicates a hook that
-   cannot be forgotten.
+   owns rule 2's "does the suppression say why", `thresholds.py` owns
+   rule 6's detection half, and `surface_area.py` rule 13's -- run them
+   rather than reading for any of these. A reviewer spending attention
+   there duplicates a hook that cannot be forgotten.
 
 Note the asymmetry with rule 7: never report formatting itself, but do
 report an author who hand-fixed formatting instead of running the tool.
@@ -226,9 +226,35 @@ examples and one-off scripts, which are transient by design and whose
 readability for a human experimenter outranks factoring -- see the
 notebooks skill for that carve-out.
 
+## 13. Generalize before adding a module; never read another's privates
+
+A new module, wrapper or helper is a concept a reader must hold, beyond
+its LOC. The defect is not module count but the *shallow* module
+(Ousterhout): a small interface over another module's internals, with
+one caller. A deep module -- a real algorithm behind a narrow interface
+-- earns its file even with one caller; folding it into a large class
+makes that class harder to read.
+
+```python
+# Flag: a new module that reads Graph's internals for its one caller
+# sector_conservation.py
+def variable_op_strings(graph: Graph) -> set[str]:
+    for idx, op_string in enumerate(graph._op_names):
+        functional = getattr(graph, f"_functional_{idx}")
+        ...
+
+# Prefer: the query lives on the class that owns the data, and the new
+# module keeps only the algorithm that is its own
+class Graph:
+    def variable_op_strings(self) -> set[str]: ...
+```
+
+A module `surface_area.py` flags is a candidate, not a finding: judge
+whether it is shallow before reporting it.
+
 ## Fallback lens: the classic smells
 
-Weaker signals than the twelve rules above -- prefer a concrete rule
+Weaker signals than the thirteen rules above -- prefer a concrete rule
 when one applies. All are judgement calls; distinguish a hard violation
 from a matter of taste, and say which you are reporting. From Fowler,
 *Refactoring*, ch. 3.
