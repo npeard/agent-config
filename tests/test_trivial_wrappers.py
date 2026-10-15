@@ -48,6 +48,20 @@ class TestTrivialWrapper:
         source = "class C:\n    def m(self):\n        return g()\n\n    def _n(self):\n        return 1\n"
         assert findings(source) == []
 
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "class C:\n    class D:\n        def m(self):\n            return g()\n",
+            (
+                "class C:\n    class D:\n        class E:\n"
+                "            def _m(self):\n                return 1\n"
+            ),
+            "class C:\n    if X:\n        def m(self):\n            return g()\n",
+        ],
+    )
+    def test_methods_at_any_class_depth_are_excluded(self, source):
+        assert findings(source) == []
+
     def test_nested_function_is_checked(self):
         source = (
             "def outer(a):\n"

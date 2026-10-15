@@ -84,22 +84,25 @@ def has_reason(rest: str) -> bool:
 
 
 def functions(
-    node: ast.AST, nested: bool = False
+    node: ast.AST, *, nested: bool, in_class: bool
 ) -> Iterator[tuple[FunctionNode, bool]]:
-    """Every non-method function with whether it is nested in another function."""
+    """Every non-method function with whether it is nested in another function.
+
+    ``in_class`` carries through a class body's nested classes and ``if``
+    blocks, so a method is excluded at any depth; a function nested in a
+    method is not a method.
+    """
     for child in ast.iter_child_nodes(node):
         if isinstance(child, FunctionNode):
-            yield child, nested
-            yield from functions(child, True)
-        elif isinstance(child, ast.ClassDef):
-            # A method is excluded, but a function nested in one is not.
-            for method in child.body:
-                if isinstance(method, FunctionNode):
-                    yield from functions(method, True)
-                else:
-                    yield from functions(method, nested)
+            if not in_class:
+                yield child, nested
+            yield from functions(child, nested=True, in_class=False)
         else:
-            yield from functions(child, nested)
+            yield from functions(
+                child,
+                nested=nested,
+                in_class=in_class or isinstance(child, ast.ClassDef),
+            )
 
 
 def statements(func: FunctionNode) -> list[ast.stmt]:
@@ -172,7 +175,7 @@ def check(source: str) -> list[Finding]:
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
     }
     found = []
-    for func, nested in functions(tree):
+    for func, nested in functions(tree, nested=False, in_class=False):
         name = func.name
         # A recursive call is the function using itself, not a caller.
         own = sum(
