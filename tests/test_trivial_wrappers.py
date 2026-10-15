@@ -204,3 +204,18 @@ class TestRound2:
         assert findings(source) == []
         source = "def f(\n    x,\n): return g(x)  # wrapper-ok: names the unit\n"
         assert findings(source) == []
+
+
+class TestScriptPublicHelpers:
+    HELPER = "def helper(x):\n    y = x + 1\n    return y\n\n\ndef run():\n    a = helper(1)\n    return a + 1\n"
+    MAIN = "\n\nif __name__ == '__main__':\n    run()\n"
+
+    def test_public_one_use_helper_in_a_script_is_flagged(self):
+        assert findings(self.HELPER + self.MAIN) == [("single-use-helper", "helper", 1)]
+
+    def test_same_helper_in_a_library_module_is_not(self):
+        assert findings(self.HELPER) == []
+
+    def test_entry_point_is_still_exempt(self):
+        source = "def run():\n    a = 1\n    return a + 1\n" + self.MAIN
+        assert findings(source) == []

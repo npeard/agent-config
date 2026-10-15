@@ -20,13 +20,15 @@ A finding is a module-level or nested function (methods are excluded) that is
 - ``trivial-wrapper``: its body, docstring excluded, is one statement -- a
   return, bare expression or assignment -- whose value is a call, attribute,
   constructor, literal or comprehension; or
-- ``single-use-helper``: private (``_``-prefixed) or nested, and referenced
-  exactly once in its module.
+- ``single-use-helper``: private (``_``-prefixed) or nested, or public in a
+  script (a module with an ``if __name__`` block, whose functions have no
+  outside callers), and referenced exactly once in its module.
 
 A function that is both reports as a trivial wrapper. A public function
 referenced from the ``if __name__ == "__main__":`` block is an entry point
 and exempt, as is any decorated function, ``test_*`` function, or stub
-(``...`` body, e.g. an ``@overload``). Recursive calls are not uses. ``# wrapper-ok: <reason>`` on the ``def`` line silences a
+(``...`` body, e.g. an ``@overload``). Recursive calls are not uses.
+``# wrapper-ok: <reason>`` on the ``def`` line silences a
 finding; a marker with no reason is a ``bare-marker`` finding, the same
 convention as scripts/suppressions.py.
 
@@ -161,6 +163,7 @@ def check(source: str) -> list[Finding]:
         for n in ast.walk(tree)
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
     )
+    is_script = any(is_main_guard(stmt) for stmt in tree.body)
     entry_points = {
         n.id
         for stmt in tree.body
@@ -195,7 +198,7 @@ def check(source: str) -> list[Finding]:
             continue
         if is_trivial(func):
             found.append(Finding(func.lineno, "trivial-wrapper", name, sites))
-        elif (nested or name.startswith("_")) and sites == 1:
+        elif (is_script or nested or name.startswith("_")) and sites == 1:
             found.append(Finding(func.lineno, "single-use-helper", name, sites))
     return sorted(found, key=lambda f: f.line)
 
