@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Flag ASCII stand-ins for math in figure text and document prose.
+r"""Flag ASCII stand-ins for math in figure text and document prose.
 
 A phase diagram titled "mean |<kappa_b>|", ticked "pi/2 ... 3pi/2" or
 annotated "+phi" ships uncompiled notation beside a document that typesets
@@ -21,9 +21,9 @@ What is read:
   the string value of a ``title:``, ``subtitle:`` or ``caption:`` argument.
   Other code (``#let``, ``#set``, call arguments) is skipped: a path or a key
   there is not prose.
-- ``.tex`` -- the body after ``\\begin{document}`` outside math and
-  verbatim-like environments; arguments of ``\\label``, ``\\ref``,
-  ``\\cite``, ``\\includegraphics`` and similar are skipped.
+- ``.tex`` -- the body after ``\begin{document}`` outside math and
+  verbatim-like environments; arguments of ``\label``, ``\ref``,
+  ``\cite``, ``\includegraphics`` and similar are skipped.
 - ``.py`` -- only a module that imports matplotlib or calls an Axes method.
   String literals passed to a label call (``set_xlabel``, ``set_title``,
   ``text``, ``annotate``, ``legend``, ``set_xticks(labels=...)``, ...) or as
@@ -49,7 +49,7 @@ that never plots is skipped either way)::
         name: math is typeset, not spelled, in prose and figure labels
         entry: pixi run python scripts/plain_math.py --gate
         language: system
-        files: '(\\.typ|(?<!\\.code)\\.tex|/(figures|plots?)/[^/]*\\.py)$'
+        files: '(\.typ|(?<!\.code)\.tex|/(figures|plots?)/[^/]*\.py)$'
 """
 
 from __future__ import annotations
@@ -114,9 +114,12 @@ STAND_IN = re.compile(
     rf"""
     (?P<magnitude>\|(?=[^\s|])[^|\n]{{1,40}}?(?<=[^\s|])\|)
   | (?P<expectation><(?=[A-Za-z\\])[^<>\n]{{1,30}}?(?<=\S)>)
-  | (?P<pi_multiple>(?<![\w\\.])(?:\d+(?:\.\d+)?\s*pi(?:\s*/\s*\d+)?|pi\s*/\s*\d+)(?!\w))
-  | (?P<subscript>(?<![\w\\])(?:{_G}|[A-Za-z])\\?_(?:\{{[^{{}}\n]{{1,20}}\}}|[A-Za-z0-9]+))
-  | (?P<superscript>(?<![\w\\])(?:{_G}|[A-Za-z]|\d+)\^(?:\{{[^{{}}\n]{{1,20}}\}}|[-+]?[A-Za-z0-9]+))
+  | (?P<pi_multiple>(?<![\w\\.])
+      (?:\d+(?:\.\d+)?\s*pi(?:\s*/\s*\d+)?|pi\s*/\s*\d+)(?!\w))
+  | (?P<subscript>(?<![\w\\])(?:{_G}|[A-Za-z])\\?_
+      (?:\{{[^{{}}\n]{{1,20}}\}}|[A-Za-z0-9]+))
+  | (?P<superscript>(?<![\w\\])(?:{_G}|[A-Za-z]|\d+)\^
+      (?:\{{[^{{}}\n]{{1,20}}\}}|[-+]?[A-Za-z0-9]+))
   | (?P<function>(?<![\w\\])(?:exp|arg|Re|Im)\()
   | (?P<greek>(?<![\w\\])(?:{_G})\d*(?!\w))
   | (?P<digit_subscript>(?<![\w\\.])[A-Za-z]\d{{1,2}}(?!\w|\.\d))
@@ -286,6 +289,18 @@ def _raw_end(s: str, i: int) -> int:
     return len(s) if end == -1 else end + ticks
 
 
+def _typst_hash_at(s: str, i: int, vis: bytearray) -> int | None:
+    """Skip the ``#`` construct at ``i``; None if it is a bare ``#``."""
+    if m := IDENT.match(s, i + 1):
+        return typst_hash(s, m, vis)
+    nxt = s[i + 1 : i + 2]
+    if nxt == "[":
+        return typst_markup(s, i + 2, vis, "]")
+    if nxt in ("(", "{"):
+        return typst_code(s, i + 2, vis, ")}"["({".index(nxt)], eol=False)
+    return None
+
+
 def typst_markup(s: str, i: int, vis: bytearray, close: str | None) -> int:
     """Mark markup text visible from ``i`` until ``close``; returns the end."""
     while i < len(s):
@@ -305,19 +320,12 @@ def typst_markup(s: str, i: int, vis: bytearray, close: str | None) -> int:
             i = _raw_end(s, i)
         elif c == "$":
             i = _until(s, i + 1, "$")
-        elif (
-            c == "<"
-            and (m := TYPST_LABEL.match(s, i))
-            or c == "@"
-            and (m := TYPST_REF.match(s, i))
+        elif (c == "<" and (m := TYPST_LABEL.match(s, i))) or (
+            c == "@" and (m := TYPST_REF.match(s, i))
         ):
             i = m.end()
-        elif c == "#" and (m := IDENT.match(s, i + 1)):
-            i = typst_hash(s, m, vis)
-        elif c == "#" and s[i + 1 : i + 2] == "[":
-            i = typst_markup(s, i + 2, vis, "]")
-        elif c == "#" and s[i + 1 : i + 2] in ("(", "{"):
-            i = typst_code(s, i + 2, vis, ")}"["({".index(s[i + 1])], eol=False)
+        elif c == "#" and (end := _typst_hash_at(s, i, vis)) is not None:
+            i = end
         elif c == "[" and close == "]":
             i = typst_markup(s, i + 1, vis, "]")
         else:
@@ -594,6 +602,31 @@ def _call_name(call: ast.Call) -> str | None:
     return func.id if isinstance(func, ast.Name) else None
 
 
+Table = dict[str, list[tuple[ast.expr, tuple[int, ...]]]]
+
+
+def _string_parts(expr: ast.expr) -> list[ast.expr]:
+    """The sub-expressions whose strings ``expr`` is built from."""
+    match expr:
+        case (
+            ast.JoinedStr(values=parts)
+            | ast.Tuple(elts=parts)
+            | ast.List(elts=parts)
+            | ast.Set(elts=parts)
+        ):
+            return parts
+        case ast.IfExp():
+            return [expr.body, expr.orelse]
+        case ast.BinOp():
+            return [expr.left, expr.right]
+        case ast.Starred():
+            return [expr.value]
+        case ast.Call(func=ast.Attribute() as func):
+            # "...".format(...) and "\n".join([...]) build a label from parts.
+            return [func.value, *(expr.args if func.attr == "join" else ())]
+    return []
+
+
 class Bindings:
     """Where each name in a module may get its value: crude, like
     trivial_wrappers.py's call counting -- every binding of a name anywhere
@@ -601,12 +634,8 @@ class Bindings:
     """
 
     def __init__(self, tree: ast.Module):
-        self.values: dict[str, list[tuple[ast.expr, tuple[int, ...]]]] = defaultdict(
-            list
-        )
-        self.loops: dict[str, list[tuple[ast.expr, tuple[int, ...]]]] = defaultdict(
-            list
-        )
+        self.values: Table = defaultdict(list)
+        self.loops: Table = defaultdict(list)
         self.appended: dict[str, list[ast.expr]] = defaultdict(list)
         self.returns: dict[str, list[ast.expr]] = defaultdict(list)
         for node in ast.walk(tree):
@@ -637,7 +666,9 @@ class Bindings:
                 else:
                     self.appended[name].append(value)
 
-    def _bind(self, table, target: ast.expr, value: ast.expr, path: tuple[int, ...]):
+    def _bind(
+        self, table: Table, target: ast.expr, value: ast.expr, path: tuple[int, ...]
+    ):
         if isinstance(target, ast.Name):
             table[target.id].append((value, path))
         elif isinstance(target, ast.Tuple | ast.List):
@@ -689,19 +720,24 @@ class Bindings:
             yield from self.elements(expr.left, depth + 1)
             yield from self.elements(expr.right, depth + 1)
         elif isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name):
-            name, args = expr.func.id, expr.args
-            if name == "enumerate" and args:
-                for element in self.elements(args[0], depth + 1):
-                    yield ast.Tuple(elts=[ast.Constant(0), element])
-            elif name == "zip":
-                columns = [list(self.elements(a, depth + 1)) for a in args]
-                for row in zip(*columns, strict=False):
-                    yield ast.Tuple(elts=list(row))
-            elif name in ("list", "tuple", "sorted", "reversed") and args:
-                yield from self.elements(args[0], depth + 1)
-            else:
-                for value in self.returns.get(name, ()):
-                    yield from self.elements(value, depth + 1)
+            yield from self._call_elements(expr.func.id, expr.args, depth + 1)
+
+    def _call_elements(
+        self, name: str, args: list[ast.expr], depth: int
+    ) -> Iterator[ast.expr]:
+        """The elements iterating over ``name(*args)`` may yield."""
+        if name == "enumerate" and args:
+            for element in self.elements(args[0], depth):
+                yield ast.Tuple(elts=[ast.Constant(0), element])
+        elif name == "zip":
+            columns = [list(self.elements(a, depth)) for a in args]
+            for row in zip(*columns, strict=False):
+                yield ast.Tuple(elts=list(row))
+        elif name in ("list", "tuple", "sorted", "reversed") and args:
+            yield from self.elements(args[0], depth)
+        else:
+            for value in self.returns.get(name, ()):
+                yield from self.elements(value, depth)
 
     def strings(self, expr: ast.expr, depth: int) -> Iterator[ast.Constant]:
         """Every string literal ``expr`` may evaluate to, or be built from."""
@@ -709,29 +745,12 @@ class Bindings:
             return
         if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
             yield expr
-        elif isinstance(expr, ast.JoinedStr):
-            for part in expr.values:
-                yield from self.strings(part, depth + 1)
-        elif isinstance(expr, ast.Tuple | ast.List | ast.Set):
-            for element in expr.elts:
-                yield from self.strings(element, depth + 1)
-        elif isinstance(expr, ast.IfExp):
-            yield from self.strings(expr.body, depth + 1)
-            yield from self.strings(expr.orelse, depth + 1)
-        elif isinstance(expr, ast.BinOp):
-            yield from self.strings(expr.left, depth + 1)
-            yield from self.strings(expr.right, depth + 1)
-        elif isinstance(expr, ast.Starred):
-            yield from self.strings(expr.value, depth + 1)
         elif isinstance(expr, ast.Name):
             for value in self.resolve(expr.id, depth + 1):
                 yield from self.strings(value, depth + 1)
-        elif isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute):
-            # "...".format(...) and "\n".join([...]) build a label from parts.
-            yield from self.strings(expr.func.value, depth + 1)
-            if expr.func.attr == "join":
-                for arg in expr.args:
-                    yield from self.strings(arg, depth + 1)
+        else:
+            for part in _string_parts(expr):
+                yield from self.strings(part, depth + 1)
 
 
 def is_plotting(tree: ast.Module) -> bool:
@@ -777,7 +796,7 @@ def check_python(source: str) -> list[Finding]:
                     found[key] = Finding(call.lineno, 1, "bare-marker", "math-ok", "")
                 if marked:
                     continue
-                text = MATHTEXT.sub(lambda m: " " * len(m.group()), literal.value)
+                text = MATHTEXT.sub(lambda m: " " * len(m.group()), str(literal.value))
                 for _, kind, token, suggestion in stand_ins(text, typst=False):
                     key = (literal.lineno, literal.col_offset, token)
                     found[key] = Finding(
@@ -806,11 +825,19 @@ def format_finding(path: Path | str, f: Finding) -> str:
     return f'{path}:{f.line}:{f.col}: {f.kind}: "{f.token}" -> {f.suggestion}'
 
 
+def _expand(name: str) -> Iterator[Path]:
+    """``name`` itself, or what it matches when it is a glob."""
+    if not glob.has_magic(name):
+        yield Path(name)
+        return
+    # Path.glob takes no absolute pattern, so split off the drive and root.
+    anchor = Path(name).anchor
+    yield from Path(anchor or ".").glob(name[len(anchor) :])
+
+
 def files(paths: list[str]) -> Iterator[Path]:
     for name in paths:
-        matches = glob.glob(name, recursive=True) if glob.has_magic(name) else [name]
-        for match in sorted(matches):
-            path = Path(match)
+        for path in sorted(_expand(name)):
             if not path.is_dir():
                 yield path
                 continue
