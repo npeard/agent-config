@@ -211,6 +211,7 @@ pixi run format                     # ruff (py) + mdformat (md), autofix
 pixi run lint                       # ruff check
 pixi run ascii                      # scripts/check_ascii.py
 pixi run prose-metrics FILE        # paragraph/caption/section metrics for a .tex, .typ or .md
+pixi run plain-math PATH...         # ASCII math stand-ins in prose and figure labels
 pixi run spell                      # codespell
 pixi run friction                   # recurring friction from transcripts
 pixi run burn                       # where a session's tokens went
@@ -451,6 +452,14 @@ and pricing remain separate and unchanged.
   sentence-length metrics against the session's first measurement,
   because advice to keep sentences short loses to the habit of writing
   long ones and a number does not.
+- `hooks/plain-math.py` -- after a Write or Edit of a `.typ`, `.tex` or
+  matplotlib `.py` file, runs `scripts/plain_math.py` on it and blocks
+  on ASCII math stand-ins (`3pi/2`, `phi`, `mean |<kappa_b>|`) on the
+  lines the tool wrote; findings elsewhere in the file are counted, not
+  listed. A label string compiles whether or not it is math, so nothing
+  else reported these before a reader did. Claude Code only: Codex's
+  apply_patch payload names no single file, so Codex projects use the
+  pre-commit hook in the script's docstring instead.
 - `hooks/spec-retraction-check.py` -- fires when a *spec* is written
   with retraction-shaped instructions in it ("claims to retract", "what
   the earlier draft claimed"). `AGENTS.md` and `writing-orchestration`
@@ -577,10 +586,19 @@ and pricing remain separate and unchanged.
   and flags new modules with one caller or a read of another module's
   privates, because a LOC diff does not show how many concepts a reader
   must now hold; it is also a report, and the one script that needs a
-  third-party package (`grimp`). `check_forward_refs.py` is the gate: it
-  fails when a LaTeX or Typst document cites a label defined later in
-  reading order (appendices and floats excepted), because a reader
-  cannot yet follow a pointer to text they have not read.
+  third-party package (`grimp`). `trivial_wrappers.py` lists the
+  functions too thin to justify existing -- a one-statement body, or a
+  private or nested helper used once -- as the mechanical half of rule
+  13; a reasoned `wrapper-ok` marker exempts one, and `--gate` makes it
+  fail. `plain_math.py` flags ASCII stand-ins for math (`phi`, `3pi/2`,
+  `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX prose and in the string
+  literals a matplotlib script passes to a label, title, tick or legend
+  call, outside `$...$`; a reasoned `math-ok` comment exempts a line,
+  and its docstring carries the pre-commit entry a project copies.
+  `check_forward_refs.py` is the gate: it fails when a LaTeX or Typst
+  document cites a label defined later in reading order (appendices and
+  floats excepted), because a reader cannot yet follow a pointer to text
+  they have not read.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

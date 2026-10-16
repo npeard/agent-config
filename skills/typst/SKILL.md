@@ -240,10 +240,10 @@ over. Code or notes referring to `typst query` predate this.
 
 ## Ecosystem
 
-Package and tooling table in `reference.md`. The three that change a
+Package and tooling table in `reference.md`. The two that change a
 decision: **touying** for slides (not polylux -- 0.4.0 removed themes
-and `#pause`), **equate** for subequations, and **no linter exists**.
-Bibliography needs no package -- Hayagriva is built in and reads `.bib`.
+and `#pause`) and **equate** for subequations. Bibliography needs no
+package -- Hayagriva is built in and reads `.bib`.
 
 ## Boundaries
 
@@ -273,3 +273,4 @@ text and a reviewer diffs the two renderings, not the wording.
 | "A missing citation will show as `[?]`"          | It is a hard error. Not LaTeX.                                         |
 | "I'll copy the LaTeX table syntax"               | No `&`, no `\\`, no `\hline`. `table(columns: n, ...)`.                |
 | "polylux is the slides package"                  | 0.4.0 removed what you want. Use touying.                              |
+| "Spelled `phi` is fine"                          | It renders as a word. `$phi$`; `plain-math` checks.                    |

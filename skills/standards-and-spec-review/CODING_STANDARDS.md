@@ -226,14 +226,14 @@ examples and one-off scripts, which are transient by design and whose
 readability for a human experimenter outranks factoring -- see the
 notebooks skill for that carve-out.
 
-## 13. Generalize before adding a module; never read another's privates
+## 13. Generalize before adding a module or function; never read another's privates
 
-A new module, wrapper or helper is a concept a reader must hold, beyond
-its LOC. The defect is not module count but the *shallow* module
-(Ousterhout): a small interface over another module's internals, with
-one caller. A deep module -- a real algorithm behind a narrow interface
--- earns its file even with one caller; folding it into a large class
-makes that class harder to read.
+A new module, wrapper or helper is a concept a reader must hold. The
+defect is not module count but the *shallow* module (Ousterhout): a
+small interface over another module's internals, with one caller. A deep
+module -- a real algorithm behind a narrow interface -- earns its file
+even with one caller; folding it into a large class makes that class
+harder to read.
 
 ```python
 # Flag: a new module that reads Graph's internals for its one caller
@@ -251,6 +251,9 @@ class Graph:
 
 A module `surface_area.py` flags is a candidate, not a finding: judge
 whether it is shallow before reporting it.
+
+Examples: a function earns its name by shared logic;
+`pixi run trivial-wrappers` lists the rest.
 
 ## Fallback lens: the classic smells
 

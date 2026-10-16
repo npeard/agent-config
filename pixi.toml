@@ -25,6 +25,8 @@ dev = { features = ["dev"], solve-group = "default" }
 ascii = "python scripts/check_ascii.py"
 prose-metrics = "python scripts/prose_metrics.py"
 surface-area = "python scripts/surface_area.py"
+trivial-wrappers = "python scripts/trivial_wrappers.py"
+plain-math = "python scripts/plain_math.py"
 forward-refs = "python scripts/check_forward_refs.py"
 preflight = "python scripts/preflight.py"
 friction = "python scripts/friction.py"

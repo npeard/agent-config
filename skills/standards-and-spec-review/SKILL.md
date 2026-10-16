@@ -76,6 +76,12 @@ reading for rule 13. It lists new modules, public symbols and import
 edges, with symbols and edges per 100 net LOC, and flags the new modules
 worth a look.
 
+Also run
+`pixi run --manifest-path ~/.agents/agent-config/pixi.toml trivial-wrappers ABSOLUTE_PATH...`
+in report mode over the Python files the branch added or changed. It
+lists one-statement and single-use functions, the function-level half of
+rule 13; each is a candidate to judge, not a finding.
+
 Do not restate the rules here or in the report -- name them. A reviewer
 that pastes the rulebook back at the reader buries its own findings.
 
