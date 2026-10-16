@@ -1637,3 +1637,28 @@ standards-and-spec-review runs the script in branch mode. A project can gate
 on it, which is how the doqs top-level examples use it. No AGENTS.md prose:
 the existing rule-13 trigger line already points at the skill.
 """
+
+[[decision]]
+class = "plain-text-math-in-figures-and-prose"
+source = "observed"
+date = "2026-10-15"
+cause = "rule-not-enforced"
+outcome = "tier-1"
+note = """
+A report's phase-diagram figure shipped "mean |<kappa_b>|" as a panel title,
+"pi/2 ... 3pi/2" as polar tick labels and "+phi", "phi / pi", "E1 - E0" across
+its other figures, while the report beside them typeset the same symbols. The
+user caught it, not a build: a label string compiles whether or not it is
+math, and no skill stated the rule, so nothing could have reported it.
+
+Tier 1 plus the script it runs. scripts/plain_math.py finds the stand-ins
+mechanically (AST for matplotlib label call sites, tracing a variable to the
+tuples it was looped from; a mode scanner for Typst and LaTeX prose), and
+hooks/plain-math.py runs it after each Write/Edit, blocking only on lines the
+tool wrote, the same split prose-feedback.py makes so a block can always be
+cleared in scope. Validated on that report's committed tree: all 25 findings
+true, including every example the user named. Projects can also gate at
+commit time with the pre-commit entry in the script's docstring. The rule
+itself is one bullet in scientific-writing and a red-flags row in typst,
+both pointing at the checker; AGENTS.md is unchanged.
+"""

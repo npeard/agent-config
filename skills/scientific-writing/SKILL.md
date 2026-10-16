@@ -137,8 +137,21 @@ body. It does not gate.
 ## 5. Precision
 
 - **A term of art is not jargon.** Write "propagator", not "the forward
-  trajectory of all basis states"; "k = 0, pi", not "the two
+  trajectory of all basis states"; `$k = 0, \pi$`, not "the two
   self-conjugate ones". A paraphrase needs a gloss the term did not.
+- **Every symbol a reader sees is compiled math.** That covers prose,
+  captions, and figure text: axis labels, ticks, titles, colorbars,
+  legends, annotations. An ASCII stand-in compiles and renders, so no
+  build catches it:
+  ```
+  Flag:   ax.set_title("mean |<kappa_b>|"); ticks "pi/2", "3pi/2"; "J1/J2 model"; "rho"
+  Prefer: ax.set_title(r"mean $|\langle\kappa_b\rangle|$"); r"$3\pi/2$"; "$J_1$/$J_2$ model"
+  ```
+  The `plain-math` hook checks each edit to a `.tex`, `.typ` or
+  matplotlib script. Without it, run
+  `pixi run --manifest-path ~/.agents/agent-config/pixi.toml plain-math PATH...`.
+  An English word that is also a letter name ("beta testers") takes a
+  `math-ok: <reason>` comment on its line.
 - **One name per quantity.** Synonym churn ("spinon", "localized
   excitation", "the defect") reads as several objects.
 - **A coined term needs a reason in the ledger**: every use costs the
