@@ -5,11 +5,13 @@ channels = ["conda-forge"]
 platforms = ["osx-64", "osx-arm64", "linux-64", "win-64"]
 
 [dependencies]
-python = ">=3.13"
+# <3.15: ukkonen (pre-commit -> identify) has no cp315 conda-forge build yet,
+# so the solver falls back to identify 1.x, which cannot read ruff's hooks.
+python = ">=3.13,<3.15"
 grimp = ">=3.17,<4"
 
 [feature.dev.dependencies]
-ruff = ">=0.16.10,<0.17"
+ruff = ">=0.17.1,<0.18"
 codespell = "*"
 pre-commit = "*"
 mdformat = "*"
