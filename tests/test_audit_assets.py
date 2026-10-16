@@ -487,6 +487,18 @@ class TestReadAndEmit:
         assert [f.asset for f in found] == ["hooks/h.py"]
         assert "agent-context" in found[0].detail
 
+    def test_a_block_reason_is_an_agent_context_sink(self, fake_root):
+        # The agent reads a block's reason as feedback, same as additionalContext.
+        (fake_root / "hooks" / "h.py").write_text(
+            "import json\n"
+            "from pathlib import Path\n"
+            "t = Path('pixi.toml').read_text()\n"
+            'print(json.dumps({"decision": "block", "reason": t}))\n'
+        )
+        found = audit_assets.check_read_and_emit(fake_root)
+        assert [f.asset for f in found] == ["hooks/h.py"]
+        assert "agent-context" in found[0].detail
+
     def test_the_audit_script_does_not_report_itself(self):
         """It holds every pattern as data, so a naive scan flags it and the
         finding can never be resolved."""
