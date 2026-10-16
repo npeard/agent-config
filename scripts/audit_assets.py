@@ -761,7 +761,8 @@ HIGH_SINKS = frozenset({"agent-context", "shell-argument"})
 # lookahead for `=` keeps a keyword argument (`print(file=...)`) from counting
 # as emitted content.
 EMIT_SINKS = {
-    "agent-context": re.compile(r"additionalContext"),
+    # A PostToolUse block's reason is fed back to the agent like context.
+    "agent-context": re.compile(r"additionalContext|[\"']decision[\"']"),
     "shell-argument": re.compile(r"osascript|shell=True|os\.system"),
     "stdout-nonliteral": re.compile(
         r"print\(\s*(?:f[\"']|[A-Za-z_][A-Za-z0-9_]*\b(?!\s*=))"

@@ -235,7 +235,12 @@ def violation_lines(header: str, violations: list, root: str, room: int) -> list
     here = os.path.dirname(root)
 
     def name(path: str) -> str:
-        return shown_path(os.path.relpath(path, here))
+        try:
+            path = os.path.relpath(path, here)
+        except ValueError:  # Windows: no relative path across drives
+            pass
+        # as_posix: a Windows separator would fail PLAIN_PATH and print quoted.
+        return shown_path(Path(path).as_posix())
 
     shown = min(len(violations), MAX_VIOLATIONS)
     if shown < len(violations) or shown + 1 > room:
