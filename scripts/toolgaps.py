@@ -195,7 +195,7 @@ def gaps(root: Path) -> list[tuple[str, str]]:
 
 
 def assets(config: Path = AGENT_CONFIG) -> dict[str, list[str]]:
-    """Reusable tooling already available to copy or adapt.
+    """Reusable tooling already available to install or adapt.
 
     This is what makes "an asset already solves this, it just is not
     installed here" a reachable conclusion; without the inventory there is
@@ -236,7 +236,7 @@ def render(root: Path, show_assets: bool) -> None:
     inventory = assets()
     if not inventory:
         return
-    print("\nAvailable in agent-config to copy or adapt:")
+    print("\nAvailable in agent-config to install or adapt:")
     for label, names in inventory.items():
         print(f"  {label:8} {', '.join(names)}")
     print("Prefer adapting one of these over writing something new; if more")

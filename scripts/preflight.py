@@ -12,8 +12,9 @@ should have at all (capability).** Pre-commit installation and test results
 are state and belong here; "is there a type checker at all" does not.
 
 Deliberately stdlib-only and project-agnostic -- host hooks load it by file
-path, with no install step, so it must run standalone. Run alone it runs and reports; the checks that need a sibling module skip
-without it: hook registration and skill links need ``platform_paths.py``,
+path, with no install step, so it must run standalone. Run alone it runs
+and reports; the checks that need a sibling module skip without it: hook
+registration and skill links need ``platform_paths.py``,
 and the dependency and VS Code extension rows need ``dep_updates.py`` and
 ``vscode_extensions.py`` (plus ``platform_paths.py``, which both load). It
 assumes a current interpreter rather than degrading to whatever `python3`

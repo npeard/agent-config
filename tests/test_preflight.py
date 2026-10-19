@@ -1043,13 +1043,13 @@ class TestSkillDestinationOrchestration:
         assert str(home / ".agents" / "skills") in output
 
 
-class TestCopiedAloneIntoANewProject:
+class TestRunsAloneWithoutItsSiblings:
     """The docstring and README both advertise this file as runnable standalone by
     file path, and `scripts/platform_paths.py` is deliberately not
     on that list -- it is described as a library module, not an installed tool.
 
-    So a bare copy has to work. It did not: the sibling was loaded
-    unconditionally at module scope, so a copy raised FileNotFoundError from
+    So it has to run without its siblings. It did not: the sibling was loaded
+    unconditionally at module scope, so it raised FileNotFoundError from
     the import before a single check ran -- and in a script whose exit
     contract is 0 unless --strict, precisely so a SessionStart hook can never
     abort a session over a warning.

@@ -184,8 +184,8 @@ project with no `pixi.toml` gets a warning instead, since these scripts
 run in repos that manage their environments some other way. An env
 reached through a symlink counts as local, which is what a git worktree
 sharing the parent checkout's `.pixi` has. Only a too-old interpreter
-stops the remaining checks -- the alternative was a copy of preflight
-reporting one failure and inspecting nothing.
+stops the remaining checks -- the alternative was preflight reporting
+one failure and inspecting nothing.
 
 `pixi run preflight` also confirms that both instruction adapters match
 the canonical guidance and that skills are linked into both host
