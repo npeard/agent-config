@@ -112,7 +112,7 @@ def compile_findings(
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Findings name paths, and stdout may be a cp1252 console.
+    # Escape what cp1252 stdout cannot encode; see check_ascii.main.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter

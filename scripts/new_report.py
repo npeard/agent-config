@@ -258,7 +258,7 @@ def ignore(repo: Path, report: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Paths and the title reach stdout, which may be a cp1252 console.
+    # Escape what cp1252 stdout cannot encode; see check_ascii.main.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter

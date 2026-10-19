@@ -310,8 +310,7 @@ def report(path: Path, as_json: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Findings name paths, which may not encode in the console's codepage
-    # (pre-commit's stdout is cp1252 on Windows); escape rather than raise.
+    # Escape what cp1252 stdout cannot encode; see check_ascii.main.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     target = parser.add_mutually_exclusive_group(required=True)

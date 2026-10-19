@@ -848,8 +848,7 @@ def files(paths: list[str]) -> Iterator[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Findings name paths and tokens that may not encode in the console's
-    # codepage (pre-commit's stdout is cp1252 on Windows); escape, don't raise.
+    # Escape what cp1252 stdout cannot encode; see check_ascii.main.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--gate", action="store_true", help="exit 1 on any finding")

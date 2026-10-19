@@ -967,8 +967,7 @@ def check_tests(report: Report, root: Path, run: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Rows name branches and paths that may not encode in the console's
-    # codepage (pre-commit's stdout is cp1252 on Windows); escape, don't raise.
+    # Escape what cp1252 stdout cannot encode; see check_ascii.main.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--with-tests", action="store_true", help="run the suite")
