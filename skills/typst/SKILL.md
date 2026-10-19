@@ -13,7 +13,9 @@ costs you is the other: **exit 0, no diagnostic, wrong output.**
 
 There is no `--deny-warnings` flag, no linter, and no overflow check
 (typst#5759 and typst#6787 both open). So a project needs its own gate,
-and "it compiled" is never evidence.
+and "it compiled" is never evidence. agent-config's
+`report-check --compile` fails on any warning and on a page budget; it
+cannot see overflow, so the assert below still applies.
 
 ## The silent traps
 

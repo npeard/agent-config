@@ -62,8 +62,7 @@ uncertainty, then state the assumption you made and continue.
 `pixi run preflight` (or the project's equivalent). Add `--with-tests`
 when starting fresh work; add `--check-updates` weekly rather than every
 session, since it costs a network round trip per hook repo. If the
-project has no such script, install agent-config's exported `preflight`
-command (README, "Using these tools from another project").
+project has no such script, install agent-config's exported `preflight`.
 
 ### 1. Understand -- `superpowers:brainstorming`
 
