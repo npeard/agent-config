@@ -689,7 +689,7 @@ class TestInterpreter:
     def test_a_project_with_no_pixi_manifest_only_warns(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """These scripts are advertised as copyable into any project, and a
+        """These scripts are advertised as runnable in any project, and a
         conda named env or ~/.virtualenvs lives outside the checkout by
         design. Failing there reported one problem and inspected nothing."""
         monkeypatch.setattr("sys.prefix", "/opt/conda/envs/thesis")
@@ -858,7 +858,7 @@ class TestSkillsLinked:
         assert "renamed-away" in details(report, "skills linked")
 
     def test_silent_in_a_project_that_installs_no_skills(self, tmp_path: Path):
-        """preflight is copied into projects verbatim, and a `skills/`
+        """preflight runs standalone in other projects, and a `skills/`
         directory with no installer says nothing about this machine."""
         (tmp_path / "skills").mkdir()
         report = preflight.Report()
@@ -1044,9 +1044,9 @@ class TestSkillDestinationOrchestration:
 
 
 class TestCopiedAloneIntoANewProject:
-    """The docstring and README both advertise this file as copyable into a
-    new project verbatim, and `scripts/platform_paths.py` is deliberately not
-    on that list -- it is described as a library module, not a copied tool.
+    """The docstring and README both advertise this file as runnable standalone by
+    file path, and `scripts/platform_paths.py` is deliberately not
+    on that list -- it is described as a library module, not an installed tool.
 
     So a bare copy has to work. It did not: the sibling was loaded
     unconditionally at module scope, so a copy raised FileNotFoundError from

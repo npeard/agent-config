@@ -91,7 +91,7 @@ def has_reason(rest: str) -> bool:
     """Whether the text after the marker explains anything.
 
     Deliberately duplicated from scripts/suppressions.py rather than imported:
-    each script here is meant to be copied into another repo on its own, and a
+    each script here must run standalone by file path, and a
     cross-import would break the one property that makes them portable.
     """
     return bool(re.search(r"[A-Za-z]{3}", rest.strip(" -#:<>!")))

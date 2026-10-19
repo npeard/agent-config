@@ -181,11 +181,11 @@ scripts and hooks into contortions for a version nobody chose.
 `pixi run preflight` fails rather than warns if it is running outside a
 project-local environment, or below the floor the project declares. A
 project with no `pixi.toml` gets a warning instead, since these scripts
-are copied into repos that manage their environments some other way. An
-env reached through a symlink counts as local, which is what a git
-worktree sharing the parent checkout's `.pixi` has. Only a too-old
-interpreter stops the remaining checks -- the alternative was a copy of
-preflight reporting one failure and inspecting nothing.
+run in repos that manage their environments some other way. An env
+reached through a symlink counts as local, which is what a git worktree
+sharing the parent checkout's `.pixi` has. Only a too-old interpreter
+stops the remaining checks -- the alternative was a copy of preflight
+reporting one failure and inspecting nothing.
 
 `pixi run preflight` also confirms that both instruction adapters match
 the canonical guidance and that skills are linked into both host
@@ -252,6 +252,8 @@ A pixi git dependency, for a command you run yourself:
 [tool.pixi.pypi-dependencies]
 agent-config = { git = "https://github.com/npeard/agent-config", tag = "vX.Y.Z" }
 ```
+
+A `pixi.toml` consumer writes `[pypi-dependencies]` instead.
 
 Exported commands: `check-ascii`, `plain-math`, `trivial-wrappers`,
 `forward-refs`, `preflight`, `new-report`, `report-check`. The hooks are
@@ -598,15 +600,15 @@ and pricing remain separate and unchanged.
   `suppressions.py`, `thresholds.py`, `prose_metrics.py`) meant to be
   reused rather than rewritten from scratch; the exported ones are
   installed, not copied (see "Using these tools from another project").
-  Copied alone each one runs; `preflight.py` skips its two link-related
-  checks unless `platform_paths.py` is copied beside it, and says so
-  rather than failing to start. Plus `register_hooks.py` and
-  `audit_assets.py`, which are specific to this repo -- the first to its
-  install, the second because it knows this layout rather than
-  describing a capability every project has. `audit_assets.py` also owns
-  the always-loaded context ceilings, which
-  `tests/test_context_budget.py` imports rather than restating, so the
-  gate and the report share one definition of each number.
+  Each runs standalone by file path, as host hooks load it;
+  `preflight.py` skips its two link-related checks unless
+  `platform_paths.py` is beside it, and says so rather than failing to
+  start. Plus `register_hooks.py` and `audit_assets.py`, which are
+  specific to this repo -- the first to its install, the second because
+  it knows this layout rather than describing a capability every project
+  has. `audit_assets.py` also owns the always-loaded context ceilings,
+  which `tests/test_context_budget.py` imports rather than restating, so
+  the gate and the report share one definition of each number.
   `check_ascii.py` lets a single file opt out with a reason-bearing
   `check-ascii: allow` marker in its first ten lines; a marker with no
   reason fails rather than skipping, so the exemption is documented
@@ -626,7 +628,7 @@ and pricing remain separate and unchanged.
   `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX prose and in the string
   literals a matplotlib script passes to a label, title, tick or legend
   call, outside `$...$`; a reasoned `math-ok` comment exempts a line,
-  and its docstring carries the pre-commit entry a project copies.
+  and its docstring is also the exported `plain-math` hook.
   `check_forward_refs.py` is the gate: it fails when a LaTeX or Typst
   document cites a label defined later in reading order (appendices and
   floats excepted), because a reader cannot yet follow a pointer to text

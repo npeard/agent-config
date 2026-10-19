@@ -11,9 +11,8 @@ right now (state); toolgaps asks whether the project has the tooling it
 should have at all (capability).** Pre-commit installation and test results
 are state and belong here; "is there a type checker at all" does not.
 
-Deliberately stdlib-only and project-agnostic -- it is meant to be copied
-into new projects verbatim, per this repo's ``scripts/`` convention. Copied
-alone it runs and reports; the checks that need a sibling module skip
+Deliberately stdlib-only and project-agnostic -- host hooks load it by file
+path, with no install step, so it must run standalone. Run alone it runs and reports; the checks that need a sibling module skip
 without it: hook registration and skill links need ``platform_paths.py``,
 and the dependency and VS Code extension rows need ``dep_updates.py`` and
 ``vscode_extensions.py`` (plus ``platform_paths.py``, which both load). It
@@ -71,7 +70,7 @@ def _load_sibling(name: str):
     dataclasses look their own module up there while the class is built.
 
     None is not an error. This file's own docstring and the README both
-    advertise it as copyable into a new project verbatim, and the siblings
+    advertise it as runnable standalone by file path, and the siblings
     are deliberately not on that list. Loading one unconditionally broke
     that promise the loudest way available: a FileNotFoundError traceback
     from module scope, before a single check ran, in a script whose exit
@@ -394,7 +393,7 @@ def check_interpreter(report: Report, root: Path) -> bool:
         # A failure only where the project declares a pixi environment: there,
         # an inherited interpreter is how scripts end up contorted for
         # whatever version the machine ships. Elsewhere it is how the project
-        # is built, and preflight is advertised as copyable verbatim.
+        # is built, and preflight must run standalone by file path.
         report.add(
             FAIL if (root / "pixi.toml").is_file() else WARN, "interpreter", detail
         )
@@ -599,7 +598,7 @@ TEST_RUNNERS = (
 def check_friction(report: Report, root: Path) -> None:
     """Surface recurring workflow friction, if the miner is present.
 
-    Silent when friction.py is absent: preflight is meant to be copied into
+    Silent when friction.py is absent: preflight runs standalone in
     projects that have no such script, and a missing optional companion is
     not a finding about the project.
     """
@@ -668,7 +667,7 @@ def check_audit_owed(report: Report, root: Path) -> None:
     sibling module in the same directory is not the coupling the rule is about.
 
     Silent when nothing is owed for the current branch, and silent in projects
-    with no audit script, since preflight is copied into repos that have no
+    with no audit script, since preflight runs in repos that have no
     such concept.
     """
     if not (Path(__file__).resolve().parent / "audit_assets.py").is_file():
@@ -710,8 +709,8 @@ def check_hooks(report: Report, root: Path) -> None:
     Registration is machine state, not repo state -- a fresh clone correctly
     has none -- so it cannot be gated by a test. Session start is when it
     matters, because an unregistered hook is silently absent rather than
-    broken. Silent when the repo has no registrar, since preflight is copied
-    into projects that have no hooks at all.
+    broken. Silent when the repo has no registrar, since preflight runs in
+    projects that have no hooks at all.
     """
     registrar = Path(__file__).resolve().parent / "register_hooks.py"
     if not registrar.is_file():
@@ -855,7 +854,7 @@ def check_skills(
 
     A link must target the named skill in this checkout or its main checkout:
     sessions in linked worktrees still consume the main installation. Silent
-    in projects with no installer, since preflight is copied into other repos.
+    in projects with no installer, since preflight runs in other repos.
     """
     source = root / "skills"
     if not source.is_dir() or not (root / "install.py").is_file():

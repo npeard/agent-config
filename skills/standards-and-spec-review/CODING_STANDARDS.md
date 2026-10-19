@@ -158,10 +158,10 @@ be forgotten beats a habit that can.
 Flag a diff that re-fixes something already fixed before without adding
 the check that would have caught it.
 
-Generic tools worth reusing across projects live in
-`~/.agents/agent-config/scripts/`. Copy from there rather than rewriting
-one that has already been built and tested; if more than one looks
-relevant, check whether they duplicate a concept before adopting both.
+Generic tools worth reusing live in `agent-config/scripts/`, exported as
+pinned commands. Install one rather than rewriting a tool that has
+already been built and tested; if more than one looks relevant, check
+whether they duplicate a concept before adopting both.
 
 ## 11. A correction replaces the claim it corrects
 
