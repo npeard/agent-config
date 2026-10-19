@@ -229,6 +229,36 @@ pixi run all                        # format, lint, ascii, spell,
                                     #   audit, test
 ```
 
+## Using these tools from another project
+
+Copying a script forks it, and a fix then reaches no one. The generic
+tools are exported instead, in two channels. Pin a tag in either (tags
+are the refs to pin); an update is then opt-in, via
+`pre-commit autoupdate` or by bumping the tag.
+
+A pre-commit hook, for a gate:
+
+```yaml
+repos:
+  - repo: https://github.com/npeard/agent-config
+    rev: vX.Y.Z
+    hooks:
+      - id: check-ascii
+```
+
+A pixi git dependency, for a command you run yourself:
+
+```toml
+[tool.pixi.pypi-dependencies]
+agent-config = { git = "https://github.com/npeard/agent-config", tag = "vX.Y.Z" }
+```
+
+Exported commands: `check-ascii`, `plain-math`, `trivial-wrappers`,
+`forward-refs`, `preflight`, `new-report`, `report-check`. The hooks are
+`check-ascii`, `plain-math`, `trivial-wrappers`, `forward-refs` and
+`report-check`. The command-line interface of this list is the
+compatibility promise; everything else in `scripts/` may change freely.
+
 ## Codex session analytics
 
 Codex capture is opt-in. Run `pixi run capture-codex -- <arguments>` to
@@ -566,31 +596,33 @@ and pricing remain separate and unchanged.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `burn.py`, `toolgaps.py`, `validate_skills.py`,
   `suppressions.py`, `thresholds.py`, `prose_metrics.py`) meant to be
-  copied into new projects rather than rewritten from scratch. Copied
-  alone each one runs; `preflight.py` skips its two link-related checks
-  unless `platform_paths.py` is copied beside it, and says so rather
-  than failing to start. Plus `register_hooks.py` and `audit_assets.py`,
-  which are specific to this repo -- the first to its install, the
-  second because it knows this layout rather than describing a
-  capability every project has. `audit_assets.py` also owns the
-  always-loaded context ceilings, which `tests/test_context_budget.py`
-  imports rather than restating, so the gate and the report share one
-  definition of each number. `check_ascii.py` lets a single file opt out
-  with a reason-bearing `check-ascii: allow` marker in its first ten
-  lines; a marker with no reason fails rather than skipping, so the
-  exemption is documented rather than silent. `prose_metrics.py` reports
-  paragraph, sentence, caption and section sizes for a LaTeX, Typst or
-  Markdown file, so prose density is measured rather than judged by eye;
-  it is a report, not a gate. `surface_area.py` reports the modules,
-  public symbols and import edges a branch added to a Python package,
-  and flags new modules with one caller or a read of another module's
-  privates, because a LOC diff does not show how many concepts a reader
-  must now hold; it is also a report, and the one script that needs a
-  third-party package (`grimp`). `trivial_wrappers.py` lists the
-  functions too thin to justify existing -- a one-statement body, or a
-  private or nested helper used once -- as the mechanical half of rule
-  13; a reasoned `wrapper-ok` marker exempts one, and `--gate` makes it
-  fail. `plain_math.py` flags ASCII stand-ins for math (`phi`, `3pi/2`,
+  reused rather than rewritten from scratch; the exported ones are
+  installed, not copied (see "Using these tools from another project").
+  Copied alone each one runs; `preflight.py` skips its two link-related
+  checks unless `platform_paths.py` is copied beside it, and says so
+  rather than failing to start. Plus `register_hooks.py` and
+  `audit_assets.py`, which are specific to this repo -- the first to its
+  install, the second because it knows this layout rather than
+  describing a capability every project has. `audit_assets.py` also owns
+  the always-loaded context ceilings, which
+  `tests/test_context_budget.py` imports rather than restating, so the
+  gate and the report share one definition of each number.
+  `check_ascii.py` lets a single file opt out with a reason-bearing
+  `check-ascii: allow` marker in its first ten lines; a marker with no
+  reason fails rather than skipping, so the exemption is documented
+  rather than silent. `prose_metrics.py` reports paragraph, sentence,
+  caption and section sizes for a LaTeX, Typst or Markdown file, so
+  prose density is measured rather than judged by eye; it is a report,
+  not a gate. `surface_area.py` reports the modules, public symbols and
+  import edges a branch added to a Python package, and flags new modules
+  with one caller or a read of another module's privates, because a LOC
+  diff does not show how many concepts a reader must now hold; it is
+  also a report, and the one script that needs a third-party package
+  (`grimp`). `trivial_wrappers.py` lists the functions too thin to
+  justify existing -- a one-statement body, or a private or nested
+  helper used once -- as the mechanical half of rule 13; a reasoned
+  `wrapper-ok` marker exempts one, and `--gate` makes it fail.
+  `plain_math.py` flags ASCII stand-ins for math (`phi`, `3pi/2`,
   `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX prose and in the string
   literals a matplotlib script passes to a label, title, tick or legend
   call, outside `$...$`; a reasoned `math-ok` comment exempts a line,

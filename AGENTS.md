@@ -142,9 +142,8 @@ changes there and not here.
   a real wall-clock A/B, and if the result was neutral, say so.
 - **Build new tools when a correction recurs.** If you keep re-fixing
   the same class of error, add the check to the project's CD workflow.
-  Generic tools worth reusing across projects live in
-  `~/.agents/agent-config/scripts/` -- copy from there rather than
-  rewriting one that has already been built.
+  Generic tools worth reusing live in `agent-config/scripts/`, exported
+  as pinned commands -- install one rather than rewriting it.
 - **A correction replaces the claim it corrects** -- no retraction kept
   in a deliverable. This binds the spec stage, where it starts.
 - **DRY forbids duplicated intent**, not only duplicated lines.

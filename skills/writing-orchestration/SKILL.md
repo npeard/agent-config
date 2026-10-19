@@ -95,27 +95,22 @@ are ordinary prose and take the full step 6.
 ## A report built from results
 
 A report whose figures come from computed results is a build, not only a
-document. Lay it out at step 2 so that the prose and the figures can be
-reworked for hours without recomputing anything:
+document. Scaffold it at step 2 with `new-report`, and gate it with
+`report-check` (static in pre-commit, `--compile` in the document rule),
+so the prose and figures can be reworked for hours without recomputing
+anything. The layout has three reasons:
 
-- **One build DAG.** A Snakemake `Snakefile` beside the Typst source
-  runs data, then figure PDFs, then the report PDF. One command rebuilds
-  only what changed. Give each figure its own rule whose inputs are the
-  script and the data files it reads; an undeclared input is a stale
-  figure.
-- **Figures read saved data.** A figure script loads committed results
-  (npz, JSON) or runs a simulation fast enough to repeat on every build.
-  It never trains or sweeps. Expensive compute is a separate driver or
-  rule that writes the data once, so a caption, layout or label change
-  costs seconds, not a rerun.
-- **References live apart from the project.** Papers, preprints, and
-  third-party code or artifacts the report cites go in a dedicated,
-  gitignored `references/` subdirectory of the project. Exclude it from
-  spell and lint, which would otherwise flag text that is not yours to
-  fix. Cite each item by DOI or arXiv id in the bibliography so a fresh
-  clone can fetch it. Loose PDFs beside the code each need their own
-  ignore line, get mistaken for build outputs, and drift into the wrong
-  project.
+- **One build DAG**, so one command rebuilds only what changed and an
+  undeclared figure input is a visible stale figure.
+- **Figures read saved data**, never train or sweep, so a caption or
+  label change costs seconds, not a rerun.
+- **References live apart from the project**, so a cited source is never
+  mistaken for your own file.
+
+Put papers, preprints and third-party artifacts the report cites in a
+gitignored `references/` subdirectory, excluded from spell and lint,
+which would flag text that is not yours to fix. Cite each by DOI or
+arXiv id in the bibliography so a fresh clone can fetch it.
 
 ## Post-cut critique
 
