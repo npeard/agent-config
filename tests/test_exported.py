@@ -51,9 +51,8 @@ def test_console_script_targets_import():
         assert callable(getattr(importlib.import_module(module), function)), command
 
 
-@pytest.mark.installs
 def test_installed_commands_run(tmp_path):
-    """Needs the network: pip fetches the build backend."""
+    """Offline: --no-index proves it, and the dev env supplies setuptools."""
     # Installed from a copy: building in place litters the repo with build/
     # and an egg-info directory.
     source = tmp_path / "source"
@@ -62,10 +61,20 @@ def test_installed_commands_run(tmp_path):
     )
     shutil.copy(REPO_ROOT / "pyproject.toml", source)
     venv = tmp_path / "venv"
-    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+    # System site-packages so the build sees the env's setuptools without a
+    # download; the commands still land in, and run from, the venv.
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--system-site-packages", str(venv)], check=True
+    )
     bin_dir = venv / ("Scripts" if os.name == "nt" else "bin")
     python = bin_dir / ("python.exe" if os.name == "nt" else "python")
-    subprocess.run([str(python), "-m", "pip", "install", "-q", str(source)], check=True)
+    subprocess.run(
+        [
+            *(str(python), "-m", "pip", "install", "-q"),
+            *("--no-index", "--no-build-isolation", str(source)),
+        ],
+        check=True,
+    )
     for command in CONSOLE_SCRIPTS:
         result = subprocess.run(
             [str(bin_dir / command), "--help"],

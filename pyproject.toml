@@ -37,6 +37,3 @@ py-modules = [
     "report_plotting",
     "report_check",
 ]
-
-[tool.pytest.ini_options]
-markers = ["installs: pip-installs the repo into a temp venv (needs the network)"]

@@ -18,6 +18,8 @@ mdformat = "*"
 mdformat-gfm = "*"
 mdformat-frontmatter = "*"
 pytest = "*"
+# The build backend, so test_exported installs this repo offline.
+setuptools = "*"
 
 # What a scaffolded report builds with, so tests/test_new_report.py can build
 # one end to end. This repo goes in editable because the generated build calls
