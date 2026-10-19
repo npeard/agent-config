@@ -1,7 +1,8 @@
 """The export surface: console scripts, pre-commit hooks, and their contract.
 
-Generic over `pyproject.toml` and `.pre-commit-hooks.yaml`, so a command added
-to either is covered without editing this file.
+Read from `pyproject.toml` and `.pre-commit-hooks.yaml`, so a command or hook
+added to either is checked here without editing this file -- except the cp1252
+test, which needs a case per command and fails until a new one has it.
 """
 
 from __future__ import annotations
@@ -75,48 +76,64 @@ def test_installed_commands_run(tmp_path):
         assert result.returncode == 0, f"{command}: {result.stderr}"
 
 
-# script -> (fixture name, fixture body)
+RHO = "\u03c1"
+
+
+def one_file(name: str, body: str):
+    return lambda root: [str(write(root, f"{RHO}_{name}", body))]
+
+
+def report_dir(root: Path) -> list[str]:
+    report = root / RHO
+    (report / "figures").mkdir(parents=True)
+    write(report, "Snakefile", 'FIGURES = {"example": "plot_example"}\n')
+    write(report, "report.typ", "")
+    return [str(report)]
+
+
+def rho_branch(root: Path) -> list[str]:
+    subprocess.run(["git", "checkout", "-q", "-b", RHO], cwd=root, check=True)
+    return ["--no-friction", "--offline"]
+
+
+# command -> its argv, given a fresh git repo, for a run whose output names RHO
 CP1252_CASES = {
-    "check_ascii": ("rho.py", "# \u03c1\n"),
-    "plain_math": (
-        "rho.py",
-        'import matplotlib.pyplot as plt\nplt.xlabel("phi \u03c1")\n',
+    "check-ascii": one_file("rho.py", f"# {RHO}\n"),
+    "plain-math": one_file(
+        "rho.py", f'import matplotlib.pyplot as plt\nplt.xlabel("phi {RHO}")\n'
     ),
-    "forward_refs": (
+    "forward-refs": one_file(
         "rho.typ",
         (FIXTURES / "forward_refs" / "forward.typ").read_text(encoding="utf-8"),
     ),
-    "trivial_wrappers": ("rho.py", "def f(x):\n    return g(x)\n\n\nf(1)\nf(2)\n"),
+    "trivial-wrappers": one_file(
+        "rho.py", "def f(x):\n    return g(x)\n\n\nf(1)\nf(2)\n"
+    ),
+    "preflight": rho_branch,
+    "new-report": lambda root: [
+        *(str(root / RHO), "--shared", str(root / "shared")),
+        *("--title", "T"),
+    ],
+    "report-check": report_dir,
 }
-SCRIPT_FILES = {"forward_refs": "check_forward_refs"}
 
 
-@pytest.mark.parametrize("name", CP1252_CASES)
-def test_findings_survive_cp1252_stdout(tmp_path, name):
-    """A finding names a path holding a character cp1252 cannot encode."""
-    filename, body = CP1252_CASES[name]
-    target = write(tmp_path, f"\u03c1_{filename}", body)
-    script = SCRIPTS / f"{SCRIPT_FILES.get(name, name)}.py"
+@pytest.mark.parametrize("command", CONSOLE_SCRIPTS)
+def test_output_survives_cp1252_stdout(git_repo, command):
+    """Output naming a path or branch that cp1252 cannot encode still prints.
+
+    Over every console script, so a new one fails here until it has a case,
+    and so cannot ship without its stdout reconfigure line.
+    """
+    assert command in CP1252_CASES, f"add a cp1252 case for {command}"
+    argv = CP1252_CASES[command](git_repo)
+    module = CONSOLE_SCRIPTS[command].split(":")[0]
     result = subprocess.run(
-        [sys.executable, str(script), str(target)],
-        check=False,
-        capture_output=True,
-        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
-        cwd=tmp_path,
-    )
-    assert b"UnicodeEncodeError" not in result.stderr
-    assert result.stdout, "the finding should reach stdout"
-
-
-def test_preflight_survives_cp1252_stdout(git_repo):
-    """Preflight's rows name the branch, which may hold such a character."""
-    subprocess.run(["git", "checkout", "-q", "-b", "\u03c1"], cwd=git_repo, check=True)
-    result = subprocess.run(
-        [sys.executable, str(SCRIPTS / "preflight.py"), "--no-friction", "--offline"],
+        [sys.executable, str(SCRIPTS / f"{module}.py"), *argv],
         check=False,
         capture_output=True,
         env={**os.environ, "PYTHONIOENCODING": "cp1252"},
         cwd=git_repo,
     )
     assert b"UnicodeEncodeError" not in result.stderr
-    assert result.stdout
+    assert result.stdout, "the output should reach stdout"

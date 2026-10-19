@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 import report_check
-from conftest import REPO_ROOT, scaffold
+from conftest import scaffold
 
 REGISTRY = 'FIGURES = {"example": "plot_example"}'
 
@@ -144,22 +142,6 @@ def test_missing_typst_is_a_clear_error(repo, report, monkeypatch, capsys):
     assert code == 1
     assert "typst" in out
     assert "Traceback" not in out
-
-
-def test_findings_survive_cp1252_stdout(tmp_path):
-    """A finding names a report dir holding a character cp1252 cannot encode."""
-    report = tmp_path / "03c1"
-    (report / "figures").mkdir(parents=True)
-    (report / "Snakefile").write_text(REGISTRY + "\n", encoding="utf-8")
-    (report / "report.typ").write_text("", encoding="utf-8")
-    result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts/report_check.py"), str(report)],
-        check=False,
-        capture_output=True,
-        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
-    )
-    assert b"UnicodeEncodeError" not in result.stderr
-    assert result.stdout, "the finding should reach stdout"
 
 
 def test_code_mode_fig_call_counts(report, capsys):
