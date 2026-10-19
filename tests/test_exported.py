@@ -185,3 +185,15 @@ def test_output_survives_cp1252_stdout(git_repo, command):
     )
     assert b"UnicodeEncodeError" not in result.stderr
     assert result.stdout, "the output should reach stdout"
+
+
+def test_readme_lists_the_exports():
+    """The README's lists are the compatibility promise, so they must not drift."""
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(
+        r"Exported commands:(.*?)The hooks are(.*?)The command-line", text, re.DOTALL
+    )
+    assert match, "README lost its exported-commands paragraph"
+    commands, hooks = (set(re.findall(r"`([^`]+)`", part)) for part in match.groups())
+    assert commands == set(CONSOLE_SCRIPTS)
+    assert hooks == set(hook_entries())
