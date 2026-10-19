@@ -316,7 +316,13 @@ def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
         return None
     try:
         return subprocess.run(
-            [exe, *argv[1:]], capture_output=True, text=True, timeout=15, check=False
+            [exe, *argv[1:]],
+            capture_output=True,
+            # code (Node) writes UTF-8, not the locale codepage.
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None

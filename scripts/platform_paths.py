@@ -106,7 +106,10 @@ def git_output(root: Path, *args: str, timeout: float) -> str | None:
         return subprocess.run(
             ["git", "-C", str(root), *args],
             capture_output=True,
-            text=True,
+            # git's paths are UTF-8 whatever the locale, and the result
+            # becomes a Path, so undecodable bytes must round-trip.
+            encoding="utf-8",
+            errors="surrogateescape",
             check=True,
             timeout=timeout,
         ).stdout

@@ -71,7 +71,13 @@ def tracked_files() -> list[str] | None:
     """
     try:
         out = subprocess.run(
-            ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
+            ["git", "ls-files", "-z"],
+            capture_output=True,
+            # git emits paths as UTF-8 whatever the locale; surrogateescape
+            # lets an undecodable POSIX name still round-trip to its file.
+            encoding="utf-8",
+            errors="surrogateescape",
+            check=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None

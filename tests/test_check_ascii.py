@@ -237,3 +237,14 @@ class TestPathsWithSpaces:
             lambda *a, **k: SimpleNamespace(stdout="release notes.md\0b.py\0"),
         )
         assert check_ascii.tracked_files() == ["release notes.md", "b.py"]
+
+    def test_a_non_ascii_tracked_path_decodes_whatever_the_locale(
+        self, git_repo: Path, monkeypatch
+    ):
+        """git emits paths as UTF-8; decoding them with the locale codepage
+        (cp1252 on Windows) raised on the 0x81 byte of this name."""
+        name = "\u03c1_notes.md"
+        write(git_repo, name, "plain\n")
+        subprocess.run(["git", "add", name], cwd=git_repo, check=True)
+        monkeypatch.chdir(git_repo)
+        assert name in check_ascii.tracked_files()
