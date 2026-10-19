@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "agent-config"
 version = "0.1.0"
 description = "Gates and tools exported from agent-config for pinned use in other projects"
-# tomllib (dep_updates, preflight's checks) is the newest stdlib module the
-# exported scripts need; no interpreter older than 3.13 is tested here.
+# The floor is tomllib's (dep_updates, preflight's checks), the newest stdlib
+# module the exported scripts need. CI tests 3.13 and up only, so 3.11 and
+# 3.12 are allowed but untested.
 requires-python = ">=3.11"
 
 [project.scripts]

@@ -87,8 +87,8 @@ SNAKEFILE = Template("""\
 #
 #     snakemake --cores all
 #
-# Figures read saved data. Expensive compute is a driver run by hand that
-# writes data/ once, so it has no rule here.
+# Figures read saved data. Expensive compute is a driver script beside this
+# file, run by hand to write data/ once, so it has no rule here.
 #
 # FIGURES is the registry (figure name -> figures/plot_*.py stem) that
 # report-check compares with the #fig calls in report.typ and the scripts on
