@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -77,6 +78,9 @@ rule document:
     shell:
         "report-check --compile {output} --root {ROOT} --max-pages {MAX_PAGES} ."
 """)
+# ROOT as REPORT_SMK writes it. A ROOT rewritten in another form is not read,
+# and keeping it wide enough is left to whoever rewrote it.
+ROOT_LINE = re.compile(r'^ROOT = os\.path\.relpath\(SHARED / "([^"]*)"\)', re.MULTILINE)
 
 SNAKEFILE = Template("""\
 # Build DAG for $title: data/ -> build/figures/*.pdf -> build/report.pdf.
@@ -278,6 +282,15 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(os.path.commonpath([report, shared]))
     except ValueError:  # different Windows drives: no Typst root holds both
         print(f"{report} and {shared} must share a root (same drive)", file=sys.stderr)
+        return 1
+    smk = shared / "report.smk"
+    match = ROOT_LINE.search(smk.read_text(encoding="utf-8")) if smk.exists() else None
+    if match and not report.is_relative_to(fixed := (shared / match[1]).resolve()):
+        print(
+            f"{report}: outside ROOT {fixed} in the existing {smk}, so it could "
+            "not build; widen ROOT there by hand first",
+            file=sys.stderr,
+        )
         return 1
 
     shared_files = {

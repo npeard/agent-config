@@ -157,3 +157,18 @@ def test_refuses_dirs_without_a_common_root(repo, capsys):
     assert code == 1
     assert "share a root" in capsys.readouterr().err
     assert tree(repo) == set()
+
+
+def test_refuses_a_report_outside_the_existing_shared_root(repo, capsys):
+    """The first report fixed ROOT at reports/; one outside could not build."""
+    scaffold(repo, "reports/demo")
+    before = tree(repo)
+    code = new_report.main(
+        [
+            str(repo / "elsewhere/demo"),
+            *("--shared", str(repo / "reports/_shared"), "--title", TITLE),
+        ]
+    )
+    assert code == 1
+    assert "ROOT" in capsys.readouterr().err
+    assert tree(repo) == before
