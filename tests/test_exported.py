@@ -7,6 +7,7 @@ test, which needs a case per command and fails until a new one has it.
 
 from __future__ import annotations
 
+import ast
 import importlib
 import os
 import re
@@ -49,6 +50,44 @@ def test_console_script_targets_import():
         module, function = target.split(":")
         assert module in py_modules, command
         assert callable(getattr(importlib.import_module(module), function)), command
+
+
+def siblings(module: str) -> set[str]:
+    """The scripts/ modules `module` needs beside it once installed.
+
+    Those it imports or loads by path through a load_sibling helper. An
+    import guarded by a check for its file ("audit_assets.py") is an optional
+    companion that preflight skips when absent, so it is not counted.
+    """
+    tree = ast.parse((SCRIPTS / f"{module}.py").read_text(encoding="utf-8"))
+    imported, loaded, guarded = set(), set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+        elif isinstance(node, ast.Constant) and str(node.value).endswith(".py"):
+            guarded.add(node.value.removesuffix(".py"))
+        elif isinstance(node, ast.Call) and getattr(
+            node.func, "attr", getattr(node.func, "id", None)
+        ) in ("load_sibling", "_load_sibling"):
+            loaded.add(node.args[0].value)
+    names = (imported - guarded) | loaded
+    return {name for name in names if (SCRIPTS / f"{name}.py").is_file()}
+
+
+def test_every_module_an_export_needs_is_packaged():
+    """A sibling left out of py-modules imports fine here, from scripts/,
+    and is missing, or for preflight silently skipped, once installed."""
+    py_modules = set(PYPROJECT["tool"]["setuptools"]["py-modules"])
+    pending = [target.split(":")[0] for target in CONSOLE_SCRIPTS.values()]
+    needed = set()
+    while pending:
+        module = pending.pop()
+        if module not in needed:
+            needed.add(module)
+            pending += siblings(module)
+    assert needed <= py_modules, sorted(needed - py_modules)
 
 
 def test_installed_commands_run(tmp_path):

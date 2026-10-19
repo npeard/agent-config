@@ -21,8 +21,8 @@ report-check = "report_check:main"
 
 [tool.setuptools]
 package-dir = { "" = "scripts" }
-# preflight loads its siblings by path at import time; a module missing here
-# is skipped silently there, so every one it loads must be listed.
+# tests/test_exported.py fails on a sibling an export loads that is missing
+# here, which preflight would otherwise skip silently once installed.
 py-modules = [
     "check_ascii",
     "plain_math",
