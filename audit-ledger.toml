@@ -735,3 +735,17 @@ runs it reads back nothing it did not supply. It is not a hook.
 Re-granted 2026-10-19 after the different-drive refusal, which prints the same
 two caller-chosen paths to stderr and reads nothing new.
 """
+
+[[decision]]
+asset = "scripts/plain_math.py"
+principle = 5
+date = "2026-10-19"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "965835439705c8bb81355a41ebf8432289734fcc94cb94d17d34919e1a619b92"
+note = """
+Flagged for a network source: the GitHub URL appears only in the pre-commit
+snippet in the module docstring. The script reads the files it is handed and
+prints findings drawn from them as text for the author; it opens no socket
+and fetches nothing.
+"""

@@ -41,15 +41,15 @@ Kinds: ``greek`` (a spelled letter name as a whole word), ``pi-multiple``
 Python literal, any line of the literal or of its call); a marker with no
 reason is a ``bare-marker`` finding, the convention of scripts/suppressions.py.
 
-A project gates on it by copying this file to its scripts/ and adding a local
-pre-commit hook; widen ``files`` to wherever its figure scripts live (a .py
-that never plots is skipped either way)::
+A project gates on it with the exported hook, pinned to a tag; override
+``files`` to narrow it to wherever its figure scripts live (a .py that never
+plots is skipped either way)::
 
-    -   id: plain-math
-        name: math is typeset, not spelled, in prose and figure labels
-        entry: pixi run python scripts/plain_math.py --gate
-        language: system
-        files: '(\.typ|(?<!\.code)\.tex|/(figures|plots?)/[^/]*\.py)$'
+    -   repo: https://github.com/npeard/agent-config
+        rev: vX.Y.Z
+        hooks:
+        -   id: plain-math
+            files: '(\.typ|(?<!\.code)\.tex|/(figures|plots?)/[^/]*\.py)$'
 """
 
 from __future__ import annotations
