@@ -606,6 +606,12 @@ and pricing remain separate and unchanged.
   generated files hold only taste and a fix reaches every report at its
   next pin bump. The `report` pixi feature exists so the tests can build
   a scaffold end to end.
+- `scripts/report_check.py` -- `report-check`, the scaffold's gate: the
+  figure registry, the document's `#fig` calls and the figure scripts
+  must agree, and with `--compile` (the document rule's only command)
+  the Typst build must print no warning and fit its page budget, since
+  Typst renders many mistakes at exit 0. A pre-commit hook passes it
+  staged files; each maps to its report, checked once.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

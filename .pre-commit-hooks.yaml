@@ -23,3 +23,12 @@
   entry: forward-refs --containing
   language: python
   files: \.(tex|typ)$
+
+- id: report-check
+  name: Report figure registry agrees with the document and scripts
+  entry: report-check
+  language: python
+  # One process sees every file, so a report split across batches is not
+  # checked, and its findings printed, once per batch.
+  require_serial: true
+  files: (^|/)(Snakefile|[^/]*\.typ|plot_[^/]*\.py)$
