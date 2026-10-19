@@ -964,7 +964,7 @@ def check_tests(report: Report, root: Path, run: bool) -> None:
         report.add(FAIL, "tests", f"'{command}' failed (exit {result.returncode})")
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--with-tests", action="store_true", help="run the suite")
     parser.add_argument(

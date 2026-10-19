@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-config"
+version = "0.1.0"
+description = "Gates and tools exported from agent-config for pinned use in other projects"
+# tomllib (dep_updates, preflight's checks) is the newest stdlib module the
+# exported scripts need; no interpreter older than 3.13 is tested here.
+requires-python = ">=3.11"
+
+[project.scripts]
+check-ascii = "check_ascii:main"
+plain-math = "plain_math:main"
+trivial-wrappers = "trivial_wrappers:main"
+forward-refs = "check_forward_refs:main"
+preflight = "preflight:main"
+
+[tool.setuptools]
+package-dir = { "" = "scripts" }
+# preflight loads its siblings by path at import time; a module missing here
+# is skipped silently there, so every one it loads must be listed.
+py-modules = [
+    "check_ascii",
+    "plain_math",
+    "trivial_wrappers",
+    "check_forward_refs",
+    "preflight",
+    "platform_paths",
+    "installation_contract",
+    "dep_updates",
+    "vscode_extensions",
+]
+
+[tool.pytest.ini_options]
+markers = ["installs: pip-installs the repo into a temp venv (needs the network)"]

@@ -1,0 +1,25 @@
+# Consumers pin a rev; per-project behaviour goes through `args:` in their
+# own config, never through edits here.
+- id: check-ascii
+  name: ASCII-only source (no Unicode; use plain text or LaTeX)
+  entry: check-ascii
+  language: python
+  types_or: [python, markdown]
+
+- id: plain-math
+  name: Plain-text math stand-ins in plot labels and Typst/LaTeX
+  entry: plain-math --gate
+  language: python
+  files: \.(py|tex|typ)$
+
+- id: trivial-wrappers
+  name: Trivial wrapper functions
+  entry: trivial-wrappers --gate
+  language: python
+  types: [python]
+
+- id: forward-refs
+  name: Forward references in Typst and LaTeX documents
+  entry: forward-refs --containing
+  language: python
+  files: \.(tex|typ)$

@@ -171,6 +171,9 @@ def scan(path: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Findings name paths and tokens that may not encode in the console's
+    # codepage (pre-commit's stdout is cp1252 on Windows); escape, don't raise.
+    sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "paths",

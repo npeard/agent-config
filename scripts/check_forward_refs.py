@@ -3,7 +3,7 @@
 
 Usage:
     python scripts/check_forward_refs.py FILE [--json]
-    python scripts/check_forward_refs.py --containing FILE [--json]
+    python scripts/check_forward_refs.py --containing FILE [FILE ...] [--json]
 
 A reader meets the text in order, so a reference to a label defined later
 (``see Sec.~\\ref{sec:result}`` in an introduction's roadmap paragraph) asks
@@ -295,31 +295,10 @@ def find_violations(path: Path) -> list[dict]:
     return found
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    target = parser.add_mutually_exclusive_group(required=True)
-    target.add_argument(
-        "path", nargs="?", help=".tex or .typ file; \\input/\\include are followed"
-    )
-    target.add_argument(
-        "--containing",
-        metavar="FILE",
-        help="check the document that includes FILE (see document_root)",
-    )
-    parser.add_argument("--json", action="store_true", help="emit one JSON object")
-    args = parser.parse_args(argv)
-    path = Path(args.path or args.containing)
-    if path.suffix not in (LATEX, TYPST):
-        print(f"{path}: unsupported suffix (want .tex or .typ)", file=sys.stderr)
-        return 2
-    try:
-        if args.containing:
-            path = document_root(path)
-        found = find_violations(path)
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"{path}: cannot read ({exc})", file=sys.stderr)
-        return 2
-    if args.json:
+def report(path: Path, as_json: bool) -> int:
+    """Print the violations of the document rooted at `path`; its exit code."""
+    found = find_violations(path)
+    if as_json:
         print(json.dumps({"root": str(path), "violations": found}, indent=2))
     else:
         for v in found:
@@ -328,6 +307,38 @@ def main(argv: list[str] | None = None) -> int:
                 f"(defined {v['defined_file']}:{v['defined_line']})"
             )
     return 1 if found else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Findings name paths, which may not encode in the console's codepage
+    # (pre-commit's stdout is cp1252 on Windows); escape rather than raise.
+    sys.stdout.reconfigure(errors="backslashreplace")
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument(
+        "path", nargs="?", help=".tex or .typ file; \\input/\\include are followed"
+    )
+    target.add_argument(
+        "--containing",
+        nargs="+",
+        metavar="FILE",
+        help="check the document that includes each FILE (see document_root); "
+        "several at once so a pre-commit hook can pass its staged set",
+    )
+    parser.add_argument("--json", action="store_true", help="emit one JSON object")
+    args = parser.parse_args(argv)
+    edited = [Path(f) for f in args.containing or [args.path]]
+    for path in edited:
+        if path.suffix not in (LATEX, TYPST):
+            print(f"{path}: unsupported suffix (want .tex or .typ)", file=sys.stderr)
+            return 2
+    try:
+        roots = [document_root(p) for p in edited] if args.containing else edited
+        # Several staged files often share one document; check it once.
+        return max(report(root, args.json) for root in dict.fromkeys(roots))
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"cannot read ({exc})", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

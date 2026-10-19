@@ -1,8 +1,8 @@
 """Shared fixtures.
 
-`scripts/` is not a package and is deliberately kept import-free of project
-structure (each script is meant to be copied into other repos verbatim), so
-tests reach it by path rather than via an installed distribution.
+`scripts/` is a flat directory of modules that `pyproject.toml` exports as
+console scripts, and the host hooks load some of them by file path, so tests
+reach them by path rather than via an installed distribution.
 """
 
 from __future__ import annotations
