@@ -7,6 +7,8 @@ reach them by path rather than via an installed distribution.
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -69,3 +71,41 @@ def git_repo(tmp_path: Path) -> Path:
     run_git(tmp_path, "add", "README.md")
     run_git(tmp_path, "commit", "-qm", "seed")
     return tmp_path
+
+
+TITLE = "A demo report"
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    # The space is on purpose: generated commands must survive it.
+    root = tmp_path / "my repo"
+    root.mkdir()
+    run_git(root, "init", "-q", ".")
+    return root
+
+
+def scaffold(repo: Path, report: str) -> int:
+    # Imported here: scripts/ joins sys.path only below this module's imports.
+    import new_report
+
+    return new_report.main(
+        [
+            str(repo / report),
+            "--shared",
+            str(repo / "reports/_shared"),
+            "--title",
+            TITLE,
+        ]
+    )
+
+
+@pytest.fixture
+def build_tools() -> None:
+    """Skip locally without the tools, but fail in CI, which must build once."""
+    missing = [tool for tool in ("snakemake", "typst") if not shutil.which(tool)]
+    if missing:
+        message = f"{', '.join(missing)} not on PATH (the dev env's report feature)"
+        if os.environ.get("CI"):
+            pytest.fail(message)
+        pytest.skip(message)

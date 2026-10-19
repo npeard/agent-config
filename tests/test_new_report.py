@@ -4,7 +4,6 @@ that the result builds."""
 from __future__ import annotations
 
 import ast
-import os
 import re
 import shutil
 import subprocess
@@ -14,30 +13,7 @@ from pathlib import Path
 import new_report
 import pytest
 import report_plotting
-from conftest import REPO_ROOT, run_git
-
-TITLE = "A demo report"
-
-
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    # The space is on purpose: generated commands must survive it.
-    root = tmp_path / "my repo"
-    root.mkdir()
-    run_git(root, "init", "-q", ".")
-    return root
-
-
-def scaffold(repo: Path, report: str) -> int:
-    return new_report.main(
-        [
-            str(repo / report),
-            "--shared",
-            str(repo / "reports/_shared"),
-            "--title",
-            TITLE,
-        ]
-    )
+from conftest import REPO_ROOT, TITLE, scaffold
 
 
 def registry(snakefile: Path) -> dict:
@@ -109,17 +85,6 @@ def test_prints_wiring_without_editing_manifests(repo, capsys):
     out = capsys.readouterr().out
     assert "snakemake --cores all" in out
     assert 'agent-config = { git = "https://github.com/npeard/agent-config"' in out
-
-
-@pytest.fixture
-def build_tools() -> None:
-    """Skip locally without the tools, but fail in CI, which must build once."""
-    missing = [tool for tool in ("snakemake", "typst") if not shutil.which(tool)]
-    if missing:
-        message = f"{', '.join(missing)} not on PATH (the dev env's report feature)"
-        if os.environ.get("CI"):
-            pytest.fail(message)
-        pytest.skip(message)
 
 
 def test_figure_rule_builds(repo, build_tools):
