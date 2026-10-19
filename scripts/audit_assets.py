@@ -730,7 +730,10 @@ SELF = Path(__file__).name
 
 UNTRUSTED_SOURCES = {
     "transcript": re.compile(r"\.claude/projects|\.jsonl"),
-    "network": re.compile(r"\burllib\b|\brequests\b|\bsocket\b|https?://"),
+    # Tools that fetch, not URLs: a URL is as often a link in a docstring.
+    "network": re.compile(
+        r"\burllib\b|\brequests\b|\bsocket\b|\bhttp\.client\b|\bcurl\b|\bwget\b"
+    ),
     "foreign-manifest": re.compile(
         r"pixi\.toml|pyproject\.toml|package\.json|Cargo\.toml|Makefile"
     ),

@@ -470,6 +470,27 @@ class TestReadAndEmit:
         (fake_root / "scripts" / "talky.py").write_text("x = 1\nprint(x)\n")
         assert audit_assets.check_read_and_emit(fake_root) == []
 
+    def test_a_documented_url_is_not_a_network_read(self, fake_root):
+        """The URL pattern conflated a link in a docstring with a fetch."""
+        (fake_root / "scripts" / "doc.py").write_text(
+            '"""See https://github.com/example/repo."""\nx = 1\nprint(x)\n'
+        )
+        assert audit_assets.check_read_and_emit(fake_root) == []
+
+    @pytest.mark.parametrize(
+        "read",
+        [
+            "import http.client\nt = http.client.HTTPSConnection('h')\n",
+            "import subprocess\nt = subprocess.run(['curl', 'h']).stdout\n",
+        ],
+        ids=["http.client", "curl"],
+    )
+    def test_a_network_tool_is_a_network_read(self, fake_root, read):
+        (fake_root / "scripts" / "net.py").write_text(f"{read}print(t)\n")
+        found = audit_assets.check_read_and_emit(fake_root)
+        assert [f.asset for f in found] == ["scripts/net.py"]
+        assert "network" in found[0].detail
+
     def test_print_of_a_bare_literal_is_not_an_emit(self, fake_root):
         (fake_root / "scripts" / "lit.py").write_text(
             "from pathlib import Path\nPath('a.jsonl').read_text()\nprint('done')\n"
