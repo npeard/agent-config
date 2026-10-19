@@ -244,9 +244,19 @@ def test_containing_several_files_of_one_document_checks_it_once(
     body = "\\ref{late}\\input{ch/one}\\input{ch/two}\n"
     write(tmp_path, "main.tex", ROOT % body)
     write(tmp_path, "ch/one.tex", "\\label{late}\n")
-    code = check_forward_refs.main(["--containing", str(one), str(two), "--json"])
+    code = check_forward_refs.main(["--containing", str(one), str(two)])
     assert code == 1
-    assert capsys.readouterr().out.count('"root"') == 1
+    assert len(capsys.readouterr().out.splitlines()) == 1
+
+
+def test_json_takes_exactly_one_file(tmp_path: Path, capsys):
+    """Two documents' objects back to back are not one JSON document, and
+    prose-feedback parses the output as one."""
+    one, two = chapter(tmp_path), write(tmp_path, "ch/two.tex", "Two.\n")
+    with pytest.raises(SystemExit) as exit_:
+        check_forward_refs.main(["--containing", str(one), str(two), "--json"])
+    assert exit_.value.code == 2
+    assert "--json" in capsys.readouterr().err
 
 
 def test_containing_names_the_unreadable_file(tmp_path: Path, capsys):

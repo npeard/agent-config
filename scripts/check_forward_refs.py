@@ -325,9 +325,15 @@ def main(argv: list[str] | None = None) -> int:
         help="check the document that includes each FILE (see document_root); "
         "several at once so a pre-commit hook can pass its staged set",
     )
-    parser.add_argument("--json", action="store_true", help="emit one JSON object")
+    parser.add_argument(
+        "--json", action="store_true", help="emit one JSON object (one file only)"
+    )
     args = parser.parse_args(argv)
     edited = [Path(f) for f in args.containing or [args.path]]
+    # Objects for several documents would print back to back, which is not
+    # one JSON document; callers parse one, so the shape stays fixed.
+    if args.json and len(edited) > 1:
+        parser.error("--json takes exactly one file")
     for path in edited:
         if path.suffix not in (LATEX, TYPST):
             print(f"{path}: unsupported suffix (want .tex or .typ)", file=sys.stderr)
