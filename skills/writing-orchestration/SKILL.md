@@ -79,17 +79,10 @@ correctly produces a retraction slide, and the reader of that deck never
 held the claim. The superseded version belongs in the commit message and
 the chat. `CODING_STANDARDS.md` rule 11 carries the author-facing half.
 
-**Typst fails quietly where LaTeX fails loudly**, so step 5 needs a
-different bar. An undefined LaTeX `\ref` is a warning you can grep; an
-unresolved Typst citation renders as a visible marker and still exits 0,
-and content that outgrows a page just continues onto the next one with
-no diagnostic at all. There is no `chktex` equivalent and no
-warnings-as-errors flag. So a Typst project needs a build gate rather
-than an eyeball -- a page-count or overflow check the build runs -- and
-"it compiled" is not evidence. Where a project has that gate, trust it
-and say what it reported; where it does not, that gate is the first
-thing to add. Copy the document's existing conventions (table idiom,
-ASCII rule) rather than deriving markup from LaTeX habits.
+A Typst project needs a build gate, because "it compiled" is not
+evidence; the `typst` skill says what step 5 must check. Copy the
+document's existing conventions (table idiom, ASCII rule) rather than
+deriving markup from LaTeX habits.
 
 **A markup conversion is a distinct task shape.** Porting a document
 between markup languages -- LaTeX to Typst, Markdown to LaTeX -- is not
