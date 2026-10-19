@@ -13,9 +13,8 @@ costs you is the other: **exit 0, no diagnostic, wrong output.**
 
 There is no `--deny-warnings` flag, no linter, and no overflow check
 (typst#5759 and typst#6787 both open). So a project needs its own gate,
-and "it compiled" is never evidence. agent-config's
-`report-check --compile` fails on any warning and on a page budget; it
-cannot see overflow, so the assert below still applies.
+and "it compiled" is never evidence; `report-check --compile` fails on
+warnings and a page budget, not overflow.
 
 ## The silent traps
 
@@ -69,10 +68,9 @@ Fixes, cheapest first:
 
 `panic()`/`assert()` gives a nonzero exit, which is what a build gate
 needs given typst#6787. Touying 0.7.1+ detects this itself
-(`config-common(breakable: false)`) and also catches *empty* slides, but
-only warns -- so it still exits 0. A page-count gate is weakest: it
-cannot name the offending slide, and it misses one slide overflowing as
-another is deleted.
+(`config-common(breakable: false)`), *empty* slides too, but only warns.
+A page-count gate is weakest: it cannot name the slide, and misses one
+overflowing as another is deleted.
 
 ### `vec()` is a column vector, not an arrow
 
