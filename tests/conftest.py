@@ -100,7 +100,7 @@ def scaffold(repo: Path, report: str) -> int:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def build_tools() -> None:
     """Skip locally without the tools, but fail in CI, which must build once."""
     missing = [tool for tool in ("snakemake", "typst") if not shutil.which(tool)]

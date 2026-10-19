@@ -79,19 +79,6 @@ def test_prints_wiring_without_editing_manifests(repo, capsys):
     assert 'agent-config = { git = "https://github.com/npeard/agent-config"' in out
 
 
-def test_figure_rule_builds(repo, build_tools):
-    """The figure half alone: sample data, report_plotting, and the rule."""
-    scaffold(repo, "reports/demo")
-    report = repo / "reports/demo"
-    subprocess.run(
-        ["snakemake", "--cores", "1", "build/figures/example.pdf"],
-        cwd=report,
-        check=True,
-        capture_output=True,
-    )
-    assert (report / "build/figures/example.pdf").stat().st_size > 0
-
-
 def test_scaffold_builds(repo, build_tools):
     scaffold(repo, "reports/demo")
     report = repo / "reports/demo"
@@ -103,6 +90,7 @@ def test_scaffold_builds(repo, build_tools):
         text=True,
     )
     assert result.returncode == 0, result.stderr
+    assert (report / "build/figures/example.pdf").stat().st_size > 0
     assert (report / "build/report.pdf").stat().st_size > 0
 
 

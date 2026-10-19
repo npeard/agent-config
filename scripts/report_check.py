@@ -25,6 +25,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Direct import: works by file path (the script's own directory is
+# sys.path[0]) and as an installed py-module; no host hook loads this through
+# importlib.
 from check_forward_refs import strip_typst_comments
 
 # A Snakefile is not Python (`rule all:`), so only the literal is parsed.
@@ -42,15 +45,19 @@ def registry_text(directory: Path) -> str | None:
     return match.group(1) if match else None
 
 
-def report_dir(path: Path) -> Path | None:
+def find_report(path: Path) -> tuple[Path, str] | None:
+    """The report directory holding `path` and its registry, read once."""
     start = path if path.is_dir() else path.parent
-    return next((d for d in (start, *start.parents) if registry_text(d)), None)
+    for directory in (start, *start.parents):
+        if text := registry_text(directory):
+            return directory, text
+    return None
 
 
-def static_findings(report: Path) -> list[str]:
+def static_findings(report: Path, registry: str) -> list[str]:
     snakefile, document = report / "Snakefile", report / "report.typ"
     try:
-        figures = ast.literal_eval(registry_text(report))
+        figures = ast.literal_eval(registry)
     except (ValueError, SyntaxError):
         figures = None
     if not isinstance(figures, dict) or not all(
@@ -85,24 +92,23 @@ def compile_findings(
 ) -> list[str]:
     document = str(report / "report.typ")
     command = [typst, "compile", "--root", root, "--diagnostic-format", "short"]
+
+    def run(target: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [*command, document, target],
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [*command, document, str(output)],
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
-    )
+    result = run(str(output))
     if result.returncode != 0 or "warning:" in result.stderr:
         return result.stderr.splitlines() or [f"{document}: typst failed"]
     # Typst writes one file per page when the name has {p}: the page count
     # comes from Typst itself rather than from parsing the PDF.
     with tempfile.TemporaryDirectory() as pages:
-        paged = subprocess.run(
-            [*command, document, str(Path(pages) / "{p}.svg")],
-            capture_output=True,
-            encoding="utf-8",
-            check=False,
-        )
+        paged = run(str(Path(pages) / "{p}.svg"))
         if paged.returncode != 0:
             return paged.stderr.splitlines() or [f"{document}: typst failed on SVG"]
         count = len(list(Path(pages).iterdir()))
@@ -126,9 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     if any(value is not None for value in build) and None in build:
         parser.error("--compile, --root and --max-pages go together")
 
-    found = (report_dir(path.resolve()) for path in args.paths)
-    reports = sorted({report for report in found if report})
-    findings = [finding for report in reports for finding in static_findings(report)]
+    found = (find_report(path.resolve()) for path in args.paths)
+    registries = dict(sorted({hit for hit in found if hit}))
+    reports = list(registries)
+    findings = [
+        finding
+        for report, registry in registries.items()
+        for finding in static_findings(report, registry)
+    ]
     if args.compile and not findings:
         typst = shutil.which("typst")
         if len(reports) != 1:

@@ -179,9 +179,8 @@ def scan(path: Path) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     # Findings name paths and tokens that may not encode in the console's
     # codepage (pre-commit's stdout is cp1252 on Windows); escape, don't raise.
-    # Each exported main repeats this line rather than sharing it: host hooks
-    # load plain_math by file path with no sys.path, and a shared helper would
-    # need dep_updates' path bootstrap, which costs more than the line.
+    # Each exported main repeats this line: a shared helper would need a path
+    # bootstrap that costs more than the line.
     sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(

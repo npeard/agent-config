@@ -635,18 +635,11 @@ and pricing remain separate and unchanged.
   floats excepted), because a reader cannot yet follow a pointer to text
   they have not read.
 - `scripts/new_report.py` + `scripts/report_plotting.py` -- the
-  `new-report` scaffold for a report built from results (one Snakemake
-  DAG from saved data to figure PDFs to a Typst PDF), and the helpers
-  its figure scripts import. Exported rather than copied, so the
-  generated files hold only taste and a fix reaches every report at its
-  next pin bump. The `report` pixi feature exists so the tests can build
-  a scaffold end to end.
-- `scripts/report_check.py` -- `report-check`, the scaffold's gate: the
-  figure registry, the document's `#fig` calls and the figure scripts
-  must agree, and with `--compile` (the document rule's only command)
-  the Typst build must print no warning and fit its page budget, since
-  Typst renders many mistakes at exit 0. A pre-commit hook passes it
-  staged files; each maps to its report, checked once.
+  `new-report` scaffold for a report built from results, and the helpers
+  its figure scripts import; see the module docstrings.
+- `scripts/report_check.py` -- `report-check`, the scaffold's gate for
+  the figure registry, the `#fig` calls and (with `--compile`) the Typst
+  build; see its module docstring.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

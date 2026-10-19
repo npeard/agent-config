@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 import report_check
-from conftest import scaffold
+from conftest import run_git, scaffold
 
 REGISTRY = 'FIGURES = {"example": "plot_example"}'
 
@@ -95,38 +96,56 @@ def test_compile_needs_exactly_one_report(repo, report, capsys):
     assert "one report" in out
 
 
-def compile_check(capsys, repo: Path, report: Path, max_pages: int):
-    # Only the figure is built here: the document is what report-check builds.
+@pytest.fixture(scope="module")
+def built_figure(build_tools, tmp_path_factory) -> Path:
+    """A scaffolded repo with its figure built once; tests copy it to edit.
+
+    Only the figure is built here: the document is what report-check builds.
+    """
+    repo = tmp_path_factory.mktemp("built") / "my repo"
+    repo.mkdir()
+    run_git(repo, "init", "-q", ".")
+    scaffold(repo, "reports/demo")
     subprocess.run(
         ["snakemake", "--cores", "1", "build/figures/example.pdf"],
-        cwd=report,
+        cwd=repo / "reports/demo",
         check=True,
         capture_output=True,
     )
-    output = str(report / "build/report.pdf")
-    root = str(repo / "reports")
+    return repo
+
+
+def built_report(built_figure: Path, tmp_path: Path) -> Path:
+    shutil.copytree(built_figure, tmp_path / "my repo")
+    return tmp_path / "my repo/reports/demo"
+
+
+def compile_check(capsys, report: Path, max_pages: int):
     return check(
         capsys,
-        *("--compile", output, "--root", root, "--max-pages", str(max_pages)),
+        *("--compile", str(report / "build/report.pdf")),
+        *("--root", str(report.parent), "--max-pages", str(max_pages)),
         str(report),
     )
 
 
-def test_typst_warning_fails(repo, report, build_tools, capsys):
+def test_typst_warning_fails(built_figure, tmp_path, capsys):
     # Typst 0.15 compiles this at exit 0, warning only.
+    report = built_report(built_figure, tmp_path)
     edit(
         report / "report.typ",
         "= Introduction",
         '#text(font: "NoSuchFont")[x]\n\n= Introduction',
     )
-    code, out = compile_check(capsys, repo, report, 8)
+    code, out = compile_check(capsys, report, 8)
     assert code == 1
     assert "unknown font family" in out
 
 
-def test_page_budget_fails(repo, report, build_tools, capsys):
+def test_page_budget_fails(built_figure, tmp_path, capsys):
+    report = built_report(built_figure, tmp_path)
     edit(report / "report.typ", "#bibliography", "#pagebreak()\n\n#bibliography")
-    code, out = compile_check(capsys, repo, report, 1)
+    code, out = compile_check(capsys, report, 1)
     assert code == 1
     assert "2 pages" in out
     assert "budget of 1" in out

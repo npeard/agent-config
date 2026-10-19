@@ -223,6 +223,8 @@ def write_sample_data(path: Path) -> None:
 
 
 def git_toplevel(path: Path) -> Path | None:
+    # Not platform_paths.git_output: this stays standalone like the other
+    # exported gates.
     existing = next(p for p in (path, *path.parents) if p.is_dir())
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -293,11 +295,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    shared_files = {
-        "report.smk": REPORT_SMK.substitute(root=relative(root, shared)),
-        "theme.typ": THEME_TYP,
-    }
-    for name, text in shared_files.items():
+    for name, text in (
+        ("report.smk", REPORT_SMK.substitute(root=relative(root, shared))),
+        ("theme.typ", THEME_TYP),
+    ):
         if not (shared / name).exists():
             write(shared / name, text)
 
