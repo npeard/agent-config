@@ -4,6 +4,7 @@ that the result builds."""
 from __future__ import annotations
 
 import ast
+import os
 import re
 import shutil
 import subprocess
@@ -110,14 +111,18 @@ def test_prints_wiring_without_editing_manifests(repo, capsys):
     assert 'agent-config = { git = "https://github.com/npeard/agent-config"' in out
 
 
-needs_build_tools = pytest.mark.skipif(
-    not (shutil.which("snakemake") and shutil.which("typst")),
-    reason="snakemake and typst come with the dev environment's report feature",
-)
+@pytest.fixture
+def build_tools() -> None:
+    """Skip locally without the tools, but fail in CI, which must build once."""
+    missing = [tool for tool in ("snakemake", "typst") if not shutil.which(tool)]
+    if missing:
+        message = f"{', '.join(missing)} not on PATH (the dev env's report feature)"
+        if os.environ.get("CI"):
+            pytest.fail(message)
+        pytest.skip(message)
 
 
-@needs_build_tools
-def test_figure_rule_builds(repo):
+def test_figure_rule_builds(repo, build_tools):
     """The figure half alone: sample data, report_plotting, and the rule."""
     scaffold(repo, "reports/demo")
     report = repo / "reports/demo"
@@ -130,8 +135,7 @@ def test_figure_rule_builds(repo):
     assert (report / "build/figures/example.pdf").stat().st_size > 0
 
 
-@needs_build_tools
-def test_scaffold_builds(repo):
+def test_scaffold_builds(repo, build_tools):
     scaffold(repo, "reports/demo")
     report = repo / "reports/demo"
     result = subprocess.run(
@@ -173,3 +177,18 @@ def test_plotting_imports_without_matplotlib():
         cwd=REPO_ROOT / "scripts",
         check=True,
     )
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="POSIX absolute paths always share /, so only Windows drives can differ",
+)
+def test_refuses_dirs_without_a_common_root(repo, capsys):
+    # A drive other than the repo's, which need not exist: nothing is written.
+    other = "Q:" if not str(repo).upper().startswith("Q:") else "R:"
+    code = new_report.main(
+        [str(repo / "reports/demo"), "--shared", f"{other}/shared", "--title", TITLE]
+    )
+    assert code == 1
+    assert "share a root" in capsys.readouterr().err
+    assert tree(repo) == set()

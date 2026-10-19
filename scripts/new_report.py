@@ -274,8 +274,12 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         print(f"{report}: not inside a git repository", file=sys.stderr)
         return 1
+    try:
+        root = Path(os.path.commonpath([report, shared]))
+    except ValueError:  # different Windows drives: no Typst root holds both
+        print(f"{report} and {shared} must share a root (same drive)", file=sys.stderr)
+        return 1
 
-    root = Path(os.path.commonpath([report, shared]))
     shared_files = {
         "report.smk": REPORT_SMK.substitute(root=relative(root, shared)),
         "theme.typ": THEME_TYP,

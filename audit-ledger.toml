@@ -721,7 +721,7 @@ principle = 5
 date = "2026-10-19"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "4c7348b0c1da4094cb5a670992639a66dd1e4170764962a55a9a84fd6f28940b"
+asset_sha = "ab6db918a6629b168b5aa4ac7e86da64334bceea2e0ea7f17f21335642c6db7a"
 note = """
 Flagged for a network source and a foreign manifest that it never reads: the
 GitHub URL, pixi.toml and pyproject.toml appear only in the wiring text it
@@ -731,4 +731,7 @@ shell) and that repo's .gitignore, whose lines are compared and never printed.
 Stdout carries this file's templates, the two resolved paths and a report
 path relative to the repo, all of which the caller chose, so an agent that
 runs it reads back nothing it did not supply. It is not a hook.
+
+Re-granted 2026-10-19 after the different-drive refusal, which prints the same
+two caller-chosen paths to stderr and reads nothing new.
 """
