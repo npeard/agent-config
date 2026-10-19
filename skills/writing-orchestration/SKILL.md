@@ -99,6 +99,31 @@ run on it. Verify a conversion by diffing the two *renderings*, not by
 re-judging the prose. Newly drafted sections inside a converted document
 are ordinary prose and take the full step 6.
 
+## A report built from results
+
+A report whose figures come from computed results is a build, not only a
+document. Lay it out at step 2 so that the prose and the figures can be
+reworked for hours without recomputing anything:
+
+- **One build DAG.** A Snakemake `Snakefile` beside the Typst source
+  runs data, then figure PDFs, then the report PDF. One command rebuilds
+  only what changed. Give each figure its own rule whose inputs are the
+  script and the data files it reads; an undeclared input is a stale
+  figure.
+- **Figures read saved data.** A figure script loads committed results
+  (npz, JSON) or runs a simulation fast enough to repeat on every build.
+  It never trains or sweeps. Expensive compute is a separate driver or
+  rule that writes the data once, so a caption, layout or label change
+  costs seconds, not a rerun.
+- **References live apart from the project.** Papers, preprints, and
+  third-party code or artifacts the report cites go in a dedicated,
+  gitignored `references/` subdirectory of the project. Exclude it from
+  spell and lint, which would otherwise flag text that is not yours to
+  fix. Cite each item by DOI or arXiv id in the bibliography so a fresh
+  clone can fetch it. Loose PDFs beside the code each need their own
+  ignore line, get mistaken for build outputs, and drift into the wrong
+  project.
+
 ## Post-cut critique
 
 After any revision, in every class, reread your own diff for five
