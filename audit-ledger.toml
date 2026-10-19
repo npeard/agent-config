@@ -372,7 +372,7 @@ principle = 4
 date = "2026-08-27"
 cause = "rule-not-enforced"
 outcome = "tier-0"
-asset_sha = "e0c8e210bae6c9f751aa0cba80f952223bddd21637f913dc9513cd91ee414f7d"
+asset_sha = "93e04dcdee8b6ff2a30d3ec285b17c0910c66e37c3cd67097380fbb71455860e"
 note = """
 check_script_help's own rationale is "a script an agent must read to use has
 failed principle 3 while pretending to serve it" -- but this file is never
@@ -414,6 +414,9 @@ git_output, with installation_checkout's timeout now a required argument.
 Still import-only with no entry point, and the premise holds a third time:
 two of the loader copies had dropped the sys.modules registration the third
 kept.
+
+Re-granted 2026-10-19 after git_output began decoding git's output as UTF-8
+rather than the locale codepage. Still import-only with no entry point.
 """
 
 [[decision]]
