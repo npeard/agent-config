@@ -25,9 +25,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from check_forward_refs import strip_typst_comments
+
 # A Snakefile is not Python (`rule all:`), so only the literal is parsed.
 REGISTRY = re.compile(r"^FIGURES\s*=\s*(\{[^}]*\})", re.MULTILINE)
-FIG_CALL = re.compile(r'#fig\(\s*"([^"]*)"')
+# With or without `#`, since code mode (`#grid(fig("a"))`) drops it; the
+# lookbehind keeps `my-fig(` or `subfig(` from counting.
+FIG_CALL = re.compile(r'(?<![\w-])fig\(\s*"([^"]*)"')
 
 
 def registry_text(directory: Path) -> str | None:
@@ -48,8 +52,15 @@ def static_findings(report: Path) -> list[str]:
     try:
         figures = ast.literal_eval(registry_text(report))
     except (ValueError, SyntaxError):
-        return [f"{snakefile}: FIGURES is not a literal dict"]
-    placed = set(FIG_CALL.findall(document.read_text(encoding="utf-8")))
+        figures = None
+    if not isinstance(figures, dict) or not all(
+        isinstance(item, str) for pair in figures.items() for item in pair
+    ):
+        return [f"{snakefile}: FIGURES is not a literal dict of str to str"]
+    if not document.is_file():
+        return [f"{document}: missing, so no #fig call can be checked"]
+    text = strip_typst_comments(document.read_text(encoding="utf-8"))
+    placed = set(FIG_CALL.findall(text))
     scripts = {p.stem for p in (report / "figures").glob("plot_*.py")}
     findings = [
         f'{document}: #fig("{name}") names no FIGURES entry'
@@ -86,11 +97,14 @@ def compile_findings(
     # Typst writes one file per page when the name has {p}: the page count
     # comes from Typst itself rather than from parsing the PDF.
     with tempfile.TemporaryDirectory() as pages:
-        subprocess.run(
+        paged = subprocess.run(
             [*command, document, str(Path(pages) / "{p}.svg")],
             capture_output=True,
-            check=True,
+            encoding="utf-8",
+            check=False,
         )
+        if paged.returncode != 0:
+            return paged.stderr.splitlines() or [f"{document}: typst failed on SVG"]
         count = len(list(Path(pages).iterdir()))
     if count > max_pages:
         return [f"{output}: {count} pages, over the budget of {max_pages}"]

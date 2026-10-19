@@ -160,3 +160,54 @@ def test_findings_survive_cp1252_stdout(tmp_path):
     )
     assert b"UnicodeEncodeError" not in result.stderr
     assert result.stdout, "the finding should reach stdout"
+
+
+def test_code_mode_fig_call_counts(report, capsys):
+    edit(report / "report.typ", "#bibliography", '#grid(fig("ghost"))\n#bibliography')
+    code, out = check(capsys, str(report))
+    assert code == 1
+    assert "ghost" in out
+
+
+@pytest.mark.parametrize(
+    "decoy",
+    [
+        '// #fig("ghost")',
+        '/* #fig("ghost")\n */',
+        '#my-fig("ghost")',
+        '#subfig("ghost")',
+    ],
+)
+def test_commented_or_other_function_call_is_not_a_placement(report, capsys, decoy):
+    edit(report / "report.typ", "#bibliography", f"{decoy}\n#bibliography")
+    assert check(capsys, str(report)) == (0, "")
+
+
+def test_missing_document_is_a_finding(report, capsys):
+    (report / "report.typ").unlink()
+    code, out = check(capsys, str(report))
+    assert code == 1
+    assert "report.typ" in out
+
+
+@pytest.mark.parametrize(
+    "registry",
+    ['FIGURES = {"example"}', 'FIGURES = {"example": ["plot_example"]}'],
+)
+def test_malformed_registry_is_a_finding(report, capsys, registry):
+    edit(report / "Snakefile", REGISTRY, registry)
+    code, out = check(capsys, str(report))
+    assert code == 1
+    assert "FIGURES" in out
+
+
+def test_failed_page_count_compile_is_a_finding(report, monkeypatch, capsys, tmp_path):
+    def fake_run(command, **kwargs):
+        failed = command[-1].endswith(".svg")
+        return subprocess.CompletedProcess(command, int(failed), "", "boom")
+
+    monkeypatch.setattr(report_check.subprocess, "run", fake_run)
+    findings = report_check.compile_findings(
+        "typst", report, tmp_path / "out.pdf", str(report), 8
+    )
+    assert findings
