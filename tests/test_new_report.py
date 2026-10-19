@@ -4,7 +4,6 @@ that the result builds."""
 from __future__ import annotations
 
 import ast
-import re
 import shutil
 import subprocess
 import sys
@@ -12,17 +11,9 @@ from pathlib import Path
 
 import new_report
 import pytest
+import report_check
 import report_plotting
 from conftest import REPO_ROOT, TITLE, scaffold
-
-
-def registry(snakefile: Path) -> dict:
-    # A Snakefile is not Python (`rule all:`), so only the literal is parsed.
-    match = re.search(
-        r"^FIGURES = (\{[^}]*\})", snakefile.read_text(encoding="utf-8"), re.MULTILINE
-    )
-    assert match, "no top-level FIGURES"
-    return ast.literal_eval(match.group(1))
 
 
 def tree(root: Path) -> set[str]:
@@ -44,7 +35,8 @@ def test_scaffold_writes_expected_tree(repo):
         "reports/_shared/report.smk",
         "reports/_shared/theme.typ",
     } <= tree(repo)
-    assert registry(repo / "reports/demo/Snakefile") == {"example": "plot_example"}
+    figures = report_check.registry_text(repo / "reports/demo")
+    assert ast.literal_eval(figures) == {"example": "plot_example"}
 
 
 def test_second_report_leaves_shared_untouched(repo):
