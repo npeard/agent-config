@@ -35,7 +35,10 @@ agent-config = { path = ".", editable = true }
 
 [environments]
 default = { solve-group = "default" }
-dev = { features = ["dev", "report"], solve-group = "default" }
+dev = { features = ["dev"] }
+# Apart from dev, so the hooks and a fresh clone's first commit do not install
+# the report toolchain; CI tests here so the end-to-end builds still run.
+report = { features = ["dev", "report"], solve-group = "default" }
 
 [tasks]
 ascii = "python scripts/check_ascii.py"

@@ -223,6 +223,7 @@ pixi run audit                      # agent-asset principle breaches
                                     #   (--strict fails on warnings too)
 pixi run nightly                    # gate an unattended improvement pass
 pixi run test                       # pytest
+pixi run -e report test             # pytest, plus the end-to-end report builds
 pixi run precommit                  # pre-commit run --all-files
 pixi run all                        # format, lint, ascii, spell,
                                     #   suppressions, thresholds,

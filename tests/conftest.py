@@ -105,7 +105,7 @@ def build_tools() -> None:
     """Skip locally without the tools, but fail in CI, which must build once."""
     missing = [tool for tool in ("snakemake", "typst") if not shutil.which(tool)]
     if missing:
-        message = f"{', '.join(missing)} not on PATH (the dev env's report feature)"
+        message = f"{', '.join(missing)} not on PATH (the report env)"
         if os.environ.get("CI"):
             pytest.fail(message)
         pytest.skip(message)
