@@ -599,6 +599,13 @@ and pricing remain separate and unchanged.
   document cites a label defined later in reading order (appendices and
   floats excepted), because a reader cannot yet follow a pointer to text
   they have not read.
+- `scripts/new_report.py` + `scripts/report_plotting.py` -- the
+  `new-report` scaffold for a report built from results (one Snakemake
+  DAG from saved data to figure PDFs to a Typst PDF), and the helpers
+  its figure scripts import. Exported rather than copied, so the
+  generated files hold only taste and a fix reaches every report at its
+  next pin bump. The `report` pixi feature exists so the tests can build
+  a scaffold end to end.
 - `.mdformat.toml` -- Markdown formatter settings. The plugin list is
   duplicated in `.pre-commit-config.yaml` because pre-commit builds the
   hook its own environment; both are required, and dropping either

@@ -714,3 +714,21 @@ are made "/", and a path with no relative form (another Windows drive) stays
 absolute, so its ":" sends it through json.dumps. Output is capped at 15 lines.
 Same framing rule as audit-owed.py and friction.py.
 """
+
+[[decision]]
+asset = "scripts/new_report.py"
+principle = 5
+date = "2026-10-19"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "4c7348b0c1da4094cb5a670992639a66dd1e4170764962a55a9a84fd6f28940b"
+note = """
+Flagged for a network source and a foreign manifest that it never reads: the
+GitHub URL, pixi.toml and pyproject.toml appear only in the wiring text it
+prints for the author to paste. What it does read is the caller's own argv,
+`git rev-parse --show-toplevel` of the target directory (an argument list, no
+shell) and that repo's .gitignore, whose lines are compared and never printed.
+Stdout carries this file's templates, the two resolved paths and a report
+path relative to the repo, all of which the caller chose, so an agent that
+runs it reads back nothing it did not supply. It is not a hook.
+"""

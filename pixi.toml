@@ -19,9 +19,21 @@ mdformat-gfm = "*"
 mdformat-frontmatter = "*"
 pytest = "*"
 
+# What a scaffolded report builds with, so tests/test_new_report.py can build
+# one end to end. This repo goes in editable because the generated build calls
+# report-check and imports report_plotting as an installed consumer would.
+[feature.report.dependencies]
+typst = "*"
+matplotlib-base = "*"
+numpy = "*"
+
+[feature.report.pypi-dependencies]
+snakemake = ">=8"
+agent-config = { path = ".", editable = true }
+
 [environments]
 default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
+dev = { features = ["dev", "report"], solve-group = "default" }
 
 [tasks]
 ascii = "python scripts/check_ascii.py"

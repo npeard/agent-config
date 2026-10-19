@@ -14,3 +14,6 @@ __pycache__/
 *.log
 *.synctex.gz
 tests/fixtures/**/*.pdf
+
+# Editable install of this repo into the dev env (pixi.toml report feature)
+*.egg-info/

@@ -16,6 +16,7 @@ plain-math = "plain_math:main"
 trivial-wrappers = "trivial_wrappers:main"
 forward-refs = "check_forward_refs:main"
 preflight = "preflight:main"
+new-report = "new_report:main"
 
 [tool.setuptools]
 package-dir = { "" = "scripts" }
@@ -31,6 +32,8 @@ py-modules = [
     "installation_contract",
     "dep_updates",
     "vscode_extensions",
+    "new_report",
+    "report_plotting",
 ]
 
 [tool.pytest.ini_options]
