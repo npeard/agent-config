@@ -332,13 +332,19 @@ def main(argv: list[str] | None = None) -> int:
         if path.suffix not in (LATEX, TYPST):
             print(f"{path}: unsupported suffix (want .tex or .typ)", file=sys.stderr)
             return 2
-    try:
-        roots = [document_root(p) for p in edited] if args.containing else edited
-        # Several staged files often share one document; check it once.
-        return max(report(root, args.json) for root in dict.fromkeys(roots))
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"cannot read ({exc})", file=sys.stderr)
-        return 2
+    status, seen = 0, set()
+    for path in edited:
+        try:
+            root = document_root(path) if args.containing else path
+            # Several staged files often share one document; check it once.
+            if root not in seen:
+                seen.add(root)
+                status = max(status, report(root, args.json))
+        except (OSError, UnicodeDecodeError) as exc:
+            # The decode error text carries no filename, and a hook passes many.
+            print(f"{path}: cannot read ({exc})", file=sys.stderr)
+            return 2
+    return status
 
 
 if __name__ == "__main__":

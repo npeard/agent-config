@@ -135,7 +135,10 @@ def git(*args: str) -> str | None:
         out = subprocess.run(
             ["git", *args],
             capture_output=True,
-            text=True,
+            # git emits UTF-8; the locale codepage (cp1252) cannot decode a
+            # branch name like that and leaves stdout None.
+            encoding="utf-8",
+            errors="replace",
             check=True,
             timeout=GIT_SECONDS,
         )
@@ -965,6 +968,9 @@ def check_tests(report: Report, root: Path, run: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Rows name branches and paths that may not encode in the console's
+    # codepage (pre-commit's stdout is cp1252 on Windows); escape, don't raise.
+    sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--with-tests", action="store_true", help="run the suite")
     parser.add_argument(

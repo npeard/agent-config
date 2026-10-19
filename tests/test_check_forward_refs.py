@@ -234,3 +234,24 @@ def test_an_include_that_raises_oserror_is_skipped(tmp_path: Path, monkeypatch, 
 
     monkeypatch.setattr(Path, "is_file", is_file)
     assert violations(root, capsys) == [("good.tex", 1, "x", "main.tex", 3)]
+
+
+def test_containing_several_files_of_one_document_checks_it_once(
+    tmp_path: Path, capsys
+):
+    one = chapter(tmp_path)
+    two = write(tmp_path, "ch/two.tex", "Two.\n")
+    body = "\\ref{late}\\input{ch/one}\\input{ch/two}\n"
+    write(tmp_path, "main.tex", ROOT % body)
+    write(tmp_path, "ch/one.tex", "\\label{late}\n")
+    code = check_forward_refs.main(["--containing", str(one), str(two), "--json"])
+    assert code == 1
+    assert capsys.readouterr().out.count('"root"') == 1
+
+
+def test_containing_names_the_unreadable_file(tmp_path: Path, capsys):
+    good = chapter(tmp_path)
+    bad = tmp_path / "ch" / "bad.tex"
+    bad.write_bytes(b"\xff\xfe\x00not utf-8\n")
+    assert check_forward_refs.main(["--containing", str(good), str(bad)]) == 2
+    assert str(bad) in capsys.readouterr().err

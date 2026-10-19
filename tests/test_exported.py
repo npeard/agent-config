@@ -106,3 +106,17 @@ def test_findings_survive_cp1252_stdout(tmp_path, name):
     )
     assert b"UnicodeEncodeError" not in result.stderr
     assert result.stdout, "the finding should reach stdout"
+
+
+def test_preflight_survives_cp1252_stdout(git_repo):
+    """Preflight's rows name the branch, which may hold such a character."""
+    subprocess.run(["git", "checkout", "-q", "-b", "\u03c1"], cwd=git_repo, check=True)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "preflight.py"), "--no-friction", "--offline"],
+        check=False,
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        cwd=git_repo,
+    )
+    assert b"UnicodeEncodeError" not in result.stderr
+    assert result.stdout
