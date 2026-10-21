@@ -1,6 +1,6 @@
 ---
 name: compute-job-safety
-description: Use when starting, stopping, restarting, or diagnosing a long-running compute job, including GPU, cluster, batch, simulation, or background workloads that may consume shared resources or write durable outputs.
+description: Use when starting, stopping, restarting, or diagnosing a long-running compute job, or when launching model training, a batch of parallel processes, or any compute that occupies shared CPU cores or the GPU, including GPU, cluster, batch, simulation, or background workloads that may consume shared resources or write durable outputs.
 compatibility: Requires access to the job's process, scheduler, or project-local driver; host lifecycle hooks can warn about interruption but cannot safely identify arbitrary jobs.
 ---
 
@@ -49,8 +49,8 @@ sleep-poll loop and points here. Worked case: `examples.md` 1.
   and OpenMP variables, `torch.set_num_threads`, a pool's `max_workers`)
   instead of inheriting a library default of all cores. The exception is
   a PyTorch parallel training run on CPU, which should be rare; say so
-  when choosing it. Why: 48 processes on 32 cores starved the machine
-  (examples 2 and 3).
+  when choosing it. Why: 48 processes, and earlier ~70 threads, on 32
+  cores starved the machine (examples 2 and 3).
 - **Answer for the machine, not only the task.** Before starting
   compute, state what the job will occupy (cores, threads, GPU memory,
   duration) and who else shares the machine: supervising agents, other
