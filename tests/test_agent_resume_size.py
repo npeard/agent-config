@@ -200,3 +200,14 @@ def test_skips_a_zero_usage_turn_from_a_real_model(tmp_path):
     zero["message"]["usage"] = {"input_tokens": 0}
     parent = make_session(tmp_path, "abc", [usage_line(400_000), json.dumps(zero)])
     assert deny_reason(send(parent, "abc"))
+
+
+def test_resolves_a_named_target_through_its_meta_file(tmp_path):
+    parent = make_session(tmp_path, "a7ae2b", [usage_line(400_000)])
+    sub = tmp_path / "sess" / "subagents"
+    (sub / "agent-a7ae2b.meta.json").write_text(
+        json.dumps({"agentType": "general-purpose", "name": "code-review"})
+    )
+    (sub / "agent-other.meta.json").write_text("{not json")
+    assert deny_reason(send(parent, "code-review"))
+    assert deny_reason(send(parent, "someone-else")) is None

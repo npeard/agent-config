@@ -90,18 +90,36 @@ def context_tokens(transcript: Path) -> int | None:
     return None
 
 
+def target_transcript(subagents: Path, to: str) -> Path | None:
+    """The transcript SendMessage's `to` resolves to, by agent id or name.
+
+    Transcripts are keyed by id; a name given at spawn lives only in the
+    sibling meta file, so a resume by name would otherwise pass unchecked.
+    """
+    by_id = subagents / f"agent-{to}.jsonl"
+    if by_id.is_file():
+        return by_id
+    for meta in subagents.glob("agent-*.meta.json"):
+        try:
+            name = json.loads(meta.read_text(encoding="utf-8")).get("name")
+        except (ValueError, OSError, AttributeError):
+            continue
+        if name == to:
+            transcript = meta.with_name(meta.name.removesuffix(".meta.json") + ".jsonl")
+            return transcript if transcript.is_file() else None
+    return None
+
+
 def main():
     try:
         data = json.load(sys.stdin)
         if data.get("tool_name") != "SendMessage":
             return
-        to = data["tool_input"]["to"]
-        target = (
-            Path(data["transcript_path"]).with_suffix("")
-            / "subagents"
-            / f"agent-{to}.jsonl"
+        target = target_transcript(
+            Path(data["transcript_path"]).with_suffix("") / "subagents",
+            data["tool_input"]["to"],
         )
-        tokens = context_tokens(target) if target.is_file() else None
+        tokens = context_tokens(target) if target else None
     except (ValueError, KeyError, TypeError, AttributeError, OSError):
         # Fail open: a hook that tracebacks is noisier than one that declines.
         return
