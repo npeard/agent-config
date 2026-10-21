@@ -586,7 +586,7 @@ principle = 3
 date = "2026-09-16"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "d9ced7d2c40ea05b79bde7a3a156767dd36a19375a389f13e3e8c3a42a12145c"
+asset_sha = "7542c91f3dec3919e97ebe14138af034f13d354948547b92646bd97bb84f7052"
 note = """
 2123 words against the 2000 warn threshold; 4800 is the failure line, so
 this is an advisory to review before adding, not a breach.
