@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ spec.loader.exec_module(hook_lib)
 
 @pytest.fixture(autouse=True)
 def private_temp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(hook_lib.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
 
 
 def test_a_key_is_claimed_once():

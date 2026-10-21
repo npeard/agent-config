@@ -2,15 +2,15 @@
 
 Not a hook: it carries no `# claude-hook:` marker, so the registrars skip it.
 The hooks load it by path (hooks run from an arbitrary cwd, with no sys.path to
-find a sibling). Stdlib only, like the hooks that load it.
+find a sibling). Stdlib only, like the hooks that load it. hashlib and tempfile
+are imported inside the two functions that need them: poll-guard runs on every
+shell call and uses only tokenize() and deny().
 """
 
-import hashlib
 import json
 import os
 import re
 import shlex
-import tempfile
 from pathlib import Path
 
 # A native Windows path: drive letter, colon, backslash, then everything up to
@@ -53,6 +53,8 @@ def stamp_dir(name: str) -> Path:
     write its marker re-fires on every call. Windows %TEMP% is already
     per-user and has no getuid, so the suffix is omitted there.
     """
+    import tempfile
+
     getuid = getattr(os, "getuid", None)
     suffix = f"-{getuid()}" if getuid else ""
     return Path(tempfile.gettempdir()) / f"{name}{suffix}"
@@ -66,6 +68,8 @@ def claim(name: str, key: str) -> bool:
     claim one step; an exists()-then-touch pair double-fires when two calls
     race, which is the burst these guards exist to collapse.
     """
+    import hashlib
+
     directory = stamp_dir(name)
     try:
         directory.mkdir(parents=True, exist_ok=True)
