@@ -974,7 +974,8 @@ class TestAssetDocumented:
     """
 
     def readme(self, root, body):
-        (root / "README.md").write_text(body)
+        (root / "docs").mkdir(exist_ok=True)
+        (root / "docs" / "LAYOUT.md").write_text(body)
 
     def test_an_undocumented_hook_is_reported(self, fake_root):
         (fake_root / "hooks" / "ghost.py").write_text("x = 1\n")

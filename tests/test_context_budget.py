@@ -209,7 +209,7 @@ class TestHumanizerPatternCount:
         [
             "skills/humanizer/SKILL.md",
             "skills/humanizer/patterns.md",
-            "README.md",
+            "docs/LAYOUT.md",
         ],
     )
     def test_every_file_that_states_the_count_states_the_right_one(self, relative: str):

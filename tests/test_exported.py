@@ -209,7 +209,7 @@ def test_readme_lists_the_exports():
     (the gates share their names) or one of the bullets after it.
     """
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    start = text.index("## Using these tools from another project")
+    start = text.index("## Use the gates in another project")
     section = text[start : text.index("\n## ", start + 1)]
     table = section[section.index("| Hook") :].split("\n\n")[0]
     hooks = set(re.findall(r"^\| `([^`]+)`", table, re.MULTILINE))
