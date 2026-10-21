@@ -125,9 +125,9 @@ instructions:
 - Launch a job that outlasts a few minutes detached and return; see
   `compute-job-safety`'s "Long jobs".
 - Batch independent shell commands into one call; each costs over a
-  second of harness overhead (example 8).
+  second of harness overhead (example 4).
 - Run the narrowest test target that covers the change; the full suite
-  runs once, at step 5 (example 7).
+  runs once, at step 5 (example 3).
 
 Name skills, never quote them -- reading one to brief someone else pays
 for it twice, and the orchestrator is the expensive place to pay. Name
@@ -157,10 +157,10 @@ Two constraints that are the whole point of the split:
 **Fix rounds resume the implementer only while it is small.** This
 overrides `subagent-driven-development`'s "resume rounds 1-3". A resume
 re-reads the whole context every turn, so past the `agent-resume-size`
-hook's 150k-token cap dispatch a fresh fix agent with the previous
-report file, the findings and the diff range (example 6). **After a
-usage- or session-limit pause, always dispatch fresh**: the cache is
-cold, so a resume rewrites the whole context (example 5).
+hook's cap dispatch a fresh fix agent with the previous report file, the
+findings and the diff range (example 2). **After a usage- or
+session-limit pause, always dispatch fresh**: the cache is cold, so a
+resume rewrites the whole context (example 1).
 
 **Model tier:** the cheapest model that holds accuracy. Mechanical
 search, call-site updates and file moves need no frontier model;

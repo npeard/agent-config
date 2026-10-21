@@ -3,7 +3,7 @@
 Numbered as the rules in `SKILL.md` cite them. Open the one case you are
 acting on; reading this end to end buys nothing.
 
-### 12. A helper wrapping a fit, called once
+### 1. A helper wrapping a fit, called once
 
 From the user's account of helper functions and wrappers in cells, not a
 transcript. The pair below is illustrative of that account.
