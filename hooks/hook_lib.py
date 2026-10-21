@@ -45,6 +45,37 @@ def tokenize(line: str) -> "list[str] | None":
         return None
 
 
+# punctuation_chars glues adjacent operators (`);`), so a token is a separator
+# when it is made of these characters alone.
+SEPARATOR_CHARS = frozenset(";&|(){}")
+
+
+def shell_commands(text: str, tokenizer) -> "list[list[str]]":
+    """Word lists, one per simple command; a newline separates like `;`.
+
+    `tokenizer` is passed in because audit-owed retries an unreadable line with
+    its quotes stripped and the others must not. A line it cannot read is
+    skipped, not the whole text: aborting everything silenced a hook for the
+    entire invocation over one unparsable line.
+    """
+    out = []
+    for line in text.splitlines():
+        tokens = tokenizer(line)
+        if tokens is None:
+            continue
+        current = []
+        for token in tokens:
+            # `token and` keeps an empty quoted argument a word: set("") is a
+            # subset of anything.
+            if token and set(token) <= SEPARATOR_CHARS:
+                out.append(current)
+                current = []
+            else:
+                current.append(token)
+        out.append(current)
+    return [words for words in out if words]
+
+
 def stamp_dir(name: str) -> Path:
     """Where a hook's markers live, namespaced per user.
 

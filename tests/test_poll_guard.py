@@ -119,9 +119,9 @@ def test_native_windows_path_survives_tokenizing():
     spec = importlib.util.spec_from_file_location("poll_guard", HOOK)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.shell_commands(r"cat C:\Users\x\tmp\new") == [
-        ["cat", r"C:\Users\x\tmp\new"]
-    ]
+    assert module.hook_lib.shell_commands(
+        r"cat C:\Users\x\tmp\new", module.hook_lib.tokenize
+    ) == [["cat", r"C:\Users\x\tmp\new"]]
 
 
 @pytest.mark.parametrize("command", ["sleep $N", "sleep infinity"])

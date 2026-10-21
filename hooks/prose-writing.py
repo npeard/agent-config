@@ -167,9 +167,6 @@ EXCLUDED_PATHS = (
 # `1>>`) tokenize as a separate "2"/"1" word followed by the operator, so they
 # need no entries of their own.
 REDIRECTS = frozenset({">", ">>", ">|", "&>", "&>>"})
-# `;`, `&&` and friends end one command and start the next. Splitting on them
-# keeps a read in one command from being credited to a write in another.
-SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body and does not match, because `<` cannot start a delimiter.
 # The lookbehind is what stops `<<<` matching at its second angle bracket.
@@ -202,30 +199,6 @@ def without_heredocs(command: str) -> str:
                 index += 1
         index += 1
     return "\n".join(kept)
-
-
-def shell_commands(command: str) -> list[list[str]]:
-    """Token lists, one per command in the shell line. [] if unparsable.
-
-    Unparsable means an unbalanced quote, in which case nothing can be said
-    about what the command writes, so declining is the honest answer.
-    """
-    out: list[list[str]] = []
-    for line in without_heredocs(command).splitlines():
-        tokens = hook_lib.tokenize(line)
-        if tokens is None:
-            # Skip this line, not the whole command. Aborting everything meant
-            # one unparsable line silenced the hook for the entire invocation.
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in SEPARATORS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return out
 
 
 def sed_in_place(words: list[str]) -> bool:
@@ -287,7 +260,9 @@ def written_paths(command: str, cwd) -> list[str]:
     base = cwd if isinstance(cwd, str) and cwd else "."
     return [
         resolve_destination(path, base)
-        for tokens in shell_commands(command)
+        for tokens in hook_lib.shell_commands(
+            without_heredocs(command), hook_lib.tokenize
+        )
         for path in destinations(tokens)
     ]
 

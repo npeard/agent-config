@@ -121,10 +121,6 @@ GIT_OPTIONS_WITH_VALUE = frozenset(
         "--config-env",
     }
 )
-# `;`, `&&` and friends end one command and start another. Newlines are handled
-# by splitting into lines first, because shlex treats a newline as ordinary
-# whitespace and would run two lines together into a single command.
-SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body, and does not match because `<` is not a valid delimiter start.
 # The lookbehind is what stops `<<<` matching at its second angle bracket.
@@ -178,30 +174,6 @@ def tokenize(line: str) -> "list[str] | None":
     return tokens
 
 
-def shell_commands(command: str) -> list[list[str]]:
-    """Token lists, one per command in the shell line. [] if unparsable.
-
-    Unparsable means an unbalanced quote, which is not a commit either, so
-    declining is both safe and correct.
-    """
-    out: list[list[str]] = []
-    for line in without_heredocs(command).splitlines():
-        tokens = tokenize(line)
-        if tokens is None:
-            # Skip this line, not the whole command. Aborting everything meant
-            # one unparsable line silenced the hook for the entire invocation.
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in SEPARATORS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return out
-
-
 def is_commit(tokens: list[str]) -> bool:
     """Whether one command is a `git commit` that would create a commit."""
     if not tokens or os.path.basename(tokens[0]) != "git":
@@ -232,7 +204,10 @@ def commits(command: str) -> bool:
     with nothing having been committed. It was also too narrow in the other
     direction -- `git -C <path> commit` contains no such substring.
     """
-    return any(is_commit(tokens) for tokens in shell_commands(command))
+    return any(
+        is_commit(tokens)
+        for tokens in hook_lib.shell_commands(without_heredocs(command), tokenize)
+    )
 
 
 def failed(response) -> bool:

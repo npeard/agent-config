@@ -47,9 +47,6 @@ REASON = (
     "on completion. See the compute-job-safety skill."
 )
 
-# punctuation_chars glues adjacent operators (`);`), so a token is a separator
-# when it is made of these characters alone.
-SEPARATOR_CHARS = frozenset(";&|(){}")
 UNBOUNDED_LOOP_WORDS = frozenset({"while", "until"})
 BOUNDED_LOOP_WORDS = frozenset({"for", "foreach"})
 LITERAL_WORD = re.compile(r"[\w.:/+-]+")
@@ -58,24 +55,6 @@ BRACE_RANGE = re.compile(r"\{(-?\d+)\.\.(-?\d+)\}")
 # Keywords that can precede the real command word inside a compound command.
 LEADING_WORDS = frozenset({"do", "then", "else", "!"})
 SLEEP_UNITS = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
-
-
-def shell_commands(command):
-    """Token lists, one per simple command; newlines separate like `;`."""
-    out = []
-    for line in command.splitlines():
-        tokens = hook_lib.tokenize(line)
-        if tokens is None:
-            continue
-        current = []
-        for token in tokens:
-            if set(token) <= SEPARATOR_CHARS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return [words for words in out if words]
 
 
 def command_words(words):
@@ -122,7 +101,10 @@ def passes(command, loop):
 
 
 def polls(command):
-    commands = [command_words(words) for words in shell_commands(command)]
+    commands = [
+        command_words(words)
+        for words in hook_lib.shell_commands(command, hook_lib.tokenize)
+    ]
     commands = [words for words in commands if words]
     sleeps = [s for s in map(sleep_seconds, commands) if s is not None]
     if not sleeps:
