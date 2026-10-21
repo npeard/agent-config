@@ -204,8 +204,9 @@ relaxed on purpose, because the user's next act is editing this file:
   `src/`.
 - **Write the cells as one chain of thought**, top to bottom: no helper
   functions or convenience wrappers, constants plain, objects built in
-  line, a terse prose cell per section. The reader wants to follow and
-  change the work, not call it (examples.md case 1).
+  line, a terse prose cell per section. Do not pre-optimize for
+  portability; the reader wants to follow and change the work, not call
+  it (examples.md case 1).
 
 A method change in one cell reaches every figure and section that shares
 the method, as `writing-orchestration` states for reports.
