@@ -649,6 +649,33 @@ def check_friction(report: Report, root: Path) -> None:
         report.add(OK, "friction", "nothing over the bar")
 
 
+def check_memories(report: Report, root: Path, home: Path) -> None:
+    """Warn about auto-memory files kept only on this machine.
+
+    Memory is per machine and unreviewed, so a fact left there never reaches
+    another machine or a collaborator; each file should move to a durable
+    home or go. Never deletes -- the user decides. The directory name is the
+    project path with colons and slashes of either kind turned into `-`, the
+    key. Silent when there is nothing beyond the MEMORY.md index.
+    """
+    key = re.sub(r"[:\\/]", "-", str(root))
+    memory = home / ".claude" / "projects" / key / "memory"
+    try:
+        names = sorted(
+            p.name for p in memory.iterdir() if p.is_file() and p.name != "MEMORY.md"
+        )
+    except OSError:
+        return
+    if names:
+        report.add(
+            WARN,
+            "memories",
+            f"{len(names)} file(s) in {memory}: promote to a durable home "
+            "(CLAUDE.md, a skill, agent-config) or delete",
+            names,
+        )
+
+
 def check_audit_owed(report: Report, root: Path) -> None:
     """Report a config audit this branch owes but has not run.
 
@@ -1026,6 +1053,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)
+    check_memories(report, root, Path.home())
 
     problems = report.render()
     return 1 if (args.strict and problems) else 0

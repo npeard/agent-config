@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -803,6 +804,50 @@ class TestAuditOwedBranchScoping:
         self.on_branch(git_repo, "feat/x")
         (git_repo / ".audit-owed").write_text("scripts/legacy.py\n")
         assert "1 config asset(s)" in self.report_for(git_repo)[0][2]
+
+
+class TestMemories:
+    """Auto-memory is machine-local and unreviewed, so a fact kept only there
+    is lost to every other machine and to a teammate; preflight asks for each
+    file to be promoted or deleted."""
+
+    def memory_dir(self, home: Path, root: Path) -> Path:
+        key = re.sub(r"[:\\/]", "-", str(root))
+        path = home / ".claude" / "projects" / key / "memory"
+        path.mkdir(parents=True)
+        return path
+
+    def rows(self, root: Path, home: Path):
+        report = preflight.Report()
+        preflight.check_memories(report, root, home)
+        return report.rows
+
+    def test_lists_every_file_except_the_index(self, tmp_path):
+        root, home = tmp_path / "proj", tmp_path / "home"
+        memory = self.memory_dir(home, root)
+        for name in ("MEMORY.md", "a.md", "b.md"):
+            (memory / name).write_text("x", encoding="utf-8")
+        ((status, label, detail, lines),) = self.rows(root, home)
+        assert (status, label) == (WARN, "memories")
+        assert "promote to a durable home" in detail and "delete" in detail
+        assert sorted(lines) == ["a.md", "b.md"]
+        assert (memory / "a.md").exists()
+
+    def test_only_the_index_is_silent(self, tmp_path):
+        root, home = tmp_path / "proj", tmp_path / "home"
+        (self.memory_dir(home, root) / "MEMORY.md").write_text("x", encoding="utf-8")
+        assert self.rows(root, home) == []
+
+    def test_an_absent_directory_is_silent(self, tmp_path):
+        assert self.rows(tmp_path / "proj", tmp_path / "home") == []
+
+    def test_main_runs_it(self, git_repo, monkeypatch, capsys):
+        home = isolate_preflight_home(monkeypatch, git_repo)
+        monkeypatch.chdir(git_repo)
+        memory = self.memory_dir(home, git_repo)
+        (memory / "stray.md").write_text("x", encoding="utf-8")
+        preflight.main(["--no-friction", "--offline"])
+        assert "stray.md" in capsys.readouterr().out
 
 
 class TestSkillsLinked:
