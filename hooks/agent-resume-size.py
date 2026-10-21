@@ -20,9 +20,17 @@ teammate name passes untouched -- blocking ordinary messaging would be worse
 than the bug.
 """
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+
+# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
+_spec = importlib.util.spec_from_file_location(
+    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
+)
+hook_lib = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_lib)
 
 # 150k allows about one fix round. The incident's implementer was 366k after
 # its first run alone, and a fresh fix agent reading a report file starts near
@@ -125,19 +133,7 @@ def main():
         return
     if tokens is None or tokens <= RESUME_CAP_TOKENS:
         return
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": REASON.format(
-                        tokens=tokens, cap=RESUME_CAP_TOKENS
-                    ),
-                }
-            }
-        )
-    )
+    hook_lib.deny(REASON.format(tokens=tokens, cap=RESUME_CAP_TOKENS))
 
 
 if __name__ == "__main__":

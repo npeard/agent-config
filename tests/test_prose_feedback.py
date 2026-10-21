@@ -363,8 +363,8 @@ def fake_hook(tmp_path: Path, scripts: dict[str, str]) -> Path:
     (fake / "hooks").mkdir(parents=True)
     (fake / "scripts").mkdir()
     (fake / "hooks" / "prose-feedback.py").write_text(HOOK.read_text())
-    (fake / "hooks" / "hook_once.py").write_text(
-        (HOOK.parent / "hook_once.py").read_text()
+    (fake / "hooks" / "hook_lib.py").write_text(
+        (HOOK.parent / "hook_lib.py").read_text()
     )
     for stem, source in scripts.items():
         (fake / "scripts" / f"{stem}.py").write_text(source)

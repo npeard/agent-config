@@ -52,10 +52,10 @@ from pathlib import Path
 
 # A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
 _spec = importlib.util.spec_from_file_location(
-    "hook_once", Path(__file__).resolve().parent / "hook_once.py"
+    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
 )
-hook_once = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_once)
+hook_lib = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_lib)
 
 
 def resolve(path: str) -> str:
@@ -172,7 +172,7 @@ def run_json(script: str, args: list[str], ok_codes: tuple[int, ...]):
 
 def session_file(session, key: str, suffix: str) -> Path:
     digest = hashlib.sha256(f"{session}\0{key}".encode()).hexdigest()[:16]
-    return hook_once.stamp_dir("claude-prose-feedback") / f"{digest}{suffix}"
+    return hook_lib.stamp_dir("claude-prose-feedback") / f"{digest}{suffix}"
 
 
 def baseline(session, key: str, current):

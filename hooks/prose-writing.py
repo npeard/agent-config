@@ -46,17 +46,16 @@ import importlib.util
 import json
 import os
 import re
-import shlex
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 
 # A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
 _spec = importlib.util.spec_from_file_location(
-    "hook_once", Path(__file__).resolve().parent / "hook_once.py"
+    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
 )
-hook_once = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_once)
+hook_lib = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_lib)
 
 
 def forward_slashed(path) -> str:
@@ -205,58 +204,6 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
-# A native Windows path: drive letter, colon, backslash, then everything up to
-# the next whitespace or shell metacharacter. Only backslashes inside a match
-# are doubled below.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
-
-
-def with_doubled_separators(line: str) -> str:
-    """The line with the backslashes inside native Windows paths doubled.
-
-    shlex(posix=True) always treats "\\" as an escape character, which ate the
-    separators out of a path like "C:\\Users\\...\\CLAUDE.md" -- so it no longer
-    matched the directory it lives in, and this hook fired on the master repo's
-    own files, telling the agent to promote a file it was already editing in
-    place.
-
-    Keyed on the shape of the text rather than on os.name, because os.name is
-    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
-    legitimately contains POSIX escapes. Doubling every backslash on Windows
-    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
-    {} \\;` holding a stray "\\" -- inventing a destination that was never
-    written, the exact error tokenize() below declines to risk. A drive-letter
-    prefix is what separates the one shape shlex cannot read from the many it
-    can.
-    """
-    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
-
-
-def tokenize(line: str) -> "list[str] | None":
-    """Tokens for one shell line, or None if it cannot be read at all.
-
-    No quote-recovery retry here, deliberately, and audit-owed.py does have
-    one. That hook asks a yes/no question about the command verb, where a
-    false positive costs one marker entry its idempotence check absorbs. This
-    one lifts *paths* out of the command, so stripping an unbalanced quote
-    could invent a destination that was never written and put a wrong advisory
-    into context. Declining is the cheaper error here.
-
-    Duplicated in promotion-check.py and audit-owed.py, whose copy alone
-    retries (above). A hook runs standalone under whatever interpreter
-    ~/.claude/settings.json names, stdlib-only and with no sys.path
-    manipulation, so a shared module is not available here.
-    """
-    lexer = shlex.shlex(
-        with_doubled_separators(line), posix=True, punctuation_chars=True
-    )
-    lexer.whitespace_split = True
-    try:
-        return list(lexer)
-    except ValueError:
-        return None
-
-
 def shell_commands(command: str) -> list[list[str]]:
     """Token lists, one per command in the shell line. [] if unparsable.
 
@@ -265,7 +212,7 @@ def shell_commands(command: str) -> list[list[str]]:
     """
     out: list[list[str]] = []
     for line in without_heredocs(command).splitlines():
-        tokens = tokenize(line)
+        tokens = hook_lib.tokenize(line)
         if tokens is None:
             # Skip this line, not the whole command. Aborting everything meant
             # one unparsable line silenced the hook for the entire invocation.
@@ -409,12 +356,6 @@ def project_root(path: str) -> str:
     return forward_slashed(start)
 
 
-def already_fired(session: str, agent, root: str) -> bool:
-    """Whether this agent has already been told about this project."""
-    key = f"{session}\0{agent or ''}\0{root}"
-    return not hook_once.claim("claude-prose-hook", key)
-
-
 def main():
     try:
         data = json.load(sys.stdin)
@@ -469,8 +410,12 @@ def main():
         target = ""
     else:
         return
-    session = data.get("session_id")
-    if session and already_fired(session, data.get("agent_id"), project_root(resolved)):
+    if not hook_lib.claim_for(
+        "claude-prose-hook",
+        data.get("session_id"),
+        data.get("agent_id"),
+        project_root(resolved),
+    ):
         return
     print(
         json.dumps(

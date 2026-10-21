@@ -18,10 +18,18 @@ Commands are tokenized so a path, a quoted string or `grep sleep` is never
 mistaken for a sleep.
 """
 
+import importlib.util
 import json
 import re
-import shlex
 import sys
+from pathlib import Path
+
+# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
+_spec = importlib.util.spec_from_file_location(
+    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
+)
+hook_lib = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_lib)
 
 # Under this a lone sleep is a pause, not a wait; the cache TTL is minutes.
 POLL_SLEEP_SECONDS = 60
@@ -40,28 +48,12 @@ LOOP_WORDS = frozenset({"while", "until", "for", "foreach"})
 LEADING_WORDS = frozenset({"do", "then", "else", "!"})
 SLEEP_UNITS = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
-# shlex(posix=True) treats "\" as an escape, which eats the separators of a
-# native Windows path; double them, keyed on the shape of the text. Same
-# fix as hooks/prose-writing.py, copied because a hook runs standalone.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
-
-
-def tokenize(line):
-    line = NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
-    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    try:
-        return list(lexer)
-    except ValueError:
-        # Unbalanced quote: nothing reliable can be said, so decline this line.
-        return None
-
 
 def shell_commands(command):
     """Token lists, one per simple command; newlines separate like `;`."""
     out = []
     for line in command.splitlines():
-        tokens = tokenize(line)
+        tokens = hook_lib.tokenize(line)
         if tokens is None:
             continue
         current = []
@@ -123,17 +115,7 @@ def main():
         return
     if not denied:
         return
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": REASON,
-                }
-            }
-        )
-    )
+    hook_lib.deny(REASON)
 
 
 if __name__ == "__main__":

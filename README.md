@@ -489,9 +489,12 @@ and pricing remain separate and unchanged.
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
-- `hooks/hook_once.py` -- not a hook: the once-per-key marker that
-  `prose-writing.py`, `promotion-check.py` and `prose-feedback.py` load
-  by path, so the three say each thing once by one mechanism.
+- `hooks/hook_lib.py` -- not a hook: the module the hooks load by path.
+  It holds the once-per-agent marker `prose-writing.py` and
+  `promotion-check.py` use to say each thing once, the per-user stamp
+  directory `prose-feedback.py` keeps its repeat digests in, the shell
+  tokenizer that survives native Windows paths, and the PreToolUse deny
+  output, so each lives in one copy.
 - `hooks/prose-feedback.py` -- after every edit to a `.tex` or `.typ`
   file, reports forward references (blocking feedback) and
   sentence-length metrics against the session's first measurement,

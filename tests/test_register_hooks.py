@@ -94,7 +94,7 @@ class TestParsing:
         assert register_hooks.undeclared(tmp_path) == ["silent.py"]
 
     def test_a_hook_library_is_neither_registered_nor_undeclared(self, tmp_path: Path):
-        (tmp_path / "hook_once.py").write_text("x = 1\n")
+        (tmp_path / "hook_lib.py").write_text("x = 1\n")
         assert register_hooks.declared_hooks(tmp_path) == []
         assert register_hooks.undeclared(tmp_path) == []
 
