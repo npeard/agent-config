@@ -53,7 +53,11 @@ def deny_reason(payload) -> str | None:
     [
         "until test -f out.h5; do sleep 30; done",
         "while true; do sleep 5; done",
-        "for i in 1 2 3; do sleep 1; done",
+        "for i in 1 2 3; do sleep 30; done",
+        "for i in $(seq 100); do test -f out && break; sleep 5; done",
+        "for i in {1..20}; do sleep 3; done",
+        "for i in $(seq 0 2 10); do sleep 10; done",
+        "do { Start-Sleep 5 } until (Test-Path out.h5)",
         "until test -f out.h5\ndo\n  sleep 30\ndone",
         "sleep 120",
         "sleep 2m",
@@ -142,3 +146,17 @@ def test_unusable_stdin_is_silent(body):
 )
 def test_malformed_or_foreign_input_is_silent(payload):
     assert deny_reason(payload) is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "for i in $(seq 10); do curl -s :8888 && break; sleep 1; done",
+        "for i in 1 2 3; do sleep 1; done",
+        "for i in {1..5}; do sleep 2; done",
+        "for f in *.log; do gzip $f; sleep 1; done",
+        "foreach ($i in 1..10) { Start-Sleep 1 }",
+    ],
+)
+def test_allows_a_bounded_retry_with_a_short_total_sleep(command):
+    assert deny_reason(call(command)) is None
