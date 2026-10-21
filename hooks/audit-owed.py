@@ -21,7 +21,6 @@ import contextlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
@@ -29,6 +28,8 @@ if os.name == "nt":
     import msvcrt
 else:
     import fcntl
+
+import hook_lib
 
 
 @contextlib.contextmanager
@@ -113,10 +114,6 @@ GIT_OPTIONS_WITH_VALUE = frozenset(
         "--config-env",
     }
 )
-# `;`, `&&` and friends end one command and start another. Newlines are handled
-# by splitting into lines first, because shlex treats a newline as ordinary
-# whitespace and would run two lines together into a single command.
-SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body, and does not match because `<` is not a valid delimiter start.
 # The lookbehind is what stops `<<<` matching at its second angle bracket.
@@ -151,78 +148,23 @@ def without_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
-# A native Windows path: drive letter, colon, backslash, then everything up to
-# the next whitespace or shell metacharacter. Only backslashes inside a match
-# are doubled below.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
-
-
-def with_doubled_separators(line: str) -> str:
-    """The line with the backslashes inside native Windows paths doubled.
-
-    shlex(posix=True) always treats "\\" as an escape character, which ate the
-    separators out of a native path like "C:\\Users\\...\\CLAUDE.md" passed to
-    `git -C`.
-
-    Keyed on the shape of the text rather than on os.name, because os.name is
-    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
-    legitimately contains POSIX escapes. Doubling every backslash on Windows
-    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
-    {} \\;` holding a stray "\\", corrupting commands that parsed correctly
-    everywhere else. A drive-letter prefix is what separates the one shape
-    shlex cannot read from the many it can.
-    """
-    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
-
-
 def tokenize(line: str) -> "list[str] | None":
-    """Tokens for one shell line, or None if it cannot be read at all.
+    """Tokens for one shell line, retrying once without quote characters.
 
     The retry is the important part. `git commit -m "$(cat <<'EOF' ... EOF)"`
     is the message form this project mandates, and stripping the heredoc body
-    leaves the opening line holding an unbalanced quote -- so shlex raised and
-    the commit went undetected. The command word is still at the start of the
-    line, so retrying without quote characters recovers it; the alternative was
-    a hook that ignored the dominant commit form.
-
-    Duplicated in prose-writing.py and promotion-check.py; this copy alone
-    retries without quotes (above). A hook runs standalone under whatever
-    interpreter ~/.claude/settings.json names, stdlib-only and with no sys.path
-    manipulation, so a shared module is not available here.
+    leaves the opening line holding an unbalanced quote -- so shlex raises and
+    the commit would go undetected. The command word is still at the start of
+    the line, so retrying without quote characters recovers it. The retry is
+    safe here and not in hook_lib.tokenize's other callers: this hook asks a
+    yes/no question about the command verb, where a false positive costs one
+    marker entry its idempotence check absorbs, while they lift paths out of
+    the command and could invent one.
     """
-    doubled = with_doubled_separators(line)
-    for attempt in (doubled, doubled.replace('"', " ").replace("'", " ")):
-        lexer = shlex.shlex(attempt, posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        try:
-            return list(lexer)
-        except ValueError:
-            continue
-    return None
-
-
-def shell_commands(command: str) -> list[list[str]]:
-    """Token lists, one per command in the shell line. [] if unparsable.
-
-    Unparsable means an unbalanced quote, which is not a commit either, so
-    declining is both safe and correct.
-    """
-    out: list[list[str]] = []
-    for line in without_heredocs(command).splitlines():
-        tokens = tokenize(line)
-        if tokens is None:
-            # Skip this line, not the whole command. Aborting everything meant
-            # one unparsable line silenced the hook for the entire invocation.
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in SEPARATORS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return out
+    tokens = hook_lib.tokenize(line)
+    if tokens is None:
+        tokens = hook_lib.tokenize(line.replace('"', " ").replace("'", " "))
+    return tokens
 
 
 def is_commit(tokens: list[str]) -> bool:
@@ -255,7 +197,10 @@ def commits(command: str) -> bool:
     with nothing having been committed. It was also too narrow in the other
     direction -- `git -C <path> commit` contains no such substring.
     """
-    return any(is_commit(tokens) for tokens in shell_commands(command))
+    return any(
+        is_commit(tokens)
+        for tokens in hook_lib.shell_commands(without_heredocs(command), tokenize)
+    )
 
 
 def failed(response) -> bool:

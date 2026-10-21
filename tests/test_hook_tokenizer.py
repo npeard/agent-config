@@ -1,28 +1,20 @@
-"""tokenize() agreement across the three hooks that copy it.
+"""The shell tokenizer the hooks share, and audit-owed.py's retry around it.
 
-hooks/promotion-check.py, hooks/prose-writing.py and hooks/audit-owed.py each
-define their own module-level tokenize(line) -- deliberately duplicated,
-since a hook runs standalone under whatever interpreter
-~/.claude/settings.json names, stdlib-only and with no sys.path manipulation,
-so a shared module under hooks/ is not available to import from. This file is
-the coupling that keeps the three copies honest: it does not care how any of
-them is implemented, only that they agree on the contract.
+hooks/hook_lib.py's tokenize(line) is what promotion-check.py,
+prose-writing.py and poll-guard.py call; audit-owed.py wraps it with one
+quote-stripped retry. Both are exercised here, against the contract rather
+than the implementation.
 
 shlex(posix=True) always treats "\\" as an escape character, which ate the
 separators out of a native Windows path like "C:\\Users\\...\\AGENTS.md" and
-made it fail to match the directory it lives in -- the promotion-check
-self-guard's concrete symptom. Doubling the backslashes inside text shaped
-like a native Windows path is the fix under test, and the *shape* is the key,
-not the platform: the Bash tool on Windows runs Git Bash, so a POSIX escape
-in a command there is genuine and must survive untouched. Every case below
-therefore runs on every platform. audit-owed.py's tokenize additionally
-retries once with quote characters stripped (the
-`git commit -m "$(cat <<'EOF' ... EOF)"` recovery), which must survive
-alongside it. That retry also means audit-owed.py's
-tokenize has no input left that returns None -- stripping every quote
-character forecloses the only thing shlex raises on here -- so its None
-contract is not asserted below; only promotion-check.py's and
-prose-writing.py's are, and audit-owed's retry is pinned directly instead.
+made it fail to match the directory it lives in. Doubling the backslashes
+inside text shaped like a native Windows path is the fix under test, and the
+*shape* is the key, not the platform: the Bash tool on Windows runs Git Bash,
+so a POSIX escape in a command there is genuine and must survive untouched.
+Every case below therefore runs on every platform. audit-owed.py's retry has
+no input left that returns None -- stripping every quote character forecloses
+the only thing shlex raises on here -- so its None contract is not asserted;
+the retry is pinned directly instead.
 """
 
 from __future__ import annotations
@@ -33,7 +25,6 @@ from pathlib import Path
 import pytest
 
 HOOKS_DIR = Path(__file__).resolve().parent.parent / "hooks"
-HOOK_NAMES = ["promotion-check.py", "prose-writing.py", "audit-owed.py"]
 
 
 def load(name: str):
@@ -46,12 +37,14 @@ def load(name: str):
     return module
 
 
-MODULES = {name: load(name) for name in HOOK_NAMES}
+HOOK_LIB = load("hook_lib.py")
+AUDIT_OWED = load("audit-owed.py")
+TOKENIZERS = {"hook_lib": HOOK_LIB.tokenize, "audit-owed": AUDIT_OWED.tokenize}
 
 
-@pytest.fixture(params=HOOK_NAMES)
+@pytest.fixture(params=sorted(TOKENIZERS))
 def tokenize(request):
-    return MODULES[request.param].tokenize
+    return TOKENIZERS[request.param]
 
 
 WINDOWS_PATH = r"C:\Users\me\Documents\Projects\agent-config\AGENTS.md"
@@ -83,15 +76,12 @@ def test_single_quoting_still_groups_a_word_with_spaces(tokenize):
     assert tokens == ["echo", "hello world", "foo"]
 
 
-@pytest.mark.parametrize("name", ["promotion-check.py", "prose-writing.py"])
-def test_unparsable_input_declines_by_returning_none_not_a_list(name):
-    """The real contract for the two hooks with no retry: None on an
-    unbalanced quote, never an empty list or a partial one -- an unbalanced
-    quote is the only input shlex(posix=True) raises on here, and neither
-    hook recovers from it.
+def test_unparsable_input_declines_by_returning_none_not_a_list():
+    """None on an unbalanced quote, never an empty list or a partial one: an
+    unbalanced quote is the only input shlex(posix=True) raises on here, and a
+    caller that lifts paths must not guess at one.
     """
-    result = MODULES[name].tokenize("echo 'unterminated")
-    assert result is None, f"{name} returned {result!r}, expected None"
+    assert HOOK_LIB.tokenize("echo 'unterminated") is None
 
 
 def test_audit_owed_retry_recovers_the_mandated_commit_form_not_none():
@@ -102,7 +92,7 @@ def test_audit_owed_retry_recovers_the_mandated_commit_form_not_none():
     `git commit -m "$(cat <<'EOF' ... EOF)"`, so pin the recovery itself
     rather than asserting a None case this hook cannot produce.
     """
-    tokens = MODULES["audit-owed.py"].tokenize("git commit -m \"$(cat <<'EOF'")
+    tokens = AUDIT_OWED.tokenize("git commit -m \"$(cat <<'EOF'")
     assert tokens[:3] == ["git", "commit", "-m"]
 
 
@@ -124,10 +114,9 @@ class TestPosixEscapesSurvive:
     """A POSIX command must parse identically on every platform.
 
     The Bash tool on Windows runs Git Bash, so backslashes in a command there
-    are genuine POSIX escapes. Doubling them keyed on os.name corrupted these
-    two shapes, and both hooks that extract paths fed the wreckage straight
-    into path extraction -- inventing a destination that was never written,
-    which is exactly what promotion-check's tokenize() declines to risk.
+    are genuine POSIX escapes. Doubling every backslash would corrupt these
+    two shapes, and the hooks that extract paths would invent a destination
+    that was never written -- the error hook_lib.tokenize declines to risk.
     """
 
     def test_an_escaped_space_keeps_one_path_in_one_token(self, tokenize):

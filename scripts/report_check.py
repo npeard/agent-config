@@ -7,9 +7,10 @@ whose Snakefile has a top-level FIGURES literal -- so a pre-commit hook can
 pass staged files. Each report is checked once; paths under no report are
 ignored. The static check compares three lists that must agree: the FIGURES
 registry (name -> figures/ script stem), the #fig("name") calls in
-report.typ, and the figures/plot_*.py scripts.
+the document, and the figures/plot_*.py scripts. The document is
+<DOCUMENT>.typ, DOCUMENT being the Snakefile's top-level string literal.
 
---compile also builds report.typ to OUTPUT with Typst and fails on any
+--compile also builds the document to OUTPUT with Typst and fails on any
 warning, since Typst renders many mistakes at exit 0 with only a warning, and
 on a page count over N. Findings print as `path: message`; exit 1 on any.
 """
@@ -32,6 +33,7 @@ from check_forward_refs import strip_typst_comments
 
 # A Snakefile is not Python (`rule all:`), so only the literal is parsed.
 REGISTRY = re.compile(r"^FIGURES\s*=\s*(\{[^}]*\})", re.MULTILINE)
+DOCUMENT = re.compile(r"^DOCUMENT\s*=\s*(\"[^\"\n]*\"|'[^'\n]*')", re.MULTILINE)
 # With or without `#`, since code mode (`#grid(fig("a"))`) drops it; the
 # lookbehind keeps `my-fig(` or `subfig(` from counting.
 FIG_CALL = re.compile(r'(?<![\w-])fig\(\s*"([^"]*)"')
@@ -45,17 +47,40 @@ def registry_text(directory: Path) -> str | None:
     return match.group(1) if match else None
 
 
-def find_report(path: Path) -> tuple[Path, str] | None:
-    """The report directory holding `path` and its registry, read once."""
+def document_name(directory: Path) -> str | None:
+    """DOCUMENT's value, None if the line is absent, "" if it is unreadable.
+
+    The regex admits any quoted text, and a backslash escape such as "\\N" is
+    not a valid literal; "" lets the caller report that rather than traceback.
+    """
+    match = DOCUMENT.search((directory / "Snakefile").read_text(encoding="utf-8"))
+    if not match:
+        return None
+    try:
+        return ast.literal_eval(match.group(1))
+    except (ValueError, SyntaxError):
+        return ""
+
+
+def find_report(path: Path) -> tuple[Path, str, str | None] | None:
+    """The report directory holding `path`, its registry and document name."""
     start = path if path.is_dir() else path.parent
     for directory in (start, *start.parents):
         if text := registry_text(directory):
-            return directory, text
+            return directory, text, document_name(directory)
     return None
 
 
-def static_findings(report: Path, registry: str) -> list[str]:
-    snakefile, document = report / "Snakefile", report / "report.typ"
+def static_findings(report: Path, registry: str, name: str | None) -> list[str]:
+    snakefile = report / "Snakefile"
+    findings = []
+    if name is None:
+        # An old Snakefile: check as the scaffold's default so the rest still runs.
+        findings.append(f'{snakefile}: no DOCUMENT; add the line DOCUMENT = "report"')
+        name = "report"
+    if not name:
+        return [*findings, f"{snakefile}: DOCUMENT is not a string literal"]
+    document = report / f"{name}.typ"
     try:
         figures = ast.literal_eval(registry)
     except (ValueError, SyntaxError):
@@ -63,22 +88,22 @@ def static_findings(report: Path, registry: str) -> list[str]:
     if not isinstance(figures, dict) or not all(
         isinstance(item, str) for pair in figures.items() for item in pair
     ):
-        return [f"{snakefile}: FIGURES is not a literal dict of str to str"]
+        return [*findings, f"{snakefile}: FIGURES is not a literal dict of str to str"]
     if not document.is_file():
-        return [f"{document}: missing, so no #fig call can be checked"]
+        return [*findings, f"{document}: missing, so no #fig call can be checked"]
     text = strip_typst_comments(document.read_text(encoding="utf-8"))
     placed = set(FIG_CALL.findall(text))
     scripts = {p.stem for p in (report / "figures").glob("plot_*.py")}
-    findings = [
-        f'{document}: #fig("{name}") names no FIGURES entry'
-        for name in sorted(placed - figures.keys())
+    findings += [
+        f'{document}: #fig("{fig}") names no FIGURES entry'
+        for fig in sorted(placed - figures.keys())
     ]
-    for name, stem in sorted(figures.items()):
-        if name not in placed:
-            findings.append(f'{snakefile}: FIGURES["{name}"] is never placed by #fig')
+    for fig, stem in sorted(figures.items()):
+        if fig not in placed:
+            findings.append(f'{snakefile}: FIGURES["{fig}"] is never placed by #fig')
         if stem not in scripts:
             findings.append(
-                f'{snakefile}: FIGURES["{name}"] names figures/{stem}.py, which is missing'
+                f'{snakefile}: FIGURES["{fig}"] names figures/{stem}.py, which is missing'
             )
     findings += [
         f"{report / 'figures' / stem}.py: no FIGURES entry names it"
@@ -88,9 +113,9 @@ def static_findings(report: Path, registry: str) -> list[str]:
 
 
 def compile_findings(
-    typst: str, report: Path, output: Path, root: str, max_pages: int
+    typst: str, document: Path, output: Path, root: str, max_pages: int
 ) -> list[str]:
-    document = str(report / "report.typ")
+    document = str(document)
     command = [typst, "compile", "--root", root, "--diagnostic-format", "short"]
 
     def run(target: str) -> subprocess.CompletedProcess[str]:
@@ -133,12 +158,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--compile, --root and --max-pages go together")
 
     found = (find_report(path.resolve()) for path in args.paths)
-    registries = dict(sorted({hit for hit in found if hit}))
+    registries = {
+        report: (registry, name)
+        for report, registry, name in sorted(
+            {hit for hit in found if hit}, key=lambda hit: hit[0]
+        )
+    }
     reports = list(registries)
     findings = [
         finding
-        for report, registry in registries.items()
-        for finding in static_findings(report, registry)
+        for report, (registry, name) in registries.items()
+        for finding in static_findings(report, registry, name)
     ]
     if args.compile and not findings:
         typst = shutil.which("typst")
@@ -147,8 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         elif typst is None:
             findings.append("report-check: typst is not on PATH; --compile needs it")
         else:
+            document = reports[0] / f"{registries[reports[0]][1]}.typ"
             findings += compile_findings(
-                typst, reports[0], args.compile, args.root, args.max_pages
+                typst, document, args.compile, args.root, args.max_pages
             )
     for finding in findings:
         print(finding)

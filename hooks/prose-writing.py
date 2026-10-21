@@ -20,19 +20,16 @@ has been burned by twice; see the install.sh and register_hooks.py headers. If
 a future version stops honouring it, move to PostToolUse and change
 hookEventName and the test assertions together.
 
-Fires once per session per project. A thesis editing session writes main.tex
-dozens of times, and an advisory re-injected on every write costs the same
-context as the useful first one while buying less each time -- which is how a
-hook trains its reader to skip it.
+Fires once per session per agent per project. A thesis editing session
+writes main.tex dozens of times, and an advisory re-injected on every write
+costs the same context as the useful first one while buying less each time --
+which is how a hook trains its reader to skip it. Measured over six sessions:
+25 injections, 2.9k tokens, 19% verbatim repeats.
 
-Known limitation, unverified: if Claude Code gives a subagent the same
-session_id as its orchestrator, then an orchestrator that writes one prose
-file early consumes the project's single advisory, and the section-drafting
-subagents that follow -- the ones actually producing prose, with none of the
-orchestrator's context -- get nothing. Keying on something narrower would
-reintroduce the per-write noise this guard exists to remove, so the tradeoff
-is deliberate rather than settled. If subagent prose quality turns out worse
-than the orchestrator's, look here first.
+The agent is in the key (hook input carries `agent_id` only for a subagent) so
+that the section-drafting subagents, which have none of the orchestrator's
+context, each get their own first advisory instead of finding the project's
+single one already spent by the orchestrator.
 
 Path handling follows hooks/promotion-check.py: realpath and lowercase before
 comparing, because this repo's own files are reachable through ~/.claude
@@ -45,14 +42,14 @@ stdlib keeps working when that file is stale.
 """
 
 import fnmatch
-import hashlib
 import json
 import os
 import re
-import shlex
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
+
+import hook_lib
 
 
 def forward_slashed(path) -> str:
@@ -95,22 +92,21 @@ SUFFIXES = (".tex", ".typ", ".bib", ".md", ".txt", ".rst")
 # is deliberately absent: an outline is the argument, so writing one is prose
 # work, while a task list is not.
 #
-# readme.md is the uncomfortable one, and the boundary is worth stating: a
-# README *is* prose, and the writing-orchestration skill says so. What this
-# tuple decides is narrower -- whether writing the file is a reliable signal
-# that prose work is underway. It is not: most README edits add a build
-# command or fix a layout list, so firing here would spend the session's one
-# advisory on a mechanical edit. The skill therefore says to reach for
-# humanizer on a README yourself, precisely because this hook will not.
+# README is absent on purpose, and fires even inside agent-config, where the
+# rest of the repo is config work. It used to be excluded on the grounds that
+# most README edits add a build command, so the advisory would be spent on a
+# mechanical edit. Then a README rewrite went out with no writing skill loaded
+# and the user had to ask for Heilmeier's questions by name. One spent
+# advisory on a mechanical edit costs a paragraph; a public README drafted
+# without them costs a rewrite.
 # Matched on the stem, not the full filename, so one entry covers .md, .rst
-# and .txt at once. Listing full names meant a .rst project burned its single
-# advisory on README.rst while README.md was correctly ignored.
+# and .txt at once. Listing full names once let a .rst project spend its
+# single advisory on a file whose .md twin was correctly ignored.
 EXCLUDED_STEMS = frozenset(
     {
         "claude",
         "agents",
         "gemini",
-        "readme",
         "contributing",
         "changelog",
         "history",
@@ -153,20 +149,13 @@ EXCLUDED_PATHS = (
     "*/.snakemake/*",
 )
 
-# Duplicated in promotion-check.py and audit-owed.py, which need the same
-# extraction for the same reason (prose-feedback.py observes what changed on
-# disk instead, so it carries no copy). A hook is invoked by absolute path
-# under whatever interpreter ~/.claude/settings.json names and must depend on
-# nothing but the standard library, so a shared module under hooks/ is not
-# available: register_hooks.py registers every hooks/*.py and a test fails on
-# any file there without an event marker. Keep the copies in step.
+# Heredoc stripping and destination extraction are still duplicated in
+# promotion-check.py (audit-owed.py has only the heredoc part); hook_lib holds
+# the tokenizer and command splitter alone. Keep the copies in step.
 # Shell operators that send output into a file. The fd-prefixed forms (`2>`,
 # `1>>`) tokenize as a separate "2"/"1" word followed by the operator, so they
 # need no entries of their own.
 REDIRECTS = frozenset({">", ">>", ">|", "&>", "&>>"})
-# `;`, `&&` and friends end one command and start the next. Splitting on them
-# keeps a read in one command from being credited to a write in another.
-SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body and does not match, because `<` cannot start a delimiter.
 # The lookbehind is what stops `<<<` matching at its second angle bracket.
@@ -199,82 +188,6 @@ def without_heredocs(command: str) -> str:
                 index += 1
         index += 1
     return "\n".join(kept)
-
-
-# A native Windows path: drive letter, colon, backslash, then everything up to
-# the next whitespace or shell metacharacter. Only backslashes inside a match
-# are doubled below.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
-
-
-def with_doubled_separators(line: str) -> str:
-    """The line with the backslashes inside native Windows paths doubled.
-
-    shlex(posix=True) always treats "\\" as an escape character, which ate the
-    separators out of a path like "C:\\Users\\...\\CLAUDE.md" -- so it no longer
-    matched the directory it lives in, and this hook fired on the master repo's
-    own files, telling the agent to promote a file it was already editing in
-    place.
-
-    Keyed on the shape of the text rather than on os.name, because os.name is
-    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
-    legitimately contains POSIX escapes. Doubling every backslash on Windows
-    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
-    {} \\;` holding a stray "\\" -- inventing a destination that was never
-    written, the exact error tokenize() below declines to risk. A drive-letter
-    prefix is what separates the one shape shlex cannot read from the many it
-    can.
-    """
-    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
-
-
-def tokenize(line: str) -> "list[str] | None":
-    """Tokens for one shell line, or None if it cannot be read at all.
-
-    No quote-recovery retry here, deliberately, and audit-owed.py does have
-    one. That hook asks a yes/no question about the command verb, where a
-    false positive costs one marker entry its idempotence check absorbs. This
-    one lifts *paths* out of the command, so stripping an unbalanced quote
-    could invent a destination that was never written and put a wrong advisory
-    into context. Declining is the cheaper error here.
-
-    Duplicated in promotion-check.py and audit-owed.py, whose copy alone
-    retries (above). A hook runs standalone under whatever interpreter
-    ~/.claude/settings.json names, stdlib-only and with no sys.path
-    manipulation, so a shared module is not available here.
-    """
-    lexer = shlex.shlex(
-        with_doubled_separators(line), posix=True, punctuation_chars=True
-    )
-    lexer.whitespace_split = True
-    try:
-        return list(lexer)
-    except ValueError:
-        return None
-
-
-def shell_commands(command: str) -> list[list[str]]:
-    """Token lists, one per command in the shell line. [] if unparsable.
-
-    Unparsable means an unbalanced quote, in which case nothing can be said
-    about what the command writes, so declining is the honest answer.
-    """
-    out: list[list[str]] = []
-    for line in without_heredocs(command).splitlines():
-        tokens = tokenize(line)
-        if tokens is None:
-            # Skip this line, not the whole command. Aborting everything meant
-            # one unparsable line silenced the hook for the entire invocation.
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in SEPARATORS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return out
 
 
 def sed_in_place(words: list[str]) -> bool:
@@ -336,7 +249,9 @@ def written_paths(command: str, cwd) -> list[str]:
     base = cwd if isinstance(cwd, str) and cwd else "."
     return [
         resolve_destination(path, base)
-        for tokens in shell_commands(command)
+        for tokens in hook_lib.shell_commands(
+            without_heredocs(command), hook_lib.tokenize
+        )
         for path in destinations(tokens)
     ]
 
@@ -356,7 +271,7 @@ def resolve_destination(path: str, base: str) -> str:
 
 MESSAGE = (
     "About to write prose{target}. Invoke the writing-orchestration skill "
-    "for the spine. For a paper, talk or thesis also invoke "
+    "for the spine. For a paper, talk, thesis or README also invoke "
     "scientific-writing, naming the genre, to draft. Run the humanizer skill "
     "last as a lint. Do not invent a number, citation, reference, or "
     "attribution: that is the one error a reader cannot check for you. "
@@ -370,7 +285,8 @@ def relevant(path: str) -> bool:
         return False
     # The trailing slash matters: a bare prefix test would also swallow a
     # sibling directory like "agent-config-other".
-    if path.startswith(MASTER_REPO + "/"):
+    is_readme = PurePosixPath(path).stem == "readme"
+    if path.startswith(MASTER_REPO + "/") and not is_readme:
         return False
     # Asked of the platform rather than pattern-matched, because the temp
     # directory is /tmp, /private/tmp or /var/folders/... depending on the
@@ -403,40 +319,6 @@ def project_root(path: str) -> str:
         if (candidate / ".git").exists():
             return forward_slashed(candidate)
     return forward_slashed(start)
-
-
-def stamp_dir() -> Path:
-    """Where the once-per-session stamps live, namespaced per user.
-
-    On POSIX the temp directory is shared, so an unnamespaced directory
-    created by another user is not writable by this one -- and a guard that
-    cannot write its stamp re-fires on every single write. Windows %TEMP% is
-    already per-user, and has no getuid, so the suffix is simply omitted.
-    """
-    getuid = getattr(os, "getuid", None)
-    suffix = f"-{getuid()}" if getuid else ""
-    return Path(tempfile.gettempdir()) / f"claude-prose-hook{suffix}"
-
-
-def already_fired(session: str, root: str) -> bool:
-    """Whether this session has already been told about this project.
-
-    Best effort by design: any filesystem error returns False, so the
-    advisory fires. A duplicate is cheaper than a miss.
-    """
-    digest = hashlib.sha256(f"{session}\0{root}".encode()).hexdigest()[:16]
-    directory = stamp_dir()
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        # O_CREAT | O_EXCL makes testing and claiming one atomic step. An
-        # exists()-then-touch pair double-fires when two Write calls race,
-        # which is precisely the burst this guard exists to collapse.
-        os.close(os.open(directory / digest, os.O_CREAT | os.O_EXCL))
-    except FileExistsError:
-        return True
-    except OSError:
-        return False
-    return False
 
 
 def main():
@@ -493,8 +375,12 @@ def main():
         target = ""
     else:
         return
-    session = data.get("session_id")
-    if session and already_fired(session, project_root(resolved)):
+    if not hook_lib.claim_for(
+        "claude-prose-hook",
+        data.get("session_id"),
+        data.get("agent_id"),
+        project_root(resolved),
+    ):
         return
     print(
         json.dumps(

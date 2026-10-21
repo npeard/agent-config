@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 # claude-hook: PostToolUse Write|Edit|Bash
+"""Ask, once per session per agent, whether a config file just written should
+be promoted to the master repo.
+
+Once, because the question stays in context for the rest of the turns and a
+repeat buys nothing the first did not. Firing on every write measured 20
+injections over six sessions, 1.5k tokens, 55% of them verbatim repeats. The
+marker is keyed by session + agent (hook_lib.claim_for), since a
+subagent's context is its own and never saw what its orchestrator was told.
+Without a session_id there is nothing to key on and the hook fires.
+
+Stdlib only, like every hook here: its interpreter is named in
+~/.claude/settings.json, outside this repo's checks.
+"""
+
 import fnmatch
 import json
 import os
 import re
-import shlex
 import sys
+
+import hook_lib
 
 
 def canonical(path: str) -> str:
@@ -46,9 +61,6 @@ PATTERNS = (
 # `1>>`) tokenize as a separate "2"/"1" word followed by the operator, so they
 # need no entries of their own.
 REDIRECTS = frozenset({">", ">>", ">|", "&>", "&>>"})
-# `;`, `&&` and friends end one command and start the next. Splitting on them
-# keeps a read in one command from being credited to a write in another.
-SEPARATORS = frozenset({";", "&&", "||", "|", "|&", "&", "(", ")", "{", "}"})
 # An opening heredoc: `<<EOF`, `<< "EOF"`, `<<-'EOF'`. `<<<` is a herestring
 # with no body and does not match, because `<` cannot start a delimiter.
 # The lookbehind is what stops `<<<` matching at its second angle bracket.
@@ -81,82 +93,6 @@ def without_heredocs(command: str) -> str:
                 index += 1
         index += 1
     return "\n".join(kept)
-
-
-# A native Windows path: drive letter, colon, backslash, then everything up to
-# the next whitespace or shell metacharacter. Only backslashes inside a match
-# are doubled below.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
-
-
-def with_doubled_separators(line: str) -> str:
-    """The line with the backslashes inside native Windows paths doubled.
-
-    shlex(posix=True) always treats "\\" as an escape character, which ate the
-    separators out of a path like "C:\\Users\\...\\CLAUDE.md" -- so it no longer
-    matched the directory it lives in, and this hook fired on the master repo's
-    own files, telling the agent to promote a file it was already editing in
-    place.
-
-    Keyed on the shape of the text rather than on os.name, because os.name is
-    the wrong axis: the Bash tool on Windows runs Git Bash, so a command there
-    legitimately contains POSIX escapes. Doubling every backslash on Windows
-    split `cp /c/a\\ b.md /c/dest/` into two bogus tokens and left `-exec rm
-    {} \\;` holding a stray "\\" -- inventing a destination that was never
-    written, the exact error tokenize() below declines to risk. A drive-letter
-    prefix is what separates the one shape shlex cannot read from the many it
-    can.
-    """
-    return NATIVE_WINDOWS_PATH.sub(lambda m: m.group(0).replace("\\", "\\\\"), line)
-
-
-def tokenize(line: str) -> "list[str] | None":
-    """Tokens for one shell line, or None if it cannot be read at all.
-
-    No quote-recovery retry here, deliberately, and audit-owed.py does have
-    one. That hook asks a yes/no question about the command verb, where a
-    false positive costs one marker entry its idempotence check absorbs. This
-    one lifts *paths* out of the command, so stripping an unbalanced quote
-    could invent a destination that was never written and put a wrong advisory
-    into context. Declining is the cheaper error here.
-
-    Duplicated in prose-writing.py and audit-owed.py, whose copy alone
-    retries (above). A hook runs standalone under whatever interpreter
-    ~/.claude/settings.json names, stdlib-only and with no sys.path
-    manipulation, so a shared module is not available here.
-    """
-    lexer = shlex.shlex(
-        with_doubled_separators(line), posix=True, punctuation_chars=True
-    )
-    lexer.whitespace_split = True
-    try:
-        return list(lexer)
-    except ValueError:
-        return None
-
-
-def shell_commands(command: str) -> list[list[str]]:
-    """Token lists, one per command in the shell line. [] if unparsable.
-
-    Unparsable means an unbalanced quote, in which case nothing can be said
-    about what the command writes, so declining is the honest answer.
-    """
-    out: list[list[str]] = []
-    for line in without_heredocs(command).splitlines():
-        tokens = tokenize(line)
-        if tokens is None:
-            # Skip this line, not the whole command. Aborting everything meant
-            # one unparsable line silenced the hook for the entire invocation.
-            continue
-        current: list[str] = []
-        for token in tokens:
-            if token in SEPARATORS:
-                out.append(current)
-                current = []
-            else:
-                current.append(token)
-        out.append(current)
-    return out
 
 
 def sed_in_place(words: list[str]) -> bool:
@@ -218,7 +154,9 @@ def written_paths(command: str, cwd) -> list[str]:
     base = cwd if isinstance(cwd, str) and cwd else "."
     return [
         resolve_destination(path, base)
-        for tokens in shell_commands(command)
+        for tokens in hook_lib.shell_commands(
+            without_heredocs(command), hook_lib.tokenize
+        )
         for path in destinations(tokens)
     ]
 
@@ -294,6 +232,13 @@ def main():
         return
 
     if not any(promotable(candidate) for candidate in candidates):
+        return
+    if not hook_lib.claim_for(
+        "claude-promotion-check",
+        data.get("session_id"),
+        data.get("agent_id"),
+        "promote",
+    ):
         return
 
     print(

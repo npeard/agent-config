@@ -29,6 +29,16 @@ class TestRepoInvariant:
     def test_the_repo_declares_at_least_one_hook(self):
         assert register_hooks.declared_hooks()
 
+    def test_environment_drift_fires_on_startup_only(self):
+        """Nothing in its text changes within a session, so resume and
+        compact must not re-inject it."""
+        declared = {
+            (name, event, matcher)
+            for name, event, matcher in register_hooks.declared_hooks()
+            if name == "environment-drift.py"
+        }
+        assert declared == {("environment-drift.py", "SessionStart", "startup")}
+
     def test_declarations_name_a_plausible_event(self):
         known = {
             "SessionStart",
@@ -82,6 +92,11 @@ class TestParsing:
         (tmp_path / "declared.py").write_text(f"{MARKER} SessionStart\n")
         (tmp_path / "silent.py").write_text("print('hi')\n")
         assert register_hooks.undeclared(tmp_path) == ["silent.py"]
+
+    def test_a_hook_library_is_neither_registered_nor_undeclared(self, tmp_path: Path):
+        (tmp_path / "hook_lib.py").write_text("x = 1\n")
+        assert register_hooks.declared_hooks(tmp_path) == []
+        assert register_hooks.undeclared(tmp_path) == []
 
 
 class TestMerge:

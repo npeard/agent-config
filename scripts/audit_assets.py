@@ -590,6 +590,7 @@ def prose_files(root: Path = REPO_ROOT) -> list[Path]:
     candidates = [
         root / "AGENTS.md",
         root / "README.md",
+        root / "docs" / "LAYOUT.md",
         root / "audit-ledger.toml",
         root / "friction-ledger.toml",
         # rglob: top-level-only was the same depth bug fixed in check_evidence.
@@ -657,7 +658,7 @@ LAYOUT_HEADING = "## Layout"
 
 
 def layout_section(text: str) -> str:
-    """The part of README where naming an asset documents it.
+    """The part of docs/LAYOUT.md where naming an asset documents it.
 
     The finding below says "add a Layout entry", so the check has to mean
     that: a bare substring anywhere satisfied it, including inside a fence,
@@ -667,7 +668,7 @@ def layout_section(text: str) -> str:
     the asset.
 
     With no Layout heading the whole file is used. A missing section is a
-    README problem, and a check that reports every asset at once is one
+    layout-file problem, and a check that reports every asset at once is one
     nobody reads.
     """
     body = unfenced(text)
@@ -693,7 +694,7 @@ def documented(region: str, path: Path, root: Path) -> bool:
 
 
 def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
-    """P4: an asset the README does not name is one you must read the tree to find.
+    """P4: an asset docs/LAYOUT.md does not name is one you must read the tree to find.
 
     The reverse direction of check_script_references, which only asks whether a
     *named* script exists. Nothing asked the other way, so an asset could ship
@@ -701,13 +702,16 @@ def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
     promotion-check.py, task-list.py and skills/quantikz were named nowhere in
     the Layout section, one of them for months.
 
-    Matched on the bare name as well as the path, because README groups the
+    The index lives in docs/LAYOUT.md rather than the README, which is public
+    facing and links to it.
+
+    Matched on the bare name as well as the path, because the index groups the
     generic scripts into one bullet that lists filenames rather than paths.
     """
-    readme = root / "README.md"
-    if not readme.is_file():
+    layout = root / "docs" / "LAYOUT.md"
+    if not layout.is_file():
         return []
-    region = layout_section(readme.read_text(encoding="utf-8"))
+    region = layout_section(layout.read_text(encoding="utf-8"))
     assets = [*hook_files(root), *script_files(root)]
     assets += [d for d in sorted((root / "skills").glob("*")) if d.is_dir()]
     out = []
@@ -718,7 +722,7 @@ def check_asset_documented(root: Path = REPO_ROOT) -> list[Finding]:
             Finding(
                 4,
                 rel(path, root),
-                "not named in README.md's Layout section, so it can only be "
+                "not named in docs/LAYOUT.md's Layout section, so it can only be "
                 "discovered by reading the tree; add a Layout entry saying "
                 "why it exists",
             )
@@ -764,8 +768,11 @@ HIGH_SINKS = frozenset({"agent-context", "shell-argument"})
 # lookahead for `=` keeps a keyword argument (`print(file=...)`) from counting
 # as emitted content.
 EMIT_SINKS = {
-    # A PostToolUse block's reason is fed back to the agent like context.
-    "agent-context": re.compile(r"additionalContext|[\"']decision[\"']"),
+    # A PostToolUse block's reason is fed back to the agent like context, and
+    # so is a PreToolUse deny reason, printed inside hooks/hook_lib.py.
+    "agent-context": re.compile(
+        r"additionalContext|[\"']decision[\"']|hook_lib\.deny\("
+    ),
     "shell-argument": re.compile(r"osascript|shell=True|os\.system"),
     "stdout-nonliteral": re.compile(
         r"print\(\s*(?:f[\"']|[A-Za-z_][A-Za-z0-9_]*\b(?!\s*=))"

@@ -25,6 +25,8 @@ gate on what survived compaction.
 import json
 import sys
 
+import hook_lib
+
 # The catch-all agent types, which carry no model of their own -- for these,
 # an absent `model` resolves to the parent's. Every other type is left alone:
 # a named specialist may define its own model in its frontmatter (so demanding
@@ -93,17 +95,7 @@ def main():
     if (subagent_type or "").strip().lower() not in CATCH_ALL:
         return
 
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": REASON,
-                }
-            }
-        )
-    )
+    hook_lib.deny(REASON)
 
 
 if __name__ == "__main__":

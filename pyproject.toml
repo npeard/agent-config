@@ -19,6 +19,7 @@ forward-refs = "check_forward_refs:main"
 preflight = "preflight:main"
 new-report = "new_report:main"
 report-check = "report_check:main"
+jupyter-mcp = "jupyter_mcp:main"
 
 [tool.setuptools]
 package-dir = { "" = "scripts" }
@@ -37,4 +38,5 @@ py-modules = [
     "new_report",
     "report_plotting",
     "report_check",
+    "jupyter_mcp",
 ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# claude-hook: SessionStart
+# claude-hook: SessionStart startup
 """Tell the session about dependency updates and VS Code extension drift.
 
 Both were found by the user rather than by tooling: an agent said "no torch
@@ -30,6 +30,12 @@ tags and whitespace-collapsed spec/solver text; its own ledger entry says
 what bounds each) and vscode_extensions.render (ids and reasons from this
 repo's own TOML, since only listed extensions are ever reported, and a
 fixed IDE message -- never the IDE lock's authToken). Nothing read is executed.
+
+Registered for the `startup` source only. Measured over six sessions it was
+injected 17 times, 3.6k tokens held for about 1M token-turns, because
+resume and compact re-fire SessionStart and nothing here changes within a
+session. A dependency or extension change made mid-session is picked up by the
+next startup (or preflight), which is the cost of not repeating it.
 
 Stdlib-only, like every hook here: its interpreter is named in
 ~/.claude/settings.json, outside this repo's checks (see task-list.py).

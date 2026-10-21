@@ -14,29 +14,16 @@ because it would block work the rule never meant to block.
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from conftest import run_hook
 
 HOOK = Path(__file__).resolve().parent.parent / "hooks" / "agent-model.py"
 
 
-def run_hook(payload) -> str:
-    result = subprocess.run(
-        [sys.executable, str(HOOK)],
-        input=payload if isinstance(payload, str) else json.dumps(payload),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert not result.stderr, f"hook wrote to stderr: {result.stderr}"
-    return result.stdout.strip()
-
-
 def denied(payload) -> bool:
-    out = run_hook(payload)
+    out = run_hook(HOOK, payload)
     if not out:
         return False
     parsed = json.loads(out)
@@ -108,13 +95,13 @@ class TestMalformedInput:
 
     @pytest.mark.parametrize("body", ["", "not json", "[1, 2]", '"a string"', "null"])
     def test_unusable_body_is_silent(self, body: str):
-        assert run_hook(body) == ""
+        assert run_hook(HOOK, body) == ""
 
     @pytest.mark.parametrize("tool_input", [None, "a string", 42, []])
     def test_non_dict_tool_input_is_silent(self, tool_input):
-        assert run_hook({"tool_name": "Agent", "tool_input": tool_input}) == ""
+        assert run_hook(HOOK, {"tool_name": "Agent", "tool_input": tool_input}) == ""
 
     def test_non_string_subagent_type_is_silent(self):
         """The harness will reject this call on its own; denying it here would
         report the wrong reason."""
-        assert run_hook(dispatch(subagent_type=42)) == ""
+        assert run_hook(HOOK, dispatch(subagent_type=42)) == ""

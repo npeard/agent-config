@@ -86,8 +86,13 @@ def declared_hooks(hooks_dir=HOOKS_DIR):
     return found
 
 
+# Modules the hooks import. They are never run by the host, so they carry
+# no marker and must not trip the "undeclared hook" refusal below.
+HOOK_LIBRARIES = frozenset({"hook_lib.py"})
+
+
 def undeclared(hooks_dir=HOOKS_DIR):
-    declared = {name for name, _, _ in declared_hooks(hooks_dir)}
+    declared = {name for name, _, _ in declared_hooks(hooks_dir)} | HOOK_LIBRARIES
     return sorted(p.name for p in hooks_dir.glob("*.py") if p.name not in declared)
 
 

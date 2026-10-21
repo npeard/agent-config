@@ -508,6 +508,18 @@ class TestReadAndEmit:
         assert [f.asset for f in found] == ["hooks/h.py"]
         assert "agent-context" in found[0].detail
 
+    def test_a_hook_lib_deny_is_an_agent_context_sink(self, fake_root):
+        # The deny JSON is printed in hooks/hook_lib.py, so the calling hook's
+        # own text shows no print; its reason still reaches the agent.
+        (fake_root / "hooks" / "h.py").write_text(
+            "from pathlib import Path\n"
+            "t = Path('pixi.toml').read_text()\n"
+            "hook_lib.deny(REASON)\n"
+        )
+        found = audit_assets.check_read_and_emit(fake_root)
+        assert [f.asset for f in found] == ["hooks/h.py"]
+        assert "agent-context" in found[0].detail
+
     def test_a_block_reason_is_an_agent_context_sink(self, fake_root):
         # The agent reads a block's reason as feedback, same as additionalContext.
         (fake_root / "hooks" / "h.py").write_text(
@@ -962,7 +974,8 @@ class TestAssetDocumented:
     """
 
     def readme(self, root, body):
-        (root / "README.md").write_text(body)
+        (root / "docs").mkdir(exist_ok=True)
+        (root / "docs" / "LAYOUT.md").write_text(body)
 
     def test_an_undocumented_hook_is_reported(self, fake_root):
         (fake_root / "hooks" / "ghost.py").write_text("x = 1\n")

@@ -152,3 +152,60 @@ def test_refuses_a_report_outside_the_existing_shared_root(repo, capsys):
     assert code == 1
     assert "ROOT" in capsys.readouterr().err
     assert tree(repo) == before
+
+
+def test_two_reports_share_a_directory_and_a_bibliography(repo, build_tools):
+    """A named document and a bibliography outside the report both build.
+
+    BIB = "" with refs.bib gone once raised Snakemake MissingInputException.
+    """
+    scaffold(repo, "reports/one")
+    scaffold(repo, "reports/two")
+    one, two = repo / "reports/one", repo / "reports/two"
+    (one / "report.typ").rename(one / "proposal.typ")
+    edit_text(one / "Snakefile", 'DOCUMENT = "report"', 'DOCUMENT = "proposal"')
+    shared_bib = repo / "reports/references/shared.bib"
+    shared_bib.parent.mkdir()
+    shutil.move(two / "refs.bib", shared_bib)
+    edit_text(two / "Snakefile", 'BIB = "refs.bib"', 'BIB = ""')
+    edit_text(
+        two / "report.typ",
+        'bibliography("refs.bib")',
+        'bibliography("../references/shared.bib")',
+    )
+    built = subprocess.run(
+        ["snakemake", "--cores", "1"],
+        cwd=one,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert built.returncode == 0, built.stderr
+    assert (one / "build/proposal.pdf").stat().st_size > 0
+    assert (
+        report_check.main(
+            [
+                *("--compile", str(one / "build/check.pdf")),
+                *("--root", str(one.parent)),
+                *("--max-pages", "8"),
+                str(one),
+            ]
+        )
+        == 0
+    )
+    # A dry run is enough for the second report: the regression was the DAG
+    # failing to resolve its inputs, which -n does without a second compile.
+    planned = subprocess.run(
+        ["snakemake", "--cores", "1", "-n"],
+        cwd=two,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert planned.returncode == 0, planned.stderr
+
+
+def edit_text(path: Path, old: str, new: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    assert old in text
+    path.write_text(text.replace(old, new), encoding="utf-8")

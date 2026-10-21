@@ -19,6 +19,15 @@ reason alone reaches the agent (verified by hand on Claude Code 2.1.296), so
 the same text in additionalContext would arrive twice. Anything else is
 information and goes in additionalContext only.
 
+Silent unless something is wrong: a forward reference, or a sentence over
+the metrics script's long-sentence threshold. A sentence-shape line on every
+edit costs context without changing behaviour: measured over six sessions it
+would be 208 injections (206 of them in subagents), 33.0k tokens, 32% verbatim
+repeats of the one before. A non-blocking report byte-identical to the last one for the same file
+in the same agent is skipped (marker per session + agent + path); a block is
+never skipped, because a gate that quietly lifts while its violation remains
+is worse than a repeat.
+
 Never blocks on failure: a script that crashes, times out or prints something
 unparsable yields no feedback and exit 0, because a broken feedback hook must
 not stop edits. Everything runs concurrently to fit the hook's 10 s; see
@@ -39,6 +48,8 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import hook_lib
 
 
 def resolve(path: str) -> str:
@@ -155,7 +166,7 @@ def run_json(script: str, args: list[str], ok_codes: tuple[int, ...]):
 
 def session_file(session, key: str, suffix: str) -> Path:
     digest = hashlib.sha256(f"{session}\0{key}".encode()).hexdigest()[:16]
-    return stamp_dir() / f"{digest}{suffix}"
+    return hook_lib.stamp_dir("claude-prose-feedback") / f"{digest}{suffix}"
 
 
 def baseline(session, key: str, current):
@@ -192,13 +203,23 @@ def metrics_line(sentences: dict, first) -> str:
         f"Prose: {count} sentences, median {median:g} words, p90 {p90:g}, "
         f"{chained}% chained-clause"
     )
+    # An all-zero delta says nothing, and omitting it keeps a repeat of the
+    # session's first report byte-identical to it, which repeats_last skips.
     if first is None:
         return line
+    deltas = (
+        count - first["count"],
+        median - first["median_words"],
+        p90 - first["p90_words"],
+        chained - round(100 * first["chained_clause_rate"]),
+    )
+    if not any(deltas):
+        return line
     line += (
-        f" (since first this session: sentences {signed(count - first['count'], 0)}, "
-        f"median {signed(median - first['median_words'], 1)}, "
-        f"p90 {signed(p90 - first['p90_words'], 0)}, "
-        f"chained {signed(chained - round(100 * first['chained_clause_rate']), 0)} pp)"
+        f" (since first this session: sentences {signed(deltas[0], 0)}, "
+        f"median {signed(deltas[1], 1)}, "
+        f"p90 {signed(deltas[2], 0)}, "
+        f"chained {signed(deltas[3], 0)} pp)"
     )
     # Said in words because a bare "+5" was measured not to work: agents
     # shown only the delta kept splitting sentences. Conditional, because a
@@ -300,20 +321,48 @@ def file_lines(path, measured, session, share, elsewhere):
     lines = violation_lines(HERE_HEADER, here, root, share - 1)
     lines += violation_lines(ELSEWHERE_HEADER, elsewhere, root, share - 1 - len(lines))
     if sentences:
-        lines.append(metrics_line(sentences, baseline(session, path, sentences)))
-        lines += long_lines(sentences, share - len(lines))
+        # Recorded even when nothing is said, so a later breach reports its
+        # delta against the session's first measurement.
+        first = baseline(session, path, sentences)
+        # `share - 1`: the metrics line takes one of the room long_lines gets.
+        over = long_lines(sentences, share - 1 - len(lines))
+        if lines or over:
+            lines.append(metrics_line(sentences, first))
+            lines += over
     return lines, bool(here)
 
 
-def stamp_dir() -> Path:
-    """Where the per-session baselines and call stamps live, per user.
+def repeats_last(session, agent, path: str, lines: list[str]) -> bool:
+    """Whether `lines` are byte-identical to the last ones emitted for `path`.
 
-    On POSIX the temp directory is shared, so an unnamespaced directory
-    created by another user is not writable by this one.
+    Records them as what the agent last saw; silence removes the record, since
+    a missing one already means "the last emission was nothing". Keyed by agent as
+    well as session because a subagent's context is its own: it never saw what
+    the orchestrator was told, so its first report is not a repeat.
     """
-    getuid = getattr(os, "getuid", None)
-    suffix = f"-{getuid()}" if getuid else ""
-    return Path(tempfile.gettempdir()) / f"claude-prose-feedback{suffix}"
+    if not session:
+        return False
+    stamp = session_file(session, f"{agent or ''}\0{path}", ".emit")
+    if not lines:
+        try:
+            stamp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    digest = hashlib.sha256("\n".join(lines).encode()).hexdigest()
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        if stamp.read_text(encoding="utf-8") == digest:
+            return True
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+    try:
+        stamp.write_text(digest, encoding="utf-8")
+    except OSError:
+        pass
+    return False
 
 
 def previous_call(session) -> float:
@@ -443,8 +492,13 @@ def main():
             listed.add(root)
             elsewhere = [v for v in item[1] if canonical(v["file"]) not in reported]
         lines, has_here = file_lines(path, item, session, share, elsewhere)
-        blocking = blocking or (named and has_here)
-        if lines:
+        file_blocks = named and has_here
+        blocking = blocking or file_blocks
+        # Asked of blocks and of silence too, though acted on for neither: it
+        # records what the agent last saw, and after silence the same report
+        # coming back is news rather than a repeat.
+        repeated = repeats_last(session, data.get("agent_id"), path, lines)
+        if lines and (file_blocks or not repeated):
             prefix = (
                 [f"{shown_path(os.path.basename(path))}:"] if len(paths) > 1 else []
             )

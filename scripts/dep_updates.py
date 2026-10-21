@@ -21,6 +21,9 @@ So there are two halves, and pixi owns one of them.
   *not* locked from (PyPI for a conda package, conda-forge for a PyPI one),
   for the current platform only, since that is where the user works.
 
+Move a package to PyPI when its conda build lags and nothing platform-specific
+blocks the PyPI wheel; pixi locks conda first, so that move is a manual one.
+
 Results are cached per project in ``.pixi/agent-drift/deps.json`` for 24 h,
 and invalidated early when the lock or manifest changes. A cold check costs
 ~25 s on a research project, so the SessionStart hook only reads the cache (``cached``)

@@ -12,6 +12,7 @@ import importlib
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tomllib
@@ -144,6 +145,19 @@ def rho_branch(root: Path) -> list[str]:
     return ["--no-friction", "--offline"]
 
 
+LISTENERS: list[socket.socket] = []
+
+
+def jupyter_listening(root: Path) -> list[str]:
+    """A held-open local port, so the run reports it and launches no Lab."""
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen()
+    LISTENERS.append(sock)
+    port = str(sock.getsockname()[1])
+    return [*("--port", port, "--token", RHO, "--timeout", "1", "--root", str(root))]
+
+
 # command -> its argv, given a fresh git repo, for a run whose output names RHO
 CP1252_CASES = {
     "check-ascii": one_file("rho.py", f"# {RHO}\n"),
@@ -163,6 +177,7 @@ CP1252_CASES = {
         *("--title", "T"),
     ],
     "report-check": report_dir,
+    "jupyter-mcp": jupyter_listening,
 }
 
 
@@ -188,12 +203,16 @@ def test_output_survives_cp1252_stdout(git_repo, command):
 
 
 def test_readme_lists_the_exports():
-    """The README's lists are the compatibility promise, so they must not drift."""
+    """The README's lists are the compatibility promise, so they must not drift.
+
+    Every hook is a row of the hook table; every command is either a hook
+    (the gates share their names) or one of the bullets after it.
+    """
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    match = re.search(
-        r"Exported commands:(.*?)The hooks are(.*?)The command-line", text, re.DOTALL
-    )
-    assert match, "README lost its exported-commands paragraph"
-    commands, hooks = (set(re.findall(r"`([^`]+)`", part)) for part in match.groups())
-    assert commands == set(CONSOLE_SCRIPTS)
+    start = text.index("## Use the gates in another project")
+    section = text[start : text.index("\n## ", start + 1)]
+    table = section[section.index("| Hook") :].split("\n\n")[0]
+    hooks = set(re.findall(r"^\| `([^`]+)`", table, re.MULTILINE))
+    bullets = set(re.findall(r"^- `([\w-]+)[^`]*`\s+--", section, re.MULTILINE))
     assert hooks == set(hook_entries())
+    assert hooks | bullets == set(CONSOLE_SCRIPTS)

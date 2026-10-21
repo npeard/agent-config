@@ -79,20 +79,15 @@ Check in this order:
    grepping a global config proves nothing about this project. If
    `jupyter` is absent, set it up:
 
-   a. Start JupyterLab **detached** from the project's pixi environment,
-   so it outlives the session:
-   `jupyter lab --no-browser --port 8889 --IdentityProvider.token <tok> --ServerApp.root_dir <repo>`.
-   On Windows use `Start-Process`. A server started as a child of the
-   agent session dies at every restart.
+   a. `jupyter-mcp` is one of agent-config's exported tools, so the
+   project's environment must carry it (README, "Using these tools from
+   another project"); without it the call is "command not found". With
+   that environment active (e.g. via `pixi shell`), run
+   `jupyter-mcp --port 8889 --token <tok> --timeout 60 --root <repo>`.
+   It launches JupyterLab detached from `sys.executable`, so the kernel
+   is the project's, and reuses a server already listening.
 
-   b. Register the MCP server:
-   `claude mcp add jupyter --scope local --env JUPYTER_URL=http://localhost:8889 --env JUPYTER_TOKEN=<tok> -- uvx jupyter-mcp-server@latest start --transport stdio`.
-   The `start --transport stdio` suffix is required: without the
-   subcommand the server serves nothing and the connection times out at
-   30 s. Run the `uvx` command once beforehand, because the first run
-   downloads and also times out.
-
-   c. Restart the session so the tools load.
+   b. Follow what it prints: the `claude mcp add` line and its notes.
 
 Two prerequisites fail silently:
 
@@ -207,6 +202,14 @@ relaxed on purpose, because the user's next act is editing this file:
 - Do not "fix" a notebook by extracting its constants into a module.
   That is a regression in this layer even though it is an improvement in
   `src/`.
+- **Write the cells as one chain of thought**, top to bottom: no helper
+  functions or convenience wrappers, constants plain, objects built in
+  line, a terse prose cell per section. Do not pre-optimize for
+  portability; the reader wants to follow and change the work, not call
+  it (examples.md case 1).
+
+A method change in one cell reaches every figure and section that shares
+the method, as `writing-orchestration` states for reports.
 
 Core library code called *from* the notebook stays strict. The carve-out
 covers the notebook's own cells.

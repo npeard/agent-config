@@ -52,9 +52,11 @@ THEME_TYP = """\
 
 REPORT_SMK = Template("""\
 # The document rule of every report scaffolded against this directory. Each
-# report's Snakefile defines FIGURES and MAX_PAGES and includes this file, and
-# keeps its own `rule all`: Snakemake never takes an included rule as the
-# default target. Written once by new-report and yours from then on.
+# report's Snakefile defines FIGURES, DOCUMENT, BIB and MAX_PAGES and includes
+# this file, and keeps its own `rule all`: Snakemake never takes an included
+# rule as the default target. BIB = "" means the document cites a bibliography
+# outside the report, so it is no input here. Written once by new-report and
+# yours from then on.
 
 import os
 from pathlib import Path
@@ -69,12 +71,12 @@ ROOT = os.path.relpath(SHARED / "$root")
 
 rule document:
     input:
-        "report.typ",
+        f"{DOCUMENT}.typ",
         os.path.relpath(SHARED / "theme.typ"),
-        "refs.bib",
+        *([BIB] if BIB else []),
         expand("build/figures/{name}.pdf", name=FIGURES),
     output:
-        "build/report.pdf",
+        f"build/{DOCUMENT}.pdf",
     shell:
         "report-check --compile {output} --root {ROOT} --max-pages {MAX_PAGES} ."
 """)
@@ -83,7 +85,7 @@ rule document:
 ROOT_LINE = re.compile(r'^ROOT = os\.path\.relpath\(SHARED / "([^"]*)"\)', re.MULTILINE)
 
 SNAKEFILE = Template("""\
-# Build DAG for $title: data/ -> build/figures/*.pdf -> build/report.pdf.
+# Build DAG for $title: data/ -> build/figures/*.pdf -> build/<DOCUMENT>.pdf.
 #
 #     snakemake --cores all
 #
@@ -91,19 +93,24 @@ SNAKEFILE = Template("""\
 # file, run by hand to write data/ once, so it has no rule here.
 #
 # FIGURES is the registry (figure name -> figures/plot_*.py stem) that
-# report-check compares with the #fig calls in report.typ and the scripts on
+# report-check compares with the #fig calls in the document and the scripts on
 # disk. A figure joins with its script, its entry here, and a rule whose
 # inputs are the script and every data file it reads. Commands use no shell
 # builtins, so they run under cmd.exe, PowerShell and bash.
 
 FIGURES = {"example": "plot_example"}
-# The page budget report-check holds build/report.pdf to.
+# The document is DOCUMENT.typ, so several reports can share a directory.
+DOCUMENT = "report"
+# The bibliography file the build needs; "" if the document cites one outside
+# this directory, or none.
+BIB = "refs.bib"
+# The page budget report-check holds build/<DOCUMENT>.pdf to.
 MAX_PAGES = 8
 
 
 rule all:
     input:
-        "build/report.pdf",
+        f"build/{DOCUMENT}.pdf",
 
 
 include: "$include"
