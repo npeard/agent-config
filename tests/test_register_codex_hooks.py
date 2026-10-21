@@ -37,7 +37,7 @@ def test_declared_hooks_are_the_supported_static_mapping(registrar, repo: Path):
         for item in registrar.declared_hooks(repo)
     ] == [
         ("task-list.py", "SessionStart", None),
-        ("environment-drift.py", "SessionStart", None),
+        ("environment-drift.py", "SessionStart", "startup"),
         ("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
         ("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
         ("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),

@@ -40,7 +40,9 @@ class HookSpec:
 
 CODEX_HOOKS = (
     HookSpec("task-list.py", "SessionStart", None),
-    HookSpec("environment-drift.py", "SessionStart", None),
+    # Codex applies a SessionStart matcher to `source`, as Claude Code does, so
+    # resume and compact do not re-inject what cannot change mid-session.
+    HookSpec("environment-drift.py", "SessionStart", "startup"),
     HookSpec("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
     HookSpec("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
     HookSpec("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),
