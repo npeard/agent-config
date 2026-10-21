@@ -209,6 +209,24 @@ def test_failed_page_count_compile_is_a_finding(report, monkeypatch, capsys, tmp
 
     monkeypatch.setattr(report_check.subprocess, "run", fake_run)
     findings = report_check.compile_findings(
-        "typst", report, tmp_path / "out.pdf", str(report), 8
+        "typst", report / "report.typ", tmp_path / "out.pdf", str(report), 8
     )
     assert findings
+
+
+def test_missing_document_variable_names_the_line_to_add(report, capsys):
+    edit(report / "Snakefile", 'DOCUMENT = "report"\n', "")
+    code, out = check(capsys, str(report))
+    assert code == 1
+    assert 'DOCUMENT = "report"' in out
+    assert "Snakefile: " in out
+
+
+def test_static_check_reads_the_named_document(report, capsys):
+    edit(report / "Snakefile", 'DOCUMENT = "report"', 'DOCUMENT = "proposal"')
+    assert check(capsys, str(report)) == (
+        1,
+        f"{report / 'proposal.typ'}: missing, so no #fig call can be checked\n",
+    )
+    (report / "report.typ").rename(report / "proposal.typ")
+    assert check(capsys, str(report)) == (0, "")
