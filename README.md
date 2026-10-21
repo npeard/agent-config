@@ -232,36 +232,104 @@ pixi run all                        # format, lint, ascii, spell,
 
 ## Using these tools from another project
 
-Copying a script forks it, and a fix then reaches no one. The generic
-tools are exported instead, in two channels. Pin a tag in either (tags
-are the refs to pin); an update is then opt-in, via
-`pre-commit autoupdate` or by bumping the tag.
+agent-config reaches a project in two separate ways, and only one needs
+anything in the project itself:
 
-A pre-commit hook, for a gate:
+| What                                                 | How it arrives                                 | Work in the project   |
+| ---------------------------------------------------- | ---------------------------------------------- | --------------------- |
+| `AGENTS.md`, skills, Claude Code hooks               | The installer links them into your user config | None                  |
+| Gates and commands (`check-ascii`, `preflight`, ...) | The project pins a release tag of this repo    | A few lines of config |
+
+Do not copy a script into a project. A copy is a fork: it stops getting
+fixes, and doqs's copy of `preflight` is now half the length of the
+current one. Pin a tag instead. Updates are then opt-in: nothing changes
+in a project until you move its tag.
+
+### Gates, through pre-commit
+
+Add this repo to the project's `.pre-commit-config.yaml` and list the
+hooks you want:
 
 ```yaml
 repos:
   - repo: https://github.com/npeard/agent-config
-    rev: vX.Y.Z
+    rev: v0.1.0
     hooks:
       - id: check-ascii
+      - id: plain-math
+        files: '(\.typ|(?<!\.code)\.tex|/(figures|plots?)/[^/]*\.py)$'
 ```
 
-A pixi git dependency, for a command you run yourself:
+pre-commit installs the tools into its own environment, so the gates
+need no other dependency in the project.
+
+| Hook               | Fails on                                                                    | Default files                    |
+| ------------------ | --------------------------------------------------------------------------- | -------------------------------- |
+| `check-ascii`      | Any non-ASCII character                                                     | Python, Markdown                 |
+| `plain-math`       | Plain-text stand-ins for math (`alpha`, `x^2`) in plot labels and documents | `.py`, `.tex`, `.typ`            |
+| `trivial-wrappers` | Functions too thin to justify existing                                      | Python                           |
+| `forward-refs`     | A document citing a label before the label appears                          | `.tex`, `.typ`                   |
+| `report-check`     | A report whose figure list disagrees with its document or figure scripts    | `Snakefile`, `.typ`, `plot_*.py` |
+
+Fit a hook to the project from the project's own config: `files:` or
+`exclude:` to narrow it, `args:` to pass options. Never edit this repo
+to suit one project.
+
+### Commands, through pixi
+
+For the commands you run yourself, and for report figure scripts (which
+import `report_plotting`), add this repo as a pixi git dependency,
+pinned to the same tag:
 
 ```toml
 [tool.pixi.pypi-dependencies]
-agent-config = { git = "https://github.com/npeard/agent-config", tag = "vX.Y.Z" }
+agent-config = { git = "https://github.com/npeard/agent-config", tag = "v0.1.0" }
+
+[tool.pixi.tasks]
+preflight = "preflight"
 ```
 
-A `pixi.toml` consumer writes `[pypi-dependencies]` instead.
+In a `pixi.toml` the tables are `[pypi-dependencies]` and `[tasks]`. Put
+the dependency in whichever environment runs the commands -- the report
+environment, if that is where the figure scripts run.
 
-Exported commands: `check-ascii`, `plain-math`, `trivial-wrappers`,
-`forward-refs`, `preflight`, `new-report`, `report-check`,
-`jupyter-mcp`. The hooks are `check-ascii`, `plain-math`,
-`trivial-wrappers`, `forward-refs` and `report-check`. The command-line
-interface of this list is the compatibility promise; everything else in
-`scripts/` may change freely.
+That installs all eight commands: the five gates above, plus
+
+- `preflight` -- whether the project is fit to start work in: pre-commit
+  installed and current, tests green, default branch, clean tree.
+- `new-report REPORT_DIR --shared SHARED_DIR --title TITLE` -- scaffold
+  a report: `Snakefile`, `report.typ`, `refs.bib` and an example figure.
+  Several reports can share one directory and one `SHARED_DIR`;
+  `writing-orchestration` has the conventions.
+- `jupyter-mcp --port PORT --token TOKEN --timeout SECONDS --root DIR`
+  -- start JupyterLab detached and print the line that registers it as
+  an MCP server.
+
+Every command takes `--help`. The command names and their command-line
+options are the compatibility promise; everything else in `scripts/` may
+change between tags.
+
+### Moving a project off copied scripts
+
+1. Delete the copies from `scripts/`. Keep the project's own scripts.
+2. Replace each local pre-commit hook that ran a copy with the matching
+   hook above, carrying over its `files:` and arguments.
+3. Point pixi tasks at the commands: `python scripts/preflight.py`
+   becomes `preflight`.
+4. Run `pre-commit run --all-files` and fix what it finds. The current
+   tools check more than the old copies did, so expect new findings the
+   first time.
+
+### Updating and releasing
+
+To move a project to a newer release, run
+`pre-commit autoupdate --repo https://github.com/npeard/agent-config`,
+then set the pixi `tag =` to the same version, so the gates and the
+commands stay in step.
+
+To release from here: set `version` in `pyproject.toml`, merge to
+`main`, tag that commit `vX.Y.Z` to match, and push the tag. A tag is
+what projects pin, so never move one after pushing it.
 
 ## Codex session analytics
 
