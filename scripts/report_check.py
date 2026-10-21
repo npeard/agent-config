@@ -48,8 +48,18 @@ def registry_text(directory: Path) -> str | None:
 
 
 def document_name(directory: Path) -> str | None:
+    """DOCUMENT's value, None if the line is absent, "" if it is unreadable.
+
+    The regex admits any quoted text, and a backslash escape such as "\\N" is
+    not a valid literal; "" lets the caller report that rather than traceback.
+    """
     match = DOCUMENT.search((directory / "Snakefile").read_text(encoding="utf-8"))
-    return ast.literal_eval(match.group(1)) if match else None
+    if not match:
+        return None
+    try:
+        return ast.literal_eval(match.group(1))
+    except (ValueError, SyntaxError):
+        return ""
 
 
 def find_report(path: Path) -> tuple[Path, str, str | None] | None:
@@ -68,6 +78,8 @@ def static_findings(report: Path, registry: str, name: str | None) -> list[str]:
         # An old Snakefile: check as the scaffold's default so the rest still runs.
         findings.append(f'{snakefile}: no DOCUMENT; add the line DOCUMENT = "report"')
         name = "report"
+    if not name:
+        return [*findings, f"{snakefile}: DOCUMENT is not a string literal"]
     document = report / f"{name}.typ"
     try:
         figures = ast.literal_eval(registry)

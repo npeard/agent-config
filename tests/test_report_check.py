@@ -230,3 +230,10 @@ def test_static_check_reads_the_named_document(report, capsys):
     )
     (report / "report.typ").rename(report / "proposal.typ")
     assert check(capsys, str(report)) == (0, "")
+
+
+def test_unreadable_document_literal_is_a_finding_not_a_traceback(report, capsys):
+    edit(report / "Snakefile", 'DOCUMENT = "report"', r'DOCUMENT = "\N"')
+    code, out = check(capsys, str(report))
+    assert code == 1
+    assert "DOCUMENT is not a string literal" in out
