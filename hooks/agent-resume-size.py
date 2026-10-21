@@ -48,9 +48,15 @@ def _usage_tokens(line: bytes) -> int | None:
     try:
         entry = json.loads(line)
         usage = entry["message"]["usage"]
-        if entry["type"] != "assistant":
+        # A session limit appends a "<synthetic>" assistant turn with all-zero
+        # usage after the real last turn. Reading it as 0 would wave through
+        # exactly the cold-cache resume this hook exists to stop.
+        if (
+            entry["type"] != "assistant"
+            or entry["message"].get("model") == "<synthetic>"
+        ):
             return None
-        return sum(
+        tokens = sum(
             usage.get(key, 0)
             for key in (
                 "input_tokens",
@@ -58,6 +64,7 @@ def _usage_tokens(line: bytes) -> int | None:
                 "cache_creation_input_tokens",
             )
         )
+        return tokens or None
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
 

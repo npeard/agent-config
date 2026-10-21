@@ -164,3 +164,39 @@ def test_widens_once_when_the_tail_holds_no_usage(tmp_path):
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(lines) + "\n")
     assert hook.context_tokens(path) == 123_456
+
+
+def synthetic_limit_line() -> str:
+    # Shape of the turn Claude Code appends when a session limit hits: a
+    # synthetic model with all-zero usage, written after the real last turn.
+    return json.dumps(
+        {
+            "type": "assistant",
+            "message": {
+                "model": "<synthetic>",
+                "role": "assistant",
+                "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                },
+                "content": [{"type": "text", "text": "You've hit your session limit"}],
+            },
+            "isApiErrorMessage": True,
+        }
+    )
+
+
+def test_skips_a_synthetic_session_limit_turn(tmp_path):
+    parent = make_session(
+        tmp_path, "abc", [usage_line(400_000), synthetic_limit_line()]
+    )
+    assert deny_reason(send(parent, "abc"))
+
+
+def test_skips_a_zero_usage_turn_from_a_real_model(tmp_path):
+    zero = json.loads(usage_line(400_000))
+    zero["message"]["usage"] = {"input_tokens": 0}
+    parent = make_session(tmp_path, "abc", [usage_line(400_000), json.dumps(zero)])
+    assert deny_reason(send(parent, "abc"))
