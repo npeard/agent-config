@@ -29,6 +29,16 @@ class TestRepoInvariant:
     def test_the_repo_declares_at_least_one_hook(self):
         assert register_hooks.declared_hooks()
 
+    def test_environment_drift_fires_on_startup_only(self):
+        """Its text was re-injected on every resume and compact (17 times over
+        six sessions) though nothing in it changes within a session."""
+        declared = {
+            (name, event, matcher)
+            for name, event, matcher in register_hooks.declared_hooks()
+            if name == "environment-drift.py"
+        }
+        assert declared == {("environment-drift.py", "SessionStart", "startup")}
+
     def test_declarations_name_a_plausible_event(self):
         known = {
             "SessionStart",
