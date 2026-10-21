@@ -20,19 +20,16 @@ has been burned by twice; see the install.sh and register_hooks.py headers. If
 a future version stops honouring it, move to PostToolUse and change
 hookEventName and the test assertions together.
 
-Fires once per session per project. A thesis editing session writes main.tex
-dozens of times, and an advisory re-injected on every write costs the same
-context as the useful first one while buying less each time -- which is how a
-hook trains its reader to skip it.
+Fires once per session per agent per project. A thesis editing session
+writes main.tex dozens of times, and an advisory re-injected on every write
+costs the same context as the useful first one while buying less each time --
+which is how a hook trains its reader to skip it. Measured over six sessions:
+25 injections, 2.9k tokens, 19% verbatim repeats.
 
-Known limitation, unverified: if Claude Code gives a subagent the same
-session_id as its orchestrator, then an orchestrator that writes one prose
-file early consumes the project's single advisory, and the section-drafting
-subagents that follow -- the ones actually producing prose, with none of the
-orchestrator's context -- get nothing. Keying on something narrower would
-reintroduce the per-write noise this guard exists to remove, so the tradeoff
-is deliberate rather than settled. If subagent prose quality turns out worse
-than the orchestrator's, look here first.
+The agent is in the key (hook input carries `agent_id` only for a subagent) so
+that the section-drafting subagents, which have none of the orchestrator's
+context, each get their own first advisory instead of finding the project's
+single one already spent by the orchestrator.
 
 Path handling follows hooks/promotion-check.py: realpath and lowercase before
 comparing, because this repo's own files are reachable through ~/.claude
@@ -418,13 +415,14 @@ def stamp_dir() -> Path:
     return Path(tempfile.gettempdir()) / f"claude-prose-hook{suffix}"
 
 
-def already_fired(session: str, root: str) -> bool:
-    """Whether this session has already been told about this project.
+def already_fired(session: str, agent, root: str) -> bool:
+    """Whether this agent has already been told about this project.
 
     Best effort by design: any filesystem error returns False, so the
     advisory fires. A duplicate is cheaper than a miss.
     """
-    digest = hashlib.sha256(f"{session}\0{root}".encode()).hexdigest()[:16]
+    key = f"{session}\0{agent or ''}\0{root}"
+    digest = hashlib.sha256(key.encode()).hexdigest()[:16]
     directory = stamp_dir()
     try:
         directory.mkdir(parents=True, exist_ok=True)
@@ -494,7 +492,7 @@ def main():
     else:
         return
     session = data.get("session_id")
-    if session and already_fired(session, project_root(resolved)):
+    if session and already_fired(session, data.get("agent_id"), project_root(resolved)):
         return
     print(
         json.dumps(

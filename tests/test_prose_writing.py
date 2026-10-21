@@ -248,6 +248,23 @@ class TestOncePerSession:
         assert fired(write(f"{prose_project}/main.tex", session="s1"), state)
         assert fired(write(f"{prose_project}/main.tex", session="s2"), state)
 
+    def test_each_agent_gets_its_own_first_advisory(
+        self, prose_project: Path, tmp_path: Path
+    ):
+        """A subagent has its own context: the orchestrator's advisory is not
+        in it, and it is the one actually drafting the prose."""
+        state = tmp_path / "state"
+
+        def as_agent(agent):
+            payload = write(f"{prose_project}/main.tex")
+            return payload | ({"agent_id": agent} if agent else {})
+
+        assert fired(as_agent(None), state)
+        assert fired(as_agent("a1"), state)
+        assert not fired(as_agent("a1"), state)
+        assert fired(as_agent("a2"), state)
+        assert not fired(as_agent(None), state)
+
     def test_no_session_id_fires_every_time(self, tmp_path: Path):
         """Fail open: the advisory is cheap and a missed one is the worse
         outcome, so an unkeyable payload is not silently suppressed."""
