@@ -27,6 +27,38 @@ until that is resolved.
   truncates, appends, checkpoints, or writes a temporary file before
   publishing a result.
 
+## Long jobs: launch detached and return
+
+A subagent that starts a job expected to outlast a few minutes launches
+it detached, records the PID, log, and output path, and returns "waiting
+on <job>, output at <path>, done when <condition>". The orchestrator
+waits once (`run_in_background` or Monitor) and dispatches a fresh,
+small agent to consume the result. Why: a waiting agent pays for its
+whole context on every wake-up, and the orchestrator waiting in the
+background pays nothing. `hooks/poll-guard.py` denies a subagent's
+sleep-poll loop and points here. Worked case: `examples.md` 1.
+
+## Resource allocation
+
+- **Dense networks train on the GPU, always.** Check the device and fail
+  loudly if it is absent; never fall back to CPU silently. Why: agents
+  have trained dense networks on CPU for no reason (examples 3 and 4).
+- **CPU use stays at or under 50% of logical cores at all times**,
+  counted as processes x threads per process across everything the
+  session has running, not per job. Set thread counts explicitly (BLAS
+  and OpenMP variables, `torch.set_num_threads`, a pool's `max_workers`)
+  instead of inheriting a library default of all cores. The exception is
+  a PyTorch parallel training run on CPU, which should be rare; say so
+  when choosing it. Why: 48 processes on 32 cores starved the machine
+  (examples 2 and 3).
+- **Answer for the machine, not only the task.** Before starting
+  compute, state what the job will occupy (cores, threads, GPU memory,
+  duration) and who else shares the machine: supervising agents, other
+  sessions and projects, the user. A job that finishes sooner by
+  starving them has not saved time. This forbids taking over the
+  machine, not using the budget: the full 50% for a job that needs it is
+  correct.
+
 ## After interruption or failure
 
 1. Check the known process group, PID, or scheduler job ID for
