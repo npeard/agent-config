@@ -211,18 +211,21 @@ def metrics_line(sentences: dict, first) -> str:
     )
     # An all-zero delta says nothing, and omitting it keeps a repeat of the
     # session's first report byte-identical to it, which repeats_last skips.
-    if first is None or (
-        count == first["count"]
-        and median == first["median_words"]
-        and p90 == first["p90_words"]
-        and chained == round(100 * first["chained_clause_rate"])
-    ):
+    if first is None:
+        return line
+    deltas = (
+        count - first["count"],
+        median - first["median_words"],
+        p90 - first["p90_words"],
+        chained - round(100 * first["chained_clause_rate"]),
+    )
+    if not any(deltas):
         return line
     line += (
-        f" (since first this session: sentences {signed(count - first['count'], 0)}, "
-        f"median {signed(median - first['median_words'], 1)}, "
-        f"p90 {signed(p90 - first['p90_words'], 0)}, "
-        f"chained {signed(chained - round(100 * first['chained_clause_rate']), 0)} pp)"
+        f" (since first this session: sentences {signed(deltas[0], 0)}, "
+        f"median {signed(deltas[1], 1)}, "
+        f"p90 {signed(deltas[2], 0)}, "
+        f"chained {signed(deltas[3], 0)} pp)"
     )
     # Said in words because a bare "+5" was measured not to work: agents
     # shown only the delta kept splitting sentences. Conditional, because a
@@ -338,13 +341,20 @@ def file_lines(path, measured, session, share, elsewhere):
 def repeats_last(session, agent, path: str, lines: list[str]) -> bool:
     """Whether `lines` are byte-identical to the last ones emitted for `path`.
 
-    Records them, even when empty, as what the agent last saw. Keyed by agent as
+    Records them as what the agent last saw; silence removes the record, since
+    a missing one already means "the last emission was nothing". Keyed by agent as
     well as session because a subagent's context is its own: it never saw what
     the orchestrator was told, so its first report is not a repeat.
     """
     if not session:
         return False
     stamp = session_file(session, f"{agent or ''}\0{path}", ".emit")
+    if not lines:
+        try:
+            stamp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
     digest = hashlib.sha256("\n".join(lines).encode()).hexdigest()
     try:
         stamp.parent.mkdir(parents=True, exist_ok=True)
