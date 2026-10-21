@@ -93,7 +93,7 @@ SNAKEFILE = Template("""\
 # file, run by hand to write data/ once, so it has no rule here.
 #
 # FIGURES is the registry (figure name -> figures/plot_*.py stem) that
-# report-check compares with the #fig calls in report.typ and the scripts on
+# report-check compares with the #fig calls in the document and the scripts on
 # disk. A figure joins with its script, its entry here, and a rule whose
 # inputs are the script and every data file it reads. Commands use no shell
 # builtins, so they run under cmd.exe, PowerShell and bash.
@@ -104,7 +104,7 @@ DOCUMENT = "report"
 # The bibliography file the build needs; "" if the document cites one outside
 # this directory, or none.
 BIB = "refs.bib"
-# The page budget report-check holds build/report.pdf to.
+# The page budget report-check holds build/<DOCUMENT>.pdf to.
 MAX_PAGES = 8
 
 
