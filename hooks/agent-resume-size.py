@@ -52,6 +52,9 @@ REASON = (
 
 
 def _usage_tokens(line: bytes) -> int | None:
+    # Most lines are tool results or user turns; skip parsing them.
+    if b'"usage"' not in line:
+        return None
     try:
         entry = json.loads(line)
         usage = entry["message"]["usage"]
@@ -76,11 +79,22 @@ def _usage_tokens(line: bytes) -> int | None:
         return None
 
 
-def _tail_lines(transcript: Path, window: int) -> list[bytes]:
+def _tail_lines(transcript: Path, window: int, skip: int) -> list[bytes]:
+    """Lines in the last `window` bytes, leaving out the last `skip` bytes.
+
+    The line straddling the `skip` boundary is read to its end, so a pass over
+    the older bytes never loses a record that the pass over the newer ones
+    dropped as a fragment.
+    """
     with transcript.open("rb") as handle:
         size = handle.seek(0, 2)
-        handle.seek(max(0, size - window))
-        data = handle.read()
+        if size <= skip:
+            return []
+        start = max(0, size - window)
+        handle.seek(start)
+        data = handle.read(max(0, size - skip - start))
+        if skip:
+            data += handle.readline()
     lines = data.splitlines()
     # A window starting mid-file begins inside a line; that fragment is not
     # JSON and must not be mistaken for a truncated usage record.
@@ -89,8 +103,8 @@ def _tail_lines(transcript: Path, window: int) -> list[bytes]:
 
 def context_tokens(transcript: Path) -> int | None:
     """Context size at the last assistant turn, or None if none was found."""
-    for window in (TAIL_BYTES, WIDE_TAIL_BYTES):
-        for line in reversed(_tail_lines(transcript, window)):
+    for window, skip in ((TAIL_BYTES, 0), (WIDE_TAIL_BYTES, TAIL_BYTES)):
+        for line in reversed(_tail_lines(transcript, window, skip)):
             tokens = _usage_tokens(line)
             if tokens is not None:
                 return tokens
@@ -108,7 +122,11 @@ def target_transcript(subagents: Path, to: str) -> Path | None:
         return by_id
     for meta in subagents.glob("agent-*.meta.json"):
         try:
-            name = json.loads(meta.read_text(encoding="utf-8")).get("name")
+            text = meta.read_text(encoding="utf-8")
+            # Parse only a meta file that can hold this name at all.
+            if to not in text:
+                continue
+            name = json.loads(text).get("name")
         except (ValueError, OSError, AttributeError):
             continue
         if name == to:

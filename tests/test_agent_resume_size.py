@@ -166,6 +166,17 @@ def test_widens_once_when_the_tail_holds_no_usage(tmp_path):
     assert hook.context_tokens(path) == 123_456
 
 
+def test_a_usage_line_straddling_the_narrow_window_is_still_found(tmp_path):
+    usage = usage_line(123_456)
+    # The filler line is sized so the narrow window starts inside the usage line.
+    empty = json.dumps({"type": "user", "message": {"content": ""}})
+    content = "x" * (hook.TAIL_BYTES - len(usage) // 2 - len(empty))
+    pad = json.dumps({"type": "user", "message": {"content": content}})
+    path = tmp_path / "t.jsonl"
+    path.write_text(f"{usage}\n{pad}\n")
+    assert hook.context_tokens(path) == 123_456
+
+
 def synthetic_limit_line() -> str:
     # Shape of the turn Claude Code appends when a session limit hits: a
     # synthetic model with all-zero usage, written after the real last turn.
