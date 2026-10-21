@@ -231,7 +231,7 @@ principle = 5
 date = "2026-10-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "2e4a57c65fef2557a6cc95a55d656e0052003ba897699a1bccd8831231d22eb3"
+asset_sha = "db7161f0fceb9fc3b1db3b0827369cfddc6d45c304407ceac271acee4d924ffa"
 note = """
 Exactly one read value reaches agent context: `tool_input.file_path` from a
 Write or Edit payload, interpolated into the fixed MESSAGE -- the path the
@@ -246,7 +246,8 @@ Bash branch names no file; MESSAGE takes an optional target and that branch
 passes none. A test asserts that a unique marker in the command is absent from
 the output. The claim key hashes session, agent and project root into a marker
 filename and is never emitted. `~` is expanded before resolving, and ".typ" is
-among the matched suffixes; both only change which paths match.
+among the matched suffixes, and a README now matches everywhere; all three
+only change which paths match.
 
 Accepted rather than removed because the advisory is the feature: what may be
 quoted back is nothing the session did not write itself.
