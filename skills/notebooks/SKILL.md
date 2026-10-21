@@ -79,20 +79,19 @@ Check in this order:
    grepping a global config proves nothing about this project. If
    `jupyter` is absent, set it up:
 
-   a. Start JupyterLab **detached** from the project's pixi environment,
-   so it outlives the session:
-   `jupyter lab --no-browser --port 8889 --IdentityProvider.token <tok> --ServerApp.root_dir <repo>`.
-   On Windows use `Start-Process`. A server started as a child of the
-   agent session dies at every restart.
+   a. Start JupyterLab detached and get the registration line, from
+   inside the project's pixi environment (the script launches
+   `sys.executable -m jupyterlab`, so the kernel is the project's):
+   `jupyter-mcp --port 8889 --token <tok> --timeout 60 --root <repo>`
+   with that environment active (e.g. via `pixi shell`). It reuses a
+   server already listening and survives session restarts.
 
-   b. Register the MCP server:
-   `claude mcp add jupyter --scope local --env JUPYTER_URL=http://localhost:8889 --env JUPYTER_TOKEN=<tok> -- uvx jupyter-mcp-server@latest start --transport stdio`.
-   The `start --transport stdio` suffix is required: without the
-   subcommand the server serves nothing and the connection times out at
-   30 s. Run the `uvx` command once beforehand, because the first run
-   downloads and also times out.
+   b. Run the `claude mcp add` line it prints. Run the `uvx` command in
+   it once beforehand, because the first run downloads and times out at
+   30 s.
 
-   c. Restart the session so the tools load.
+   c. Restart the session if the tools do not appear; whether the server
+   loads without one is unverified.
 
 Two prerequisites fail silently:
 
@@ -207,6 +206,12 @@ relaxed on purpose, because the user's next act is editing this file:
 - Do not "fix" a notebook by extracting its constants into a module.
   That is a regression in this layer even though it is an improvement in
   `src/`.
+
+Write the cells as one chain of thought, top to bottom: no helper
+functions or convenience wrappers, constants plain, objects built in
+line, a terse prose cell per section. Do not pre-optimize for
+portability; the reader wants to follow and change the work, not call it
+(case 12).
 
 Core library code called *from* the notebook stays strict. The carve-out
 covers the notebook's own cells.
