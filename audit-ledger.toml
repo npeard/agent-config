@@ -730,8 +730,9 @@ The hook reads a subagent transcript and prints a deny reason. Nothing read
 reaches the output: the reason is a fixed template filled only with two
 integers (the summed usage counts, and the cap), so transcript text, `to`
 and any path are never echoed to the agent. `to` only selects a filename
-under the session's own directory and the file must already exist; a
-non-integer usage value raises and the hook fails open.
+under the session's own subagents directory, directly or by matching a
+meta file's name, and the file must already exist; a line whose usage is
+not summable is skipped (its value is None), so it never reaches the reason.
 """
 
 [[decision]]
