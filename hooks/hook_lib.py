@@ -1,4 +1,4 @@
-"""What several hooks share: say-once markers, a shell tokenizer, deny.
+"""What several hooks share: say-once markers, a shell tokenizer and splitter, deny.
 
 Not a hook: it carries no `# claude-hook:` marker, so the registrars skip it.
 The hooks `import hook_lib` plainly: both registrars run a hook as

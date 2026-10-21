@@ -139,10 +139,6 @@ to need changing:
 - `hooks/agent-model.py` -- refuses a catch-all subagent dispatch that
   does not name a model, to keep subagents from defaulting to the most
   expensive model.
-- `hooks/agent-resume-size.py` -- refuses to resume a subagent whose
-  context is over the hook's cap, since a resume re-reads (or after a
-  pause rewrites) all of it; the reason says to dispatch a fresh agent
-  with the report file instead.
 - `hooks/notify.py` -- plays a sound and posts a desktop notification
   when a turn finishes. `CLAUDE_NOTIFY_OFF=1` mutes it.
 
@@ -489,12 +485,8 @@ and pricing remain separate and unchanged.
   prose file is about to be written, because the task rarely announces
   itself as writing ("tighten section 3") and the coding spine is what
   gets reached for otherwise.
-- `hooks/hook_lib.py` -- not a hook: the module the hooks load by path.
-  It holds the once-per-agent marker `prose-writing.py` and
-  `promotion-check.py` use to say each thing once, the per-user stamp
-  directory `prose-feedback.py` keeps its repeat digests in, the shell
-  tokenizer that survives native Windows paths, and the PreToolUse deny
-  output, so each lives in one copy.
+- `hooks/hook_lib.py` -- not a hook: the module the hooks import for
+  what they share (the docstring lists it).
 - `hooks/prose-feedback.py` -- after every edit to a `.tex` or `.typ`
   file, reports forward references (blocking feedback) and
   sentence-length metrics against the session's first measurement,
@@ -574,14 +566,9 @@ and pricing remain separate and unchanged.
   ignored; `opus` stays a valid answer, it just has to be typed. Named
   specialists and `fork` are left alone -- a specialist may pin its own
   model, and `fork` ignores the override.
-- `hooks/agent-resume-size.py` -- denies a `SendMessage` to a subagent
-  whose last assistant turn shows more context tokens than the hook's
-  cap, read from the tail of its transcript (by agent id, or by spawn
-  name through the agent's meta file). A resume re-reads the whole
-  context every turn and, after a pause, rewrites it cold. The reason
-  says to dispatch a fresh agent with the report file and fix list. It
-  passes silently for `main`, other names, a missing transcript, or
-  anything it cannot parse, so ordinary messaging is never blocked.
+- `hooks/agent-resume-size.py` -- denies a `SendMessage` that would
+  resume a subagent whose context is over the hook's cap (the docstring
+  has the cost, the cap and the silent cases).
 - `hooks/poll-guard.py` -- denies a subagent's sleep-polling Bash or
   PowerShell call (the docstring has the measured case and the rules).
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
