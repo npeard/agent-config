@@ -466,6 +466,14 @@ and pricing remain separate and unchanged.
   forbidden from proposing new skills -- `reflect` owns the tier ladder,
   and without that boundary an auditing skill becomes the skill factory
   reflect exists to prevent.
+- `skills/auto-research/` -- the level above both orchestration skills
+  for open-ended research questions: before a new model or method,
+  evidence of which current assumption fails. The boundary against
+  `superpowers:systematic-debugging` is one sentence: that skill finds
+  why code misbehaves, this one why a model or method misfits the world.
+  It also carries an `AGENTS.md` trigger line, because the failure it
+  prevents -- a creative explanation offered before anyone plotted the
+  fit -- happens mid-task, where no orchestrator is loaded.
 - `skills/writing-orchestration/` -- the prose counterpart to
   `workflow-orchestration`. The split is one sentence:
   `workflow-orchestration` owns deliverables whose correctness a test

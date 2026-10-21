@@ -11,20 +11,21 @@ it must be read, understood, and kept correct as the codebase evolves.
 Weigh that cost against the value a line provides:
 
 - Write the smallest amount of code that does not sacrifice clarity of
-  intent or process. Large diffs are inherently more difficult to
-  comprehend and check for correctness.
+  intent or process. Large diffs are harder to comprehend and check for
+  correctness.
 - Comments and docstrings should explain the *why* (a hidden constraint,
-  a non-obvious invariant, a workaround) -- the code itself already
-  defines the *what* and the *how*.
+  a non-obvious invariant, a workaround) -- the code already shows the
+  *what* and *how*.
 - Reuse and generalize existing code before writing new code.
 - Prefer standard-library or well-established third-party solutions over
-  hand-rolled ones, unless there is a clear, specific reason the
-  existing option doesn't fit.
-- The same weighing applies to agent time: dispatch subagents in
-  parallel for independent subtasks (many call sites, benchmarks, a
-  sibling repo) rather than in sequence, at the cheapest model that
-  holds accuracy. This holds for any task, not only ones running the
-  workflow below.
+  hand-rolled ones, unless a specific reason rules them out.
+- The same weighing applies to agent time, in any task: dispatch
+  subagents in parallel for independent subtasks (many call sites,
+  benchmarks, a sibling repo) rather than in sequence, at the cheapest
+  model that holds accuracy.
+- When you hear hooves, think horses: before proposing a new model or
+  method, show with evidence which current assumption fails -- see
+  `auto-research`.
 
 ## General Workflow
 
@@ -136,8 +137,8 @@ changes there and not here.
   deterministic structural assertion to a timed one.
 - **Never hand-fix what a tool owns.** Run the project's own
   format/precommit command instead of editing by hand.
-- **Comments record the why** -- see Core philosophy above; this is the
-  same rule seen from the reviewer's side.
+- **Comments record the why** -- Core philosophy's rule, seen from the
+  reviewer's side.
 - **No speedup claimed from profiler percentages alone** -- confirm with
   a real wall-clock A/B, and if the result was neutral, say so.
 - **Build new tools when a correction recurs.** If you keep re-fixing
