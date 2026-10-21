@@ -112,6 +112,17 @@ gitignored `references/` subdirectory, excluded from spell and lint,
 which would flag text that is not yours to fix. Cite each by DOI or
 arXiv id in the bibliography so a fresh clone can fetch it.
 
+**Two reports in one directory** (case 11): one Snakefile each, with its
+own `DOCUMENT` and `BIB` (`""` when the bibliography lives outside);
+share a plotting script and data, never another report's `build/`; list
+shared scripts as inputs of each report's figure rules; name pixi tasks
+by hand when two reports share a basename.
+
+**When a figure's method changes, change its siblings.** Find every
+artifact that shares or cites the method and regenerate it the same way;
+a caption saying "this one differs" invites the question why. A real
+reason to differ leads the text (case 10).
+
 ## Post-cut critique
 
 After any revision, in every class, reread your own diff for five
