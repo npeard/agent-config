@@ -599,3 +599,14 @@ def test_report_after_an_intervening_block_is_not_a_repeat(tmp_path: Path):
     assert "decision" in json.loads(run(agent_write(path, "a1"), tmp_path))
     path.write_text(BACKWARD)
     assert run(agent_write(path, "a1"), tmp_path) != ""
+
+
+def test_report_reintroduced_after_a_silent_fix_is_not_a_repeat(tmp_path: Path):
+    # The agent fixed the breach and heard nothing; the same breach coming back
+    # is news to it, not a repeat of what it last saw.
+    path = project(tmp_path, BACKWARD)
+    assert run(agent_write(path, "a1"), tmp_path) != ""
+    path.write_text(FORWARD.replace("first", "now").replace("sec:b", "sec:a"))
+    assert run(agent_write(path, "a1"), tmp_path) == ""
+    path.write_text(BACKWARD)
+    assert run(agent_write(path, "a1"), tmp_path) != ""

@@ -338,7 +338,7 @@ def file_lines(path, measured, session, share, elsewhere):
 def repeats_last(session, agent, path: str, lines: list[str]) -> bool:
     """Whether `lines` are byte-identical to the last ones emitted for `path`.
 
-    Records them as the new last emission. The marker is keyed by agent as
+    Records them, even when empty, as what the agent last saw. Keyed by agent as
     well as session because a subagent's context is its own: it never saw what
     the orchestrator was told, so its first report is not a repeat.
     """
@@ -490,11 +490,10 @@ def main():
         lines, has_here = file_lines(path, item, session, share, elsewhere)
         file_blocks = named and has_here
         blocking = blocking or file_blocks
-        # Asked of blocks too, though never acted on for them: it records the
-        # last emission, and a block is something the agent saw.
-        repeated = bool(lines) and repeats_last(
-            session, data.get("agent_id"), path, lines
-        )
+        # Asked of blocks and of silence too, though acted on for neither: it
+        # records what the agent last saw, and after silence the same report
+        # coming back is news rather than a repeat.
+        repeated = repeats_last(session, data.get("agent_id"), path, lines)
         if lines and (file_blocks or not repeated):
             prefix = (
                 [f"{shown_path(os.path.basename(path))}:"] if len(paths) > 1 else []
