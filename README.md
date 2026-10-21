@@ -572,6 +572,8 @@ and pricing remain separate and unchanged.
   dispatch a fresh agent with the report file and fix list. It passes
   silently for `main`, teammate names, a missing transcript, or anything
   it cannot parse, so ordinary messaging is never blocked.
+- `hooks/poll-guard.py` -- denies a subagent's sleep-polling Bash or
+  PowerShell call (the docstring has the measured case and the rules).
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn genuinely comes back to you: the work finished (`Stop`), a tool
   wants permission or a background agent is blocked on an answer
