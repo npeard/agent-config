@@ -19,6 +19,15 @@ reason alone reaches the agent (verified by hand on Claude Code 2.1.296), so
 the same text in additionalContext would arrive twice. Anything else is
 information and goes in additionalContext only.
 
+Silent unless something is wrong: a forward reference, or a sentence over
+the metrics script's long-sentence threshold. The sentence-shape line used to
+accompany every edit, and measured over six sessions that was 208 injections
+(206 of them in subagents), 33.0k tokens, 32% verbatim repeats of the one
+before. A non-blocking report byte-identical to the last one for the same file
+in the same agent is skipped (marker per session + agent + path); a block is
+never skipped, because a gate that quietly lifts while its violation remains
+is worse than a repeat.
+
 Never blocks on failure: a script that crashes, times out or prints something
 unparsable yields no feedback and exit 0, because a broken feedback hook must
 not stop edits. Everything runs concurrently to fit the hook's 10 s; see
@@ -192,7 +201,14 @@ def metrics_line(sentences: dict, first) -> str:
         f"Prose: {count} sentences, median {median:g} words, p90 {p90:g}, "
         f"{chained}% chained-clause"
     )
-    if first is None:
+    # An all-zero delta says nothing, and omitting it keeps a repeat of the
+    # session's first report byte-identical to it, which repeats_last skips.
+    if first is None or (
+        count == first["count"]
+        and median == first["median_words"]
+        and p90 == first["p90_words"]
+        and chained == round(100 * first["chained_clause_rate"])
+    ):
         return line
     line += (
         f" (since first this session: sentences {signed(count - first['count'], 0)}, "
@@ -300,8 +316,14 @@ def file_lines(path, measured, session, share, elsewhere):
     lines = violation_lines(HERE_HEADER, here, root, share - 1)
     lines += violation_lines(ELSEWHERE_HEADER, elsewhere, root, share - 1 - len(lines))
     if sentences:
-        lines.append(metrics_line(sentences, baseline(session, path, sentences)))
-        lines += long_lines(sentences, share - len(lines))
+        # Recorded even when nothing is said, so a later breach reports its
+        # delta against the session's first measurement.
+        first = baseline(session, path, sentences)
+        # `share - 1`: the metrics line takes one of the room long_lines gets.
+        over = long_lines(sentences, share - 1 - len(lines))
+        if lines or over:
+            lines.append(metrics_line(sentences, first))
+            lines += over
     return lines, bool(here)
 
 
@@ -314,6 +336,32 @@ def stamp_dir() -> Path:
     getuid = getattr(os, "getuid", None)
     suffix = f"-{getuid()}" if getuid else ""
     return Path(tempfile.gettempdir()) / f"claude-prose-feedback{suffix}"
+
+
+def repeats_last(session, agent, path: str, lines: list[str]) -> bool:
+    """Whether `lines` are byte-identical to the last ones emitted for `path`.
+
+    Records them as the new last emission. The marker is keyed by agent as
+    well as session because a subagent's context is its own: it never saw what
+    the orchestrator was told, so its first report is not a repeat.
+    """
+    if not session:
+        return False
+    stamp = session_file(session, f"{agent or ''}\0{path}", ".emit")
+    digest = hashlib.sha256("\n".join(lines).encode()).hexdigest()
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        if stamp.read_text(encoding="utf-8") == digest:
+            return True
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+    try:
+        stamp.write_text(digest, encoding="utf-8")
+    except OSError:
+        pass
+    return False
 
 
 def previous_call(session) -> float:
@@ -443,8 +491,11 @@ def main():
             listed.add(root)
             elsewhere = [v for v in item[1] if canonical(v["file"]) not in reported]
         lines, has_here = file_lines(path, item, session, share, elsewhere)
-        blocking = blocking or (named and has_here)
-        if lines:
+        file_blocks = named and has_here
+        blocking = blocking or file_blocks
+        if lines and (
+            file_blocks or not repeats_last(session, data.get("agent_id"), path, lines)
+        ):
             prefix = (
                 [f"{shown_path(os.path.basename(path))}:"] if len(paths) > 1 else []
             )
