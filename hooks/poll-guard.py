@@ -6,10 +6,7 @@ A Bash call is capped near 590 s, so an agent waiting on an hour-long compute
 with `until ...; sleep 30` wakes about every 10 minutes. Each wake finds the
 prompt cache expired and rewrites the whole context at full price.
 
-Measured: session 3ede61fe (2026-10-20), an Opus implementer, did this for
-hour-long report computes. 80 turns above 100k context wrote 42.1M of its
-43.3M cache-write tokens, and it peaked at 724,459 tokens over 592 turns.
-Same shape: bf2b0c84 (75 turns, 12.2M) and 6ada315c (43 turns, 10.5M).
+The measured case is compute-job-safety examples.md case 1.
 
 Only a subagent is denied (`agent_id` is present in its hook input): the main
 session polling once is cheap, and the fix -- launch detached, return, let the

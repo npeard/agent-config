@@ -140,9 +140,9 @@ to need changing:
   does not name a model, to keep subagents from defaulting to the most
   expensive model.
 - `hooks/agent-resume-size.py` -- refuses to resume a subagent whose
-  context is over 150k tokens, since a resume re-reads (or after a pause
-  rewrites) all of it; the reason says to dispatch a fresh agent with
-  the report file instead.
+  context is over the hook's cap, since a resume re-reads (or after a
+  pause rewrites) all of it; the reason says to dispatch a fresh agent
+  with the report file instead.
 - `hooks/notify.py` -- plays a sound and posts a desktop notification
   when a turn finishes. `CLAUDE_NOTIFY_OFF=1` mutes it.
 
@@ -569,20 +569,19 @@ and pricing remain separate and unchanged.
   config runs Opus. AGENTS.md already asks for the cheapest model that
   holds accuracy, but the harness default fights the rule: the only way
   to miss it is upward, and forgetting the field costs the most a
-  dispatch can cost. Measured over 30 days, 19 of 163 dispatches omitted
-  it, and one session omitted it on all 10 of its own. It denies rather
-  than advises because an advisory is a second request to behave and the
-  first one was already being ignored; `opus` stays a valid answer, it
-  just has to be typed. Named specialists and `fork` are left alone -- a
-  specialist may pin its own model, and `fork` ignores the override.
+  dispatch can cost. It denies rather than advises because an advisory
+  is a second request to behave and the first one was already being
+  ignored; `opus` stays a valid answer, it just has to be typed. Named
+  specialists and `fork` are left alone -- a specialist may pin its own
+  model, and `fork` ignores the override.
 - `hooks/agent-resume-size.py` -- denies a `SendMessage` to a subagent
-  whose last assistant turn shows more than 150k context tokens, read
-  from the tail of its transcript. A resume re-reads the whole context
-  every turn and, after a pause, rewrites it cold; one implementer grew
-  44k -> 366k -> 724k across resumed fix rounds. The reason says to
-  dispatch a fresh agent with the report file and fix list. It passes
-  silently for `main`, teammate names, a missing transcript, or anything
-  it cannot parse, so ordinary messaging is never blocked.
+  whose last assistant turn shows more context tokens than the hook's
+  cap, read from the tail of its transcript (by agent id, or by spawn
+  name through the agent's meta file). A resume re-reads the whole
+  context every turn and, after a pause, rewrites it cold. The reason
+  says to dispatch a fresh agent with the report file and fix list. It
+  passes silently for `main`, other names, a missing transcript, or
+  anything it cannot parse, so ordinary messaging is never blocked.
 - `hooks/poll-guard.py` -- denies a subagent's sleep-polling Bash or
   PowerShell call (the docstring has the measured case and the rules).
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the

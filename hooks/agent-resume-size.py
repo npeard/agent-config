@@ -7,17 +7,15 @@ the prompt cache is cold, so the whole context is written again at full
 price. Past a few hundred thousand tokens a fresh agent that reads a report
 file is cheaper on every turn.
 
-Measured: one implementer ran 44k -> 366k tokens in its first run, then grew
-about +100k per resumed fix round across three rounds and one ad-hoc "one
-more addition" (+103k). The user stopped it at 724k ("700k tokens in 1
-minute?"). Separately, four resumes after a session-limit reset found a cold
-cache and rewrote 373k, 516k, 610k and 722k tokens.
+Both costs were measured: workflow-orchestration examples.md cases 1
+(resumes after a session-limit reset) and 2 (fix rounds resumed into one
+agent).
 
 This denies rather than advises: the rule already exists in the
 orchestration skill and a resume is one message away. It only acts when the
-target resolves to a subagent transcript on disk, so a message to `main` or a
-teammate name passes untouched -- blocking ordinary messaging would be worse
-than the bug.
+target resolves, by id or spawn name, to a subagent transcript on disk, so a
+message to `main` or any other name passes untouched -- blocking ordinary
+messaging would be worse than the bug.
 """
 
 import importlib.util
@@ -32,10 +30,11 @@ _spec = importlib.util.spec_from_file_location(
 hook_lib = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hook_lib)
 
-# 150k allows about one fix round. The incident's implementer was 366k after
-# its first run alone, and a fresh fix agent reading a report file starts near
-# 50k, so past this cap fresh is cheaper on every turn. Deliberately a
-# constant rather than an environment knob: resuming is the exception.
+# About one fix round above a fresh fix agent's start (one reading a report
+# file starts near 50k), so past this cap fresh is cheaper on every turn. The
+# single home of the number: the skill and README say "the hook's cap".
+# Deliberately a constant rather than an environment knob: resuming is the
+# exception.
 RESUME_CAP_TOKENS = 150_000
 
 # Transcripts reach tens of MB; the last assistant turn is within the final
