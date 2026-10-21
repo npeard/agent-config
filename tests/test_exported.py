@@ -12,6 +12,7 @@ import importlib
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tomllib
@@ -144,6 +145,19 @@ def rho_branch(root: Path) -> list[str]:
     return ["--no-friction", "--offline"]
 
 
+LISTENERS: list[socket.socket] = []
+
+
+def jupyter_listening(root: Path) -> list[str]:
+    """A held-open local port, so the run reports it and launches no Lab."""
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen()
+    LISTENERS.append(sock)
+    port = str(sock.getsockname()[1])
+    return [*("--port", port, "--token", RHO, "--timeout", "1", "--root", str(root))]
+
+
 # command -> its argv, given a fresh git repo, for a run whose output names RHO
 CP1252_CASES = {
     "check-ascii": one_file("rho.py", f"# {RHO}\n"),
@@ -163,6 +177,7 @@ CP1252_CASES = {
         *("--title", "T"),
     ],
     "report-check": report_dir,
+    "jupyter-mcp": jupyter_listening,
 }
 
 

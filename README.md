@@ -261,10 +261,11 @@ agent-config = { git = "https://github.com/npeard/agent-config", tag = "vX.Y.Z" 
 A `pixi.toml` consumer writes `[pypi-dependencies]` instead.
 
 Exported commands: `check-ascii`, `plain-math`, `trivial-wrappers`,
-`forward-refs`, `preflight`, `new-report`, `report-check`. The hooks are
-`check-ascii`, `plain-math`, `trivial-wrappers`, `forward-refs` and
-`report-check`. The command-line interface of this list is the
-compatibility promise; everything else in `scripts/` may change freely.
+`forward-refs`, `preflight`, `new-report`, `report-check`,
+`jupyter-mcp`. The hooks are `check-ascii`, `plain-math`,
+`trivial-wrappers`, `forward-refs` and `report-check`. The command-line
+interface of this list is the compatibility promise; everything else in
+`scripts/` may change freely.
 
 ## Codex session analytics
 
@@ -615,18 +616,20 @@ and pricing remain separate and unchanged.
   `brew install terminal-notifier` is the fix for a missing banner.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `burn.py`, `toolgaps.py`, `validate_skills.py`,
-  `suppressions.py`, `thresholds.py`, `prose_metrics.py`) meant to be
-  reused rather than rewritten from scratch; the exported ones are
-  installed, not copied (see "Using these tools from another project").
-  Each runs standalone by file path, as host hooks load it;
-  `preflight.py` skips its two link-related checks unless
-  `platform_paths.py` is beside it, and says so rather than failing to
-  start. Plus `register_hooks.py` and `audit_assets.py`, which are
-  specific to this repo -- the first to its install, the second because
-  it knows this layout rather than describing a capability every project
-  has. `audit_assets.py` also owns the always-loaded context ceilings,
-  which `tests/test_context_budget.py` imports rather than restating, so
-  the gate and the report share one definition of each number.
+  `suppressions.py`, `thresholds.py`, `prose_metrics.py`,
+  `jupyter_mcp.py`, which starts a detached JupyterLab so the notebooks
+  skill's MCP server has something to talk to) meant to be reused rather
+  than rewritten from scratch; the exported ones are installed, not
+  copied (see "Using these tools from another project"). Each runs
+  standalone by file path, as host hooks load it; `preflight.py` skips
+  its two link-related checks unless `platform_paths.py` is beside it,
+  and says so rather than failing to start. Plus `register_hooks.py` and
+  `audit_assets.py`, which are specific to this repo -- the first to its
+  install, the second because it knows this layout rather than
+  describing a capability every project has. `audit_assets.py` also owns
+  the always-loaded context ceilings, which
+  `tests/test_context_budget.py` imports rather than restating, so the
+  gate and the report share one definition of each number.
   `check_ascii.py` lets a single file opt out with a reason-bearing
   `check-ascii: allow` marker in its first ten lines; a marker with no
   reason fails rather than skipping, so the exemption is documented

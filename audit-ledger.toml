@@ -733,3 +733,19 @@ and any path are never echoed to the agent. `to` only selects a filename
 under the session's own directory and the file must already exist; a
 non-integer usage value raises and the hook fails open.
 """
+
+[[decision]]
+asset = "scripts/jupyter_mcp.py"
+principle = 5
+date = "2026-10-20"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "f8ea1f25cd32743376877530de6cca325305a1bec6f3456f9e8eea4329a2356b"
+note = """
+The script reads nothing foreign into its output. The one network read is a
+GET of localhost's /api/status, whose body is discarded (only the 200 status
+is tested). Printed text is fixed strings plus the port, token and timeout the
+caller passed on its own command line. It launches JupyterLab through an argv
+list with no shell, from this interpreter, and registers nothing: the
+`claude mcp add` line is printed for the caller to run.
+"""
