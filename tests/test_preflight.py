@@ -812,7 +812,7 @@ class TestMemories:
     file to be promoted or deleted."""
 
     def memory_dir(self, home: Path, root: Path) -> Path:
-        key = re.sub(r"[:\\/]", "-", str(root))
+        key = re.sub(r"[^A-Za-z0-9]", "-", str(root))
         path = home / ".claude" / "projects" / key / "memory"
         path.mkdir(parents=True)
         return path
@@ -837,6 +837,16 @@ class TestMemories:
         root, home = tmp_path / "proj", tmp_path / "home"
         (self.memory_dir(home, root) / "MEMORY.md").write_text("x", encoding="utf-8")
         assert self.rows(root, home) == []
+
+    def test_key_encodes_every_non_alphanumeric_character(self, tmp_path):
+        """Claude Code's project key replaces each character outside
+        [A-Za-z0-9] with "-", so "_" and "." count, not only separators."""
+        home = tmp_path / "home"
+        memory = home / ".claude" / "projects" / "C--a-b-c-d" / "memory"
+        memory.mkdir(parents=True)
+        (memory / "a.md").write_text("x", encoding="utf-8")
+        ((_, label, _, lines),) = self.rows(Path(r"C:\a_b\c.d"), home)
+        assert (label, lines) == ("memories", ["a.md"])
 
     def test_an_absent_directory_is_silent(self, tmp_path):
         assert self.rows(tmp_path / "proj", tmp_path / "home") == []

@@ -654,11 +654,12 @@ def check_memories(report: Report, root: Path, home: Path) -> None:
 
     Memory is per machine and unreviewed, so a fact left there never reaches
     another machine or a collaborator; each file should move to a durable
-    home or go. Never deletes -- the user decides. The directory name is the
-    project path with colons and slashes of either kind turned into `-`, the
-    key. Silent when there is nothing beyond the MEMORY.md index.
+    home or go. Never deletes -- the user decides. The directory name is
+    Claude Code's project key: the project path with every character outside
+    [A-Za-z0-9] turned into `-`. Silent when there is nothing beyond the
+    MEMORY.md index.
     """
-    key = re.sub(r"[:\\/]", "-", str(root))
+    key = re.sub(r"[^A-Za-z0-9]", "-", str(root))
     memory = home / ".claude" / "projects" / key / "memory"
     try:
         names = sorted(
