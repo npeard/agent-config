@@ -16,7 +16,8 @@ nothing about your job.
 
 The numbered spine lives in the master `AGENTS.md`. This skill carries
 the detail behind each step: which skill to invoke and why that one, how
-to brief a subagent, and when to stop.
+to brief a subagent, and when to stop. Cases cited as "example N" live
+in `examples.md`.
 
 ## Ceremony scales; the gates do not
 
@@ -115,10 +116,18 @@ Pick the mechanism deliberately:
 
 **Every subagent brief contains:** the absolute path to the spec; which
 phase it owns and which phases are already done; the project's task
-commands; the *names* of any skills it should invoke; and the
-instruction to run the project's format/precommit itself before
-reporting. The orchestrator running the formatter is a smell -- it means
-a subagent stopped early.
+commands; the *names* of any skills it should invoke; and these
+instructions:
+
+- Run the project's format/precommit itself before reporting. The
+  orchestrator running the formatter is a smell -- a subagent stopped
+  early.
+- Launch a job that outlasts a few minutes detached and return; see
+  `compute-job-safety`'s "Long jobs".
+- Batch independent shell commands into one call; each costs over a
+  second of harness overhead (example 8).
+- Run the narrowest test target that covers the change; the full suite
+  runs once, at step 5 (example 7).
 
 Name skills, never quote them -- reading one to brief someone else pays
 for it twice, and the orchestrator is the expensive place to pay. Name
@@ -126,10 +135,9 @@ for it twice, and the orchestrator is the expensive place to pay. Name
 
 **Review each phase before starting the next.** When a phase subagent
 reports, the orchestrator dispatches a *separate* cheap reviewer running
-`standards-and-spec-review` in `phase` mode over that phase's diff. Fix
-what it finds, then move on. Do not batch this to the end: a standards
-or spec defect in phase 1 gets built on by phases 2 and 3, and unwinding
-it later costs more than the review did.
+`standards-and-spec-review` in `phase` mode over that phase's diff, and
+its findings are fixed before moving on. Batched to the end, a phase 1
+defect gets built on by phases 2 and 3.
 
 | Reviewer              | Model                        | Context                              | Owns                                                                     |
 | --------------------- | ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
@@ -140,30 +148,35 @@ Two constraints that are the whole point of the split:
 
 - **The reviewer is never the implementer.** A subagent reviewing its
   own output shares the assumptions that produced it, so it ratifies
-  rather than finds. The implementing subagent's self-check is
-  mechanical only -- did precommit run, are the spec's tests present, is
-  the brief satisfied -- and is never the source of findings.
-- **The per-phase reviewer spawns nothing.** It is a leaf, which is why
-  `standards-and-spec-review` has a `phase` mode. A reviewer that fanned
-  out would nest subagent spawns and review cost would stop being linear
-  in the number of phases.
+  rather than finds. The implementer's self-check is mechanical only --
+  precommit ran, the spec's tests exist, the brief is met.
+- **The per-phase reviewer spawns nothing.** It is a leaf (hence `phase`
+  mode); one that fanned out would make review cost nonlinear in the
+  number of phases.
+
+**Fix rounds resume the implementer only while it is small.** This
+overrides `subagent-driven-development`'s "resume rounds 1-3". A resume
+re-reads the whole context every turn, so past the `agent-resume-size`
+hook's 150k-token cap dispatch a fresh fix agent with the previous
+report file, the findings and the diff range (example 6). **After a
+usage- or session-limit pause, always dispatch fresh**: the cache is
+cold, so a resume rewrites the whole context (example 5).
 
 **Model tier:** the cheapest model that holds accuracy. Mechanical
-search, call-site updates and file moves do not need a frontier model;
-design-sensitive implementation and review do. Wrong upward wastes
-tokens, wrong downward wastes a whole round trip.
+search, call-site updates and file moves need no frontier model;
+design-sensitive work and review do. Wrong upward wastes tokens, wrong
+downward a whole round trip.
 
-**Commit as you go**, one logical change per commit. Messages explain
-*why*; the diff already shows what and how. A large uncommitted pile at
-the end is a failure of this step, not a tidiness preference -- it
-forecloses bisecting and reverting.
+**Commit as you go**, one logical change per commit, messages explaining
+*why*. A large uncommitted pile at the end forecloses bisecting and
+reverting.
 
 ### 5. Verify -- `superpowers:verification-before-completion`
 
 Evidence before assertions, always. Run the command, read the output,
 then claim. For long-running scripts, smoke-verify under a timeout and
-confirm the metric is moving the right way -- being killed by the
-timeout is the expected outcome, not a failure.
+confirm the metric is moving the right way; being killed by the timeout
+is expected, not a failure.
 
 ### 6. Review
 
@@ -178,11 +191,9 @@ Order matters here, and the obvious order is wrong:
 4. `standards-and-spec-review` in `branch` mode over the whole branch --
    house rules and spec fulfillment across phases, which per-phase
    review cannot see. Skip axes covered per phase only if every phase
-   was reviewed. **Dispatch its two axes as parallel subagents** --
-   Standards and Spec read the same diff and never need each other's
-   output, so running them in sequence adds a whole review's wall clock
-   for nothing. That skill sanctions this in `branch` mode only; `phase`
-   mode is a leaf and still spawns nothing.
+   was reviewed. **Dispatch its two axes as parallel subagents**: they
+   read the same diff and never need each other's output. That skill
+   sanctions this in `branch` mode only; `phase` mode is a leaf.
 5. `simplify` -- reuse, simplification, efficiency. This one *applies*
    its own edits rather than reporting them, so it cannot be gated by
    the filter above; read its diff and revert brevity that costs
@@ -197,22 +208,17 @@ Order matters here, and the obvious order is wrong:
 working. Massed in the code answering the last round, the fix added
 machinery -- which owes tests and a phase review first.
 
-**Scope each re-review to the fix diff; loop on correctness only.**
-Re-reading cleared code re-derives a settled answer, and a reviewer
-asked for uncertain findings always returns some, so an unscoped loop
-has no fixed point -- quality findings belong to `simplify`, not another
-lap. Leave when no correctness finding survives and verification passes.
-Escalate instead when the same finding recurs after two fix attempts
-(thrash, not progress), a finding implies the spec was wrong (a design
-bifurcation), or three full rounds have completed. Report the state
-plainly rather than looping silently.
+**Scope each re-review to the fix diff; loop on correctness only.** A
+reviewer asked for uncertain findings always returns some, so an
+unscoped loop has no fixed point; quality findings belong to `simplify`.
+Leave when no correctness finding survives and verification passes.
+Escalate, reporting the state plainly, when the same finding recurs
+after two fix attempts, a finding implies the spec was wrong, or three
+full rounds have completed.
 
 **A capacity error is not a round.** An HTTP 529 or a timeout means the
-review never ran: retry it with backoff rather than counting it, and do
-not conclude the loop is thrashing. Four consecutive `/code-review`
-invocations on one PR, all 529s, are the worst "multi-round review" in
-this repo's history and contained no findings at all -- so a rounds
-count that includes them measures the provider, not the work.
+review never ran: retry with backoff, and count it neither as a round
+nor as thrash.
 
 ### 7. Integrate -- `superpowers:finishing-a-development-branch`
 
@@ -222,9 +228,10 @@ different analysis from step 6, reading git blame and prior PR comments
 on the touched files with confidence-scored findings, so it catches
 historical-context problems a local diff review structurally cannot.
 
-Durable rationale belongs in the commit messages and PR body, not in the
-spec file -- the spec is session-scoped scaffolding and is not
-committed.
+Before the final report, check the README and top-level docs for claims
+the branch made false; the README holds no transient information.
+Durable rationale belongs in commit messages and the PR body, not the
+uncommitted spec.
 
 **Then invoke `reflect`, once.** A finished branch is the cheapest
 moment to diagnose friction: a whole task's worth of evidence exists and
