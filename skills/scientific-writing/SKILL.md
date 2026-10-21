@@ -1,6 +1,6 @@
 ---
 name: scientific-writing
-description: Use when drafting, revising, or reviewing a scientific paper, talk, or thesis section -- including when paragraphs recite what a figure or equation shows, captions repeat body numbers, a claim recurs across text, captions and appendix, or a revision is called "just a line edit".
+description: Use when drafting, revising, or reviewing a scientific paper, talk, thesis section, or project README -- including when paragraphs recite what a figure or equation shows, captions repeat body numbers, a claim recurs across text, captions and appendix, or a revision is called "just a line edit".
 compatibility: Before/after measurement comes from the `prose-feedback` hook, or `prose-metrics` without it (section 4). Figure inspection needs the rendered figure, not only its source.
 ---
 
@@ -12,7 +12,7 @@ help. Prose explaining visible evidence is repetition. Invisible
 evidence is a defect in the artifact, not a gap for prose.
 
 Name the genre, then read `genres/<genre>.md` (`paper`, `talk`,
-`thesis`): it fixes the reader and where depth goes.
+`thesis`, `readme`): it fixes the reader and where depth goes.
 
 ## 1. Claim ledger first
 

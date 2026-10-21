@@ -162,12 +162,12 @@ including inspecting the rendered figures.
 
 ## Red flags
 
-| Thought                                                              | Reality                                                                                                                                         |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| "I'll draft it and see how it reads"                                 | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                |
-| "The build passes, so the section is done"                           | That is the mechanical half of verify. The judged half has not run.                                                                             |
-| "This citation is probably right"                                    | Probably is not a citation. Check it or cut the sentence.                                                                                       |
-| "It's only a wording pass"                                           | If the wording carries the argument, it is a Document. Re-classify.                                                                             |
-| "Pass: line edits, argument unchanged" (to skip the reverse outline) | The ledger runs in every class; see `scientific-writing` section 1.                                                                             |
-| "I'll make the notation consistent at the end"                       | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                      |
-| "humanizer is for papers, not for this codebase"                     | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook stays silent on those, so invoking it there is on you. |
+| Thought                                                              | Reality                                                                                                                                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "I'll draft it and see how it reads"                                 | Drafting is where an unnamed genre and reader become expensive. Name them first.                                                                                   |
+| "The build passes, so the section is done"                           | That is the mechanical half of verify. The judged half has not run.                                                                                                |
+| "This citation is probably right"                                    | Probably is not a citation. Check it or cut the sentence.                                                                                                          |
+| "It's only a wording pass"                                           | If the wording carries the argument, it is a Document. Re-classify.                                                                                                |
+| "Pass: line edits, argument unchanged" (to skip the reverse outline) | The ledger runs in every class; see `scientific-writing` section 1.                                                                                                |
+| "I'll make the notation consistent at the end"                       | The end is when it is load-bearing in four sections. Fix it as you see it.                                                                                         |
+| "humanizer is for papers, not for this codebase"                     | It is for prose wherever prose lives -- a README, a docstring, a PR body. The prose hook fires on a README but not on a docstring or PR body, so those are on you. |

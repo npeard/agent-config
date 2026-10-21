@@ -92,22 +92,21 @@ SUFFIXES = (".tex", ".typ", ".bib", ".md", ".txt", ".rst")
 # is deliberately absent: an outline is the argument, so writing one is prose
 # work, while a task list is not.
 #
-# readme.md is the uncomfortable one, and the boundary is worth stating: a
-# README *is* prose, and the writing-orchestration skill says so. What this
-# tuple decides is narrower -- whether writing the file is a reliable signal
-# that prose work is underway. It is not: most README edits add a build
-# command or fix a layout list, so firing here would spend the session's one
-# advisory on a mechanical edit. The skill therefore says to reach for
-# humanizer on a README yourself, precisely because this hook will not.
+# README is absent on purpose, and fires even inside agent-config, where the
+# rest of the repo is config work. It used to be excluded on the grounds that
+# most README edits add a build command, so the advisory would be spent on a
+# mechanical edit. Then a README rewrite went out with no writing skill loaded
+# and the user had to ask for Heilmeier's questions by name. One spent
+# advisory on a mechanical edit costs a paragraph; a public README drafted
+# without them costs a rewrite.
 # Matched on the stem, not the full filename, so one entry covers .md, .rst
-# and .txt at once. Listing full names meant a .rst project burned its single
-# advisory on README.rst while README.md was correctly ignored.
+# and .txt at once. Listing full names once let a .rst project spend its
+# single advisory on a file whose .md twin was correctly ignored.
 EXCLUDED_STEMS = frozenset(
     {
         "claude",
         "agents",
         "gemini",
-        "readme",
         "contributing",
         "changelog",
         "history",
@@ -272,7 +271,7 @@ def resolve_destination(path: str, base: str) -> str:
 
 MESSAGE = (
     "About to write prose{target}. Invoke the writing-orchestration skill "
-    "for the spine. For a paper, talk or thesis also invoke "
+    "for the spine. For a paper, talk, thesis or README also invoke "
     "scientific-writing, naming the genre, to draft. Run the humanizer skill "
     "last as a lint. Do not invent a number, citation, reference, or "
     "attribution: that is the one error a reader cannot check for you. "
@@ -286,7 +285,8 @@ def relevant(path: str) -> bool:
         return False
     # The trailing slash matters: a bare prefix test would also swallow a
     # sibling directory like "agent-config-other".
-    if path.startswith(MASTER_REPO + "/"):
+    is_readme = PurePosixPath(path).stem == "readme"
+    if path.startswith(MASTER_REPO + "/") and not is_readme:
         return False
     # Asked of the platform rather than pattern-matched, because the temp
     # directory is /tmp, /private/tmp or /var/folders/... depending on the

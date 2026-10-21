@@ -99,6 +99,21 @@ class TestFiresOnProse:
     def test_fires(self, path: str, tmp_path: Path):
         assert fired(write(path), tmp_path), path
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            f"{THESIS}/README.md",
+            f"{THESIS}/readme.rst",
+            # Inside agent-config too: its README is the public face, not
+            # config work.
+            f"{MASTER}/README.md",
+        ],
+    )
+    def test_a_readme_fires(self, path: str, tmp_path: Path):
+        """A public README is prose: one was rewritten with no writing skill
+        loaded while README was excluded."""
+        assert fired(write(path), tmp_path), path
+
     def test_outline_fires(self, tmp_path: Path):
         """An outline is the argument, so drafting one is prose work. This is
         the borderline case the spec decided explicitly."""
@@ -113,7 +128,6 @@ class TestSilentOnEverythingElse:
             f"{THESIS}/pyproject.toml",
             f"{THESIS}/Snakefile",
             f"{THESIS}/CLAUDE.md",
-            f"{THESIS}/README.md",
             # Bookkeeping, not prose -- the other half of the OUTLINE.md
             # decision above.
             f"{THESIS}/TASKS.md",
@@ -132,10 +146,7 @@ class TestSilentOnEverythingElse:
             f"{THESIS}/skills/flat.md",
             f"{THESIS}/.tox/py313/notes.md",
             # Excluded on the stem, so one entry covers every prose suffix.
-            # A .rst project otherwise burned its one advisory on a README.
-            f"{THESIS}/README.rst",
             f"{THESIS}/CHANGELOG.rst",
-            f"{THESIS}/readme.txt",
             f"{THESIS}/HISTORY.rst",
             f"{THESIS}/docs/_build/html/notes.md",
         ],
@@ -167,11 +178,11 @@ class TestMasterRepoSelfGuard:
         "path",
         [
             f"{MASTER}/skills/humanizer/patterns.md",
-            f"{MASTER}/README.md",
+            f"{MASTER}/docs/notes.md",
             # normpath must collapse the traversal before the prefix test,
             # which is the bug class fixed in 237c1d7.
-            f"{MASTER}/skills/../README.md",
-            f"{MASTER}//README.md",
+            f"{MASTER}/skills/../docs/notes.md",
+            f"{MASTER}//docs/notes.md",
         ],
     )
     def test_silent_inside_master(self, path: str, tmp_path: Path):
@@ -439,7 +450,7 @@ class TestBashWrites:
             f"cat {THESIS}/main.tex",
             f"wc -w {THESIS}/*.tex",
             f"grep TODO {THESIS}/main.tex > /dev/null",
-            f"echo x > {THESIS}/README.md",
+            f"echo x > {THESIS}/TASKS.md",
             f"echo x > {MASTER}/notes.md",
             f"echo x > {THESIS}/src/main.py",
             "pixi run format",
