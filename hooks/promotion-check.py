@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 # claude-hook: PostToolUse Write|Edit|Bash
+"""Ask, once per session per agent, whether a config file just written should
+be promoted to the master repo.
+
+The same sentence arrived on every write to an AGENTS.md, CLAUDE.md, memory or
+skill file. Measured over six sessions: 20 injections, 1.5k tokens, 55% of them
+verbatim repeats, each staying in context for the rest of the turns. A repeat
+buys nothing the first did not, so a marker keyed by session + agent + reason
+(REASON below; the message has one) suppresses it. The agent is part of the key
+because a subagent's context is its own and never saw what its orchestrator was
+told. Without a session_id there is nothing to key on and the hook fires.
+
+Stdlib only, like every hook here: its interpreter is named in
+~/.claude/settings.json, outside this repo's checks.
+"""
+
 import fnmatch
+import hashlib
 import json
 import os
 import re
 import shlex
 import sys
+import tempfile
+from pathlib import Path
 
 
 def canonical(path: str) -> str:
@@ -261,6 +279,48 @@ def promotable(file_path: str) -> bool:
     return any(fnmatch.fnmatchcase(path, pattern) for pattern in PATTERNS)
 
 
+REASON = "promote"
+
+
+def stamp_dir() -> Path:
+    """Where the once-per-session markers live, namespaced per user.
+
+    On POSIX the temp directory is shared, so an unnamespaced directory
+    created by another user is not writable by this one. Same scheme as
+    prose-writing.py.
+    """
+    getuid = getattr(os, "getuid", None)
+    suffix = f"-{getuid()}" if getuid else ""
+    return Path(tempfile.gettempdir()) / f"claude-promotion-check{suffix}"
+
+
+def already_said(session, agent) -> bool:
+    """Whether this agent has already been told, claiming the marker if not.
+
+    Best effort: a filesystem error returns False, because a repeat is cheaper
+    than a missed prompt.
+    """
+    if not session:
+        return False
+    key = f"{session}\0{agent or ''}\0{REASON}"
+    directory = stamp_dir()
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        # O_EXCL makes test-and-claim one step, so two racing writes cannot
+        # both fire.
+        os.close(
+            os.open(
+                directory / hashlib.sha256(key.encode()).hexdigest()[:16],
+                os.O_CREAT | os.O_EXCL,
+            )
+        )
+    except FileExistsError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -294,6 +354,8 @@ def main():
         return
 
     if not any(promotable(candidate) for candidate in candidates):
+        return
+    if already_said(data.get("session_id"), data.get("agent_id")):
         return
 
     print(

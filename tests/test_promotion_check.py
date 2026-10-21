@@ -27,6 +27,18 @@ MASTER = str(PROJECTS / "agent-config")
 OTHER = str(PROJECTS / "other-project")
 
 
+@pytest.fixture(autouse=True)
+def private_stamps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # The once-per-agent marker lives under the temp directory; without this a
+    # test's session id would leak into other tests and into real sessions.
+    # TMPDIR must exist, or tempfile ignores it and uses the system directory.
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setenv("TMPDIR", str(state))
+    monkeypatch.setenv("TEMP", str(state))
+    monkeypatch.setenv("TMP", str(state))
+
+
 def run_hook(payload: dict, home: Path | None = None) -> str:
     env = os.environ | {"AGENT_CONFIG_REPO": MASTER}
     if home is not None:
@@ -77,6 +89,29 @@ def test_codex_bash_payload_emits_posttooluse():
         }
     )
     assert json.loads(out)["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+
+
+def seen(session: str, agent: str | None) -> dict:
+    payload = {"session_id": session, **write(f"{OTHER}/AGENTS.md")}
+    if agent:
+        payload["agent_id"] = agent
+    return payload
+
+
+def test_identical_advisory_is_emitted_once_per_agent():
+    assert fired(seen("s1", "a1"))
+    assert not fired(seen("s1", "a1"))
+    # A different agent never saw the first advisory.
+    assert fired(seen("s1", "a2"))
+    # The orchestrator (no agent_id) is its own reader, and a new session resets.
+    assert fired(seen("s1", None))
+    assert not fired(seen("s1", None))
+    assert fired(seen("s2", "a1"))
+
+
+def test_no_session_id_always_fires():
+    assert fired(write(f"{OTHER}/AGENTS.md"))
+    assert fired(write(f"{OTHER}/AGENTS.md"))
 
 
 class TestMatchesRealFilenames:
