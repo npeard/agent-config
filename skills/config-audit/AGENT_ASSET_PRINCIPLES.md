@@ -113,6 +113,12 @@ only because the catalogs it always reads sit outside it.
 costs. A ceiling bounds growth; it does not make the content worth
 reading. Ask what a session that never used this asset paid for it.
 
+Ask too whether it encodes durable process -- how to scope, verify or
+judge work, which holds whichever model or tool carries it out -- or one
+tool's current behaviour, which goes stale as tools improve. A tool
+quirk belongs beside the code it affects or in an on-demand reference,
+never in always-loaded prose.
+
 ## 4. Prefer deterministic scripts, and make them usable without being read
 
 Judgement a script can settle belongs in the script, because a script

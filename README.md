@@ -9,6 +9,25 @@ It lets you hand a coding agent a whole task -- from spec to merged
 branch -- and be interrupted twice, while hooks block the habits that
 waste the most time and money.
 
+## Goals
+
+- **Reuse good tools rather than rebuild them.** Where a maintained tool
+  already does the job, this repo points to it. The workflow names the
+  [superpowers](https://github.com/obra/superpowers) skills for
+  brainstorming, planning and code review instead of carrying copies of
+  its own; what lives here fills the gaps those tools leave.
+- **Encode durable process, not implementation detail.** How to scope a
+  task, when to stop and ask, what counts as evidence, how a reader
+  judges a paper: these hold whichever model or tool carries them out.
+  Advice about one tool's quirks goes stale as tools improve, so it is
+  kept out of the always-loaded guidance.
+- **Leave mechanical checks to machines.** Anything a script can check
+  -- formatting, a non-ASCII character, a subagent dispatched without a
+  model, a stale installation -- is checked by a hook, a pre-commit gate
+  or CI, not by an agent remembering to look. The agent's attention goes
+  to what needs judgment: whether a design is right, whether a paragraph
+  makes its claim.
+
 ## What you get
 
 - **Hand off a whole task.** The agent follows one sequence --
