@@ -139,6 +139,10 @@ to need changing:
 - `hooks/agent-model.py` -- refuses a catch-all subagent dispatch that
   does not name a model, to keep subagents from defaulting to the most
   expensive model.
+- `hooks/agent-resume-size.py` -- refuses to resume a subagent whose
+  context is over 150k tokens, since a resume re-reads (or after a pause
+  rewrites) all of it; the reason says to dispatch a fresh agent with
+  the report file instead.
 - `hooks/notify.py` -- plays a sound and posts a desktop notification
   when a turn finishes. `CLAUDE_NOTIFY_OFF=1` mutes it.
 
@@ -560,6 +564,14 @@ and pricing remain separate and unchanged.
   first one was already being ignored; `opus` stays a valid answer, it
   just has to be typed. Named specialists and `fork` are left alone -- a
   specialist may pin its own model, and `fork` ignores the override.
+- `hooks/agent-resume-size.py` -- denies a `SendMessage` to a subagent
+  whose last assistant turn shows more than 150k context tokens, read
+  from the tail of its transcript. A resume re-reads the whole context
+  every turn and, after a pause, rewrites it cold; one implementer grew
+  44k -> 366k -> 724k across resumed fix rounds. The reason says to
+  dispatch a fresh agent with the report file and fix list. It passes
+  silently for `main`, teammate names, a missing transcript, or anything
+  it cannot parse, so ordinary messaging is never blocked.
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn genuinely comes back to you: the work finished (`Stop`), a tool
   wants permission or a background agent is blocked on an answer

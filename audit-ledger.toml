@@ -717,3 +717,19 @@ are made "/", and a path with no relative form (another Windows drive) stays
 absolute, so its ":" sends it through json.dumps. Output is capped at 15 lines.
 Same framing rule as audit-owed.py and friction.py.
 """
+
+[[decision]]
+asset = "hooks/agent-resume-size.py"
+principle = 5
+date = "2026-10-20"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "ca56d717aae36fa0b13acf2a43e337679396b276cd7e12d809a0972cf3c974da"
+note = """
+The hook reads a subagent transcript and prints a deny reason. Nothing read
+reaches the output: the reason is a fixed template filled only with two
+integers (the summed usage counts, and the cap), so transcript text, `to`
+and any path are never echoed to the agent. `to` only selects a filename
+under the session's own directory and the file must already exist; a
+non-integer usage value raises and the hook fails open.
+"""
