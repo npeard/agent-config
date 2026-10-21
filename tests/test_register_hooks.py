@@ -30,8 +30,8 @@ class TestRepoInvariant:
         assert register_hooks.declared_hooks()
 
     def test_environment_drift_fires_on_startup_only(self):
-        """Its text was re-injected on every resume and compact (17 times over
-        six sessions) though nothing in it changes within a session."""
+        """Nothing in its text changes within a session, so resume and
+        compact must not re-inject it."""
         declared = {
             (name, event, matcher)
             for name, event, matcher in register_hooks.declared_hooks()

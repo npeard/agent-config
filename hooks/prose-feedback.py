@@ -20,10 +20,10 @@ the same text in additionalContext would arrive twice. Anything else is
 information and goes in additionalContext only.
 
 Silent unless something is wrong: a forward reference, or a sentence over
-the metrics script's long-sentence threshold. The sentence-shape line used to
-accompany every edit, and measured over six sessions that was 208 injections
-(206 of them in subagents), 33.0k tokens, 32% verbatim repeats of the one
-before. A non-blocking report byte-identical to the last one for the same file
+the metrics script's long-sentence threshold. A sentence-shape line on every
+edit costs context without changing behaviour: measured over six sessions it
+would be 208 injections (206 of them in subagents), 33.0k tokens, 32% verbatim
+repeats of the one before. A non-blocking report byte-identical to the last one for the same file
 in the same agent is skipped (marker per session + agent + path); a block is
 never skipped, because a gate that quietly lifts while its violation remains
 is worse than a repeat.

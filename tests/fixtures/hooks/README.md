@@ -1,9 +1,9 @@
 # Hook fixtures
 
 Synthesized from the documented hook contract
-(code.claude.com/docs/en/hooks), not captured from a live session: the
-session that wrote them could not register a probe hook. Replace with
-scrubbed real payloads once one is captured.
+(code.claude.com/docs/en/hooks), not captured from a live session, so
+the live contract is unverified. Replace with scrubbed real payloads
+once one is captured.
 
 - `subagent-transcript.jsonl`: a subagent transcript whose last
   assistant turn reports 400,000 context tokens (input 10 + cache_read
