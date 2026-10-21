@@ -8,6 +8,7 @@ tests/fixtures/hooks/README.md): `agent_id` is present only for a subagent.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -108,9 +109,21 @@ def test_allows_a_short_powershell_sleep():
     assert deny_reason(call("Start-Sleep -Milliseconds 500", tool="PowerShell")) is None
 
 
-def test_native_windows_path_does_not_break_parsing():
-    command = r"until test -f C:\Users\me\out.h5; do sleep 30; done"
-    assert deny_reason(call(command))
+def test_native_windows_path_survives_tokenizing():
+    # Without the path fix shlex reads `\U`, `\t` as escapes and drops the
+    # backslashes; a loop rule would deny anyway, so assert on the tokens.
+    spec = importlib.util.spec_from_file_location("poll_guard", HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.shell_commands(r"cat C:\Users\x\tmp\new") == [
+        ["cat", r"C:\Users\x\tmp\new"]
+    ]
+
+
+@pytest.mark.parametrize("command", ["sleep $N", "sleep infinity"])
+def test_non_numeric_standalone_sleep_is_allowed(command):
+    # Unknowable duration, so treated as 0 s: a false deny would block work.
+    assert deny_reason(call(command)) is None
 
 
 @pytest.mark.parametrize("body", ["", "not json", "[1]", "null"])

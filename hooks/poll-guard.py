@@ -43,7 +43,7 @@ SLEEP_UNITS = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 # shlex(posix=True) treats "\" as an escape, which eats the separators of a
 # native Windows path; double them, keyed on the shape of the text. Same
 # fix as hooks/prose-writing.py, copied because a hook runs standalone.
-NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\[^\s\"'|&;<>()]*")
+NATIVE_WINDOWS_PATH = re.compile(r"(?<![A-Za-z0-9_.\-])[A-Za-z]:\\[^\s\"'|&;<>()]*")
 
 
 def tokenize(line):
@@ -87,6 +87,8 @@ def sleep_seconds(words):
     args = [w for w in words[1:] if not w.startswith("-") or w[1:2].isdigit()]
     if name == "sleep":
         match = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", args[0]) if args else None
+        # A non-numeric argument (`$N`, `infinity`) has no knowable duration; 0
+        # allows it rather than risk denying ordinary work on a guess.
         return float(match[1]) * SLEEP_UNITS[match[2]] if match else 0
     if name == "start-sleep":
         flags = [w.lower() for w in words[1:] if w.startswith("-")]
