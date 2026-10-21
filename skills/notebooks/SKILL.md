@@ -79,19 +79,15 @@ Check in this order:
    grepping a global config proves nothing about this project. If
    `jupyter` is absent, set it up:
 
-   a. Start JupyterLab detached and get the registration line, from
-   inside the project's pixi environment (the script launches
-   `sys.executable -m jupyterlab`, so the kernel is the project's):
-   `jupyter-mcp --port 8889 --token <tok> --timeout 60 --root <repo>`
-   with that environment active (e.g. via `pixi shell`). It reuses a
-   server already listening and survives session restarts.
+   a. `jupyter-mcp` is one of agent-config's exported tools, so the
+   project's environment must carry it (README, "Using these tools from
+   another project"); without it the call is "command not found". With
+   that environment active (e.g. via `pixi shell`), run
+   `jupyter-mcp --port 8889 --token <tok> --timeout 60 --root <repo>`.
+   It launches JupyterLab detached from `sys.executable`, so the kernel
+   is the project's, and reuses a server already listening.
 
-   b. Run the `claude mcp add` line it prints. Run the `uvx` command in
-   it once beforehand, because the first run downloads and times out at
-   30 s.
-
-   c. Restart the session if the tools do not appear; whether the server
-   loads without one is unverified.
+   b. Follow what it prints: the `claude mcp add` line and its notes.
 
 Two prerequisites fail silently:
 
@@ -206,12 +202,13 @@ relaxed on purpose, because the user's next act is editing this file:
 - Do not "fix" a notebook by extracting its constants into a module.
   That is a regression in this layer even though it is an improvement in
   `src/`.
+- **Write the cells as one chain of thought**, top to bottom: no helper
+  functions or convenience wrappers, constants plain, objects built in
+  line, a terse prose cell per section. The reader wants to follow and
+  change the work, not call it (examples.md case 1).
 
-Write the cells as one chain of thought, top to bottom: no helper
-functions or convenience wrappers, constants plain, objects built in
-line, a terse prose cell per section. Do not pre-optimize for
-portability; the reader wants to follow and change the work, not call it
-(case 12).
+A method change in one cell reaches every figure and section that shares
+the method, as `writing-orchestration` states for reports.
 
 Core library code called *from* the notebook stays strict. The carve-out
 covers the notebook's own cells.
