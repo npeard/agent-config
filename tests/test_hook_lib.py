@@ -63,3 +63,10 @@ def test_deny_prints_the_pretooluse_refusal(capsys):
             "permissionDecisionReason": "no",
         }
     }
+
+
+def test_shell_commands_split_on_separators_and_keep_an_empty_argument():
+    # An empty quoted word is a subset of any character set, so it needs an
+    # explicit guard against being read as a separator.
+    split = hook_lib.shell_commands("a && b | c\nd ''", hook_lib.tokenize)
+    assert split == [["a"], ["b"], ["c"], ["d", ""]]

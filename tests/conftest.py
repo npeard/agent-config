@@ -7,6 +7,7 @@ reach them by path rather than via an installed distribution.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -52,6 +53,28 @@ def write(tmp_path: Path, name: str, body: str) -> Path:
     path = tmp_path / name
     path.write_text(body, encoding="utf-8")
     return path
+
+
+def run_hook(hook: Path, payload) -> str:
+    """Run a hook as the host does -- by file path, JSON on stdin -- and return
+    its stripped stdout. A hook must never write stderr or exit non-zero."""
+    result = subprocess.run(
+        [sys.executable, str(hook)],
+        input=payload if isinstance(payload, str) else json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert not result.stderr, f"hook wrote to stderr: {result.stderr}"
+    return result.stdout.strip()
+
+
+@pytest.fixture(scope="session")
+def hook_lib():
+    """hooks/hook_lib.py, imported once (conftest puts hooks/ on sys.path)."""
+    import hook_lib
+
+    return hook_lib
 
 
 def run_git(cwd: Path, *args: str) -> None:

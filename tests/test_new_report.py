@@ -173,28 +173,36 @@ def test_two_reports_share_a_directory_and_a_bibliography(repo, build_tools):
         'bibliography("refs.bib")',
         'bibliography("../references/shared.bib")',
     )
-    for report, document in ((one, "proposal"), (two, "report")):
-        built = subprocess.run(
-            ["snakemake", "--cores", "1"],
-            cwd=report,
-            check=False,
-            capture_output=True,
-            text=True,
+    built = subprocess.run(
+        ["snakemake", "--cores", "1"],
+        cwd=one,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert built.returncode == 0, built.stderr
+    assert (one / "build/proposal.pdf").stat().st_size > 0
+    assert (
+        report_check.main(
+            [
+                *("--compile", str(one / "build/check.pdf")),
+                *("--root", str(one.parent)),
+                *("--max-pages", "8"),
+                str(one),
+            ]
         )
-        assert built.returncode == 0, built.stderr
-        pdf = report / f"build/{document}.pdf"
-        assert pdf.stat().st_size > 0
-        assert (
-            report_check.main(
-                [
-                    *("--compile", str(report / "build/check.pdf")),
-                    *("--root", str(report.parent)),
-                    *("--max-pages", "8"),
-                    str(report),
-                ]
-            )
-            == 0
-        )
+        == 0
+    )
+    # A dry run is enough for the second report: the regression was the DAG
+    # failing to resolve its inputs, which -n does without a second compile.
+    planned = subprocess.run(
+        ["snakemake", "--cores", "1", "-n"],
+        cwd=two,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert planned.returncode == 0, planned.stderr
 
 
 def edit_text(path: Path, old: str, new: str) -> None:
