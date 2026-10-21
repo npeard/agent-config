@@ -39,6 +39,7 @@ Stdlib only: the interpreter that runs a hook is named in
 
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -48,6 +49,13 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
+_spec = importlib.util.spec_from_file_location(
+    "hook_once", Path(__file__).resolve().parent / "hook_once.py"
+)
+hook_once = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_once)
 
 
 def resolve(path: str) -> str:
@@ -164,7 +172,7 @@ def run_json(script: str, args: list[str], ok_codes: tuple[int, ...]):
 
 def session_file(session, key: str, suffix: str) -> Path:
     digest = hashlib.sha256(f"{session}\0{key}".encode()).hexdigest()[:16]
-    return stamp_dir() / f"{digest}{suffix}"
+    return hook_once.stamp_dir("claude-prose-feedback") / f"{digest}{suffix}"
 
 
 def baseline(session, key: str, current):
@@ -327,17 +335,6 @@ def file_lines(path, measured, session, share, elsewhere):
     return lines, bool(here)
 
 
-def stamp_dir() -> Path:
-    """Where the per-session baselines and call stamps live, per user.
-
-    On POSIX the temp directory is shared, so an unnamespaced directory
-    created by another user is not writable by this one.
-    """
-    getuid = getattr(os, "getuid", None)
-    suffix = f"-{getuid()}" if getuid else ""
-    return Path(tempfile.gettempdir()) / f"claude-prose-feedback{suffix}"
-
-
 def repeats_last(session, agent, path: str, lines: list[str]) -> bool:
     """Whether `lines` are byte-identical to the last ones emitted for `path`.
 
@@ -493,9 +490,12 @@ def main():
         lines, has_here = file_lines(path, item, session, share, elsewhere)
         file_blocks = named and has_here
         blocking = blocking or file_blocks
-        if lines and (
-            file_blocks or not repeats_last(session, data.get("agent_id"), path, lines)
-        ):
+        # Asked of blocks too, though never acted on for them: it records the
+        # last emission, and a block is something the agent saw.
+        repeated = bool(lines) and repeats_last(
+            session, data.get("agent_id"), path, lines
+        )
+        if lines and (file_blocks or not repeated):
             prefix = (
                 [f"{shown_path(os.path.basename(path))}:"] if len(paths) > 1 else []
             )

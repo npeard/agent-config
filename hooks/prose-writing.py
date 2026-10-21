@@ -42,7 +42,7 @@ stdlib keeps working when that file is stale.
 """
 
 import fnmatch
-import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -50,6 +50,13 @@ import shlex
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
+
+# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
+_spec = importlib.util.spec_from_file_location(
+    "hook_once", Path(__file__).resolve().parent / "hook_once.py"
+)
+hook_once = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_once)
 
 
 def forward_slashed(path) -> str:
@@ -402,39 +409,10 @@ def project_root(path: str) -> str:
     return forward_slashed(start)
 
 
-def stamp_dir() -> Path:
-    """Where the once-per-session stamps live, namespaced per user.
-
-    On POSIX the temp directory is shared, so an unnamespaced directory
-    created by another user is not writable by this one -- and a guard that
-    cannot write its stamp re-fires on every single write. Windows %TEMP% is
-    already per-user, and has no getuid, so the suffix is simply omitted.
-    """
-    getuid = getattr(os, "getuid", None)
-    suffix = f"-{getuid()}" if getuid else ""
-    return Path(tempfile.gettempdir()) / f"claude-prose-hook{suffix}"
-
-
 def already_fired(session: str, agent, root: str) -> bool:
-    """Whether this agent has already been told about this project.
-
-    Best effort by design: any filesystem error returns False, so the
-    advisory fires. A duplicate is cheaper than a miss.
-    """
+    """Whether this agent has already been told about this project."""
     key = f"{session}\0{agent or ''}\0{root}"
-    digest = hashlib.sha256(key.encode()).hexdigest()[:16]
-    directory = stamp_dir()
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        # O_CREAT | O_EXCL makes testing and claiming one atomic step. An
-        # exists()-then-touch pair double-fires when two Write calls race,
-        # which is precisely the burst this guard exists to collapse.
-        os.close(os.open(directory / digest, os.O_CREAT | os.O_EXCL))
-    except FileExistsError:
-        return True
-    except OSError:
-        return False
-    return False
+    return not hook_once.claim("claude-prose-hook", key)
 
 
 def main():

@@ -363,6 +363,9 @@ def fake_hook(tmp_path: Path, scripts: dict[str, str]) -> Path:
     (fake / "hooks").mkdir(parents=True)
     (fake / "scripts").mkdir()
     (fake / "hooks" / "prose-feedback.py").write_text(HOOK.read_text())
+    (fake / "hooks" / "hook_once.py").write_text(
+        (HOOK.parent / "hook_once.py").read_text()
+    )
     for stem, source in scripts.items():
         (fake / "scripts" / f"{stem}.py").write_text(source)
     return fake / "hooks" / "prose-feedback.py"
@@ -585,4 +588,14 @@ def test_changed_report_is_emitted_again(tmp_path: Path):
     path = project(tmp_path, BACKWARD)
     assert run(agent_write(path, "a1"), tmp_path) != ""
     path.write_text(BACKWARD.replace(LONG, LONG + " extra"))
+    assert run(agent_write(path, "a1"), tmp_path) != ""
+
+
+def test_report_after_an_intervening_block_is_not_a_repeat(tmp_path: Path):
+    # The agent last saw the block, so the same report as before it is news.
+    path = project(tmp_path, BACKWARD)
+    assert run(agent_write(path, "a1"), tmp_path) != ""
+    path.write_text(FORWARD)
+    assert "decision" in json.loads(run(agent_write(path, "a1"), tmp_path))
+    path.write_text(BACKWARD)
     assert run(agent_write(path, "a1"), tmp_path) != ""

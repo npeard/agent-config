@@ -16,14 +16,20 @@ Stdlib only, like every hook here: its interpreter is named in
 """
 
 import fnmatch
-import hashlib
+import importlib.util
 import json
 import os
 import re
 import shlex
 import sys
-import tempfile
 from pathlib import Path
+
+# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
+_spec = importlib.util.spec_from_file_location(
+    "hook_once", Path(__file__).resolve().parent / "hook_once.py"
+)
+hook_once = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook_once)
 
 
 def canonical(path: str) -> str:
@@ -282,43 +288,12 @@ def promotable(file_path: str) -> bool:
 REASON = "promote"
 
 
-def stamp_dir() -> Path:
-    """Where the once-per-session markers live, namespaced per user.
-
-    On POSIX the temp directory is shared, so an unnamespaced directory
-    created by another user is not writable by this one. Same scheme as
-    prose-writing.py.
-    """
-    getuid = getattr(os, "getuid", None)
-    suffix = f"-{getuid()}" if getuid else ""
-    return Path(tempfile.gettempdir()) / f"claude-promotion-check{suffix}"
-
-
 def already_said(session, agent) -> bool:
-    """Whether this agent has already been told, claiming the marker if not.
-
-    Best effort: a filesystem error returns False, because a repeat is cheaper
-    than a missed prompt.
-    """
+    """Whether this agent has already been told, claiming the marker if not."""
     if not session:
         return False
     key = f"{session}\0{agent or ''}\0{REASON}"
-    directory = stamp_dir()
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        # O_EXCL makes test-and-claim one step, so two racing writes cannot
-        # both fire.
-        os.close(
-            os.open(
-                directory / hashlib.sha256(key.encode()).hexdigest()[:16],
-                os.O_CREAT | os.O_EXCL,
-            )
-        )
-    except FileExistsError:
-        return True
-    except OSError:
-        return False
-    return False
+    return not hook_once.claim("claude-promotion-check", key)
 
 
 def main():
