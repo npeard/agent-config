@@ -86,7 +86,7 @@ def declared_hooks(hooks_dir=HOOKS_DIR):
     return found
 
 
-# Modules the hooks load by path. They are never run by the host, so they carry
+# Modules the hooks import. They are never run by the host, so they carry
 # no marker and must not trip the "undeclared hook" refusal below.
 HOOK_LIBRARIES = frozenset({"hook_lib.py"})
 

@@ -18,25 +18,18 @@ job with different principles, and promotion-check.py already covers the
 """
 
 import contextlib
-import importlib.util
 import json
 import os
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 if os.name == "nt":
     import msvcrt
 else:
     import fcntl
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 
 @contextlib.contextmanager

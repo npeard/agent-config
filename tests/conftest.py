@@ -17,6 +17,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+# Hooks `import hook_lib`; a host run puts the script dir on sys.path itself.
+sys.path.insert(0, str(REPO_ROOT / "hooks"))
 
 
 def dep_report(dep_updates, **changes):

@@ -42,7 +42,6 @@ stdlib keeps working when that file is stale.
 """
 
 import fnmatch
-import importlib.util
 import json
 import os
 import re
@@ -50,12 +49,7 @@ import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 
 def forward_slashed(path) -> str:

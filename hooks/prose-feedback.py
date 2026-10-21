@@ -39,7 +39,6 @@ Stdlib only: the interpreter that runs a hook is named in
 
 import fnmatch
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -50,12 +49,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 
 def resolve(path: str) -> str:

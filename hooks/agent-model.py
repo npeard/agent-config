@@ -22,17 +22,10 @@ typed. Tier 1 on the reflect ladder for exactly this reason: a hook does not
 gate on what survived compaction.
 """
 
-import importlib.util
 import json
 import sys
-from pathlib import Path
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 # The catch-all agent types, which carry no model of their own -- for these,
 # an absent `model` resolves to the parent's. Every other type is left alone:

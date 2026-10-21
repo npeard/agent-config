@@ -23,18 +23,11 @@ Known false negative: a sleep hidden inside `bash -c '...'` or `python -c` is
 one quoted word to the tokenizer, so it passes (fails open).
 """
 
-import importlib.util
 import json
 import re
 import sys
-from pathlib import Path
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 # Under this a lone sleep is a pause, not a wait; the cache TTL is minutes.
 POLL_SLEEP_SECONDS = 60

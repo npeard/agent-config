@@ -1,8 +1,10 @@
 """What several hooks share: say-once markers, a shell tokenizer, deny.
 
 Not a hook: it carries no `# claude-hook:` marker, so the registrars skip it.
-The hooks load it by path (hooks run from an arbitrary cwd, with no sys.path to
-find a sibling). Stdlib only, like the hooks that load it. hashlib and tempfile
+The hooks `import hook_lib` plainly: both registrars run a hook as
+`python <path>` without -I or -P, so the script's own directory is on sys.path
+whatever the cwd. Registering a hook with either flag would break that import.
+Stdlib only, like the hooks that import it. hashlib and tempfile
 are imported inside the two functions that need them: poll-guard runs on every
 shell call and uses only tokenize() and deny().
 """

@@ -18,17 +18,11 @@ message to `main` or any other name passes untouched -- blocking ordinary
 messaging would be worse than the bug.
 """
 
-import importlib.util
 import json
 import sys
 from pathlib import Path
 
-# A sibling loaded by path: hooks run from an arbitrary cwd, with no sys.path.
-_spec = importlib.util.spec_from_file_location(
-    "hook_lib", Path(__file__).resolve().parent / "hook_lib.py"
-)
-hook_lib = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hook_lib)
+import hook_lib
 
 # About one fix round above a fresh fix agent's start (one reading a report
 # file starts near 50k), so past this cap fresh is cheaper on every turn. The
