@@ -16,4 +16,4 @@ right.
 **What to do:** before suggesting a different function, plot the fit
 over the data and check the fitted parameters against first-principles
 expectations. Here that comparison makes the too-small amplitude readily
-apparent, and the fix is a better starting regime, not a new model.
+apparent, and the problem is a bad starting regime, not a wrong model.
