@@ -184,6 +184,20 @@ resid = windowed_residual(trace)
 resid = windowed_residual(trace)
 ```
 
+A comment saying code was rewritten because a dependency feature is
+deprecated documents the past, and the issue cannot resurface:
+
+```python
+# Flag
+# Rewritten without @torch.jit.script, which is deprecated
+def step(x):
+    return x * 2
+
+# Prefer: no comment
+def step(x):
+    return x * 2
+```
+
 The previous conclusion belongs in the session chat, the commit message,
 and the PR description -- all addressed to someone who was there. A
 "Retraction" section in a report, or a retraction slide in a deck, is
