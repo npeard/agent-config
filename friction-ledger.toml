@@ -1693,7 +1693,7 @@ class = "pixi-managed-latex-toolchain-quirks"
 source = "observed"
 date = "2026-10-23"
 cause = "agent-config-gap"
-outcome = "tier-0"
+outcome = "tier-3"
 note = """
 Standing up LaTeX repos with no system TeX Live. Three are on GitHub
 (the paper, the thesis, the CV); the paper and the thesis share one
@@ -1723,9 +1723,11 @@ macro tree" -- true of texlive-core, but tectonic was never weighed, and it
 builds the CV. That is a decision gone wrong, not a quirk that fails loudly at
 the command, so the old "loud, one repo" reasons for tier 0 no longer hold.
 
-What would carry it is a small skill, triggered by setting up or changing a
-LaTeX build: the engine choice with this evidence, plus the quirks above as
-a reference. Tier 3 needs the user's approval and then brainstorming +
-writing-skills, so this stays tier 0 until the user decides. The Snakemake
-half of the same setup got its own entry (tier 2).
+Tier 3, approved by the user: skills/latex-toolchain, triggered by setting
+up, migrating or debugging a LaTeX build. It leads with the engine decision
+and a one-line `pixi exec` test against tectonic's bundle (verified on 0.17.0,
+including the error a too-new package gives), keeps the quirks above to a
+table, and points at the paper's and thesis's commits rather than copying
+their config. The Snakemake half of the same setup got its own entry
+(tier 2), so the skill only points at preflight for it.
 """
