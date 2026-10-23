@@ -440,6 +440,64 @@ class TestHookInstalled:
         assert statuses(report, "pre-commit hook installed") == [FAIL]
 
 
+class TestSnakemakeScheduler:
+    """Two hand-built repos (a paper and a thesis) died with "Bad CPU type" on
+    an Apple Silicon Mac without Rosetta after new-report had already been
+    fixed, because the fix lived only in the scaffold."""
+
+    GREEDY = "scheduler: greedy\n"
+
+    def check(self, root: Path) -> preflight.Report:
+        report = preflight.Report()
+        preflight.check_snakemake_scheduler(report, root)
+        return report
+
+    def test_repo_without_a_snakefile_gets_no_row(self, git_repo: Path):
+        assert statuses(self.check(git_repo), "snakemake scheduler") == []
+
+    def test_snakefile_without_a_profile_warns(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("rule all:\n    input: []\n")
+        report = self.check(git_repo)
+        assert statuses(report, "snakemake scheduler") == [WARN]
+        assert "Snakefile" in details(report, "snakemake scheduler")
+
+    def test_greedy_profile_beside_the_snakefile_passes(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text(self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
+
+    def test_commented_out_scheduler_still_warns(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text("# " + self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [WARN]
+
+    def test_root_profile_covers_the_standard_workflow_layout(self, git_repo: Path):
+        # Snakemake's documented layout, run from the root: the profile is
+        # found under the working directory, not beside workflow/Snakefile.
+        (git_repo / "workflow").mkdir()
+        (git_repo / "workflow/Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text(self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
+
+    def test_each_nested_report_needs_its_own_profile(self, git_repo: Path):
+        # new-report's layout: one Snakefile per report directory, with the
+        # profile beside it, which is where Snakemake looks when run there.
+        for name in ("fixed", "unfixed"):
+            (git_repo / "reports" / name).mkdir(parents=True)
+            (git_repo / "reports" / name / "Snakefile").write_text("")
+        profile = git_repo / "reports/fixed/profiles/default"
+        profile.mkdir(parents=True)
+        (profile / "config.yaml").write_text(self.GREEDY)
+        report = self.check(git_repo)
+        assert statuses(report, "snakemake scheduler") == [WARN]
+        detail = details(report, "snakemake scheduler")
+        assert "reports/unfixed/Snakefile" in detail
+        assert "reports/fixed/Snakefile" not in detail
+
+
 class TestCodexHooks:
     def stub_registrar(
         self, monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str

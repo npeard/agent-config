@@ -1667,47 +1667,65 @@ both pointing at the checker; AGENTS.md is unchanged.
 class = "snakemake-ilp-cbc-x86-only-on-apple-silicon"
 source = "observed"
 date = "2026-10-23"
-cause = "agent-config-gap"
+cause = "asset-not-adopted"
 outcome = "tier-2"
 note = """
-On an Apple Silicon Mac without Rosetta, every Snakemake build in the LaTeX
-paper repo died with "OSError: Bad CPU type": the default ILP scheduler runs
-pulp 3.3.2's bundled CBC, shipped x86_64-only on macOS, and Snakemake's
-greedy fallback catches PulpSolverError but not OSError. Reproduced in a
-scratch workflow: 9.15 fails once two jobs are ready, 9.27 even on a linear
-two-job chain. Not a LaTeX lesson -- it hits any Snakemake DAG, including
-every report new-report scaffolds and the nine Typst report builds in a
-sibling research-code repo.
-agent-config's own end-to-end test passed only because its lock pins 9.15 and
-the scaffold's DAG never has two jobs ready at once.
+On an Apple Silicon Mac without Rosetta, every Snakemake build dies with
+"OSError: Bad CPU type": the default ILP scheduler runs pulp 3.3.2's bundled
+CBC, shipped x86_64-only on macOS, and Snakemake's greedy fallback catches
+PulpSolverError but not OSError. Reproduced in a scratch workflow: 9.15 fails
+once two jobs are ready, 9.27 even on a linear two-job chain. Not a LaTeX
+lesson -- it hits any Snakemake DAG.
 
-Tier 2: new-report writes profiles/default/config.yaml (scheduler: greedy),
-which Snakemake loads beside the Snakefile unasked, and a test with two ready
-jobs went red then green on that machine. Existing reports are not migrated:
-the scaffold writes only new ones, so they need the same three lines by hand.
+The first fix was new-report writing profiles/default/config.yaml
+(scheduler: greedy), tested with two ready jobs. It reaches only new
+reports, and the same day two hand-built repos hit it anyway: the LaTeX
+paper and then the thesis, each fixed by copying the paper's three-line
+profile. So the tested fix existed and was not adopted, which a scaffold
+cannot repair. preflight now warns on every Snakefile with no greedy
+profile beside it (check_snakemake_scheduler); run against the sibling
+research-code repo it names all nine of its report Snakefiles. Delete the
+check when pulp ships an arm64 CBC or Snakemake catches the OSError.
 """
 
 [[decision]]
 class = "pixi-managed-latex-toolchain-quirks"
 source = "observed"
 date = "2026-10-23"
-cause = "missing-tooling"
+cause = "agent-config-gap"
 outcome = "tier-0"
 note = """
-Standing up the LaTeX paper repo with no system TeX Live: tectonic's TeX Live
-2022 bundle predates quantikz2 (vendored); conda-forge's latexindent is named
-latexindent.pl, unsatisfiable on win-64, and needs the env's perl; graphviz
-needs `dot -c` because pixi skips post-link scripts; LaTeX Workshop's
-%WORKSPACE_FOLDER% picks the first folder of a multi-root window; latexindent
-with no project config reindents a whole document. Each was fixed in that
-project, with the reason beside the line it explains (pyproject, settings.json,
-README), which is where principle 3 puts a tool quirk.
+Standing up LaTeX repos with no system TeX Live. Three are on GitHub
+(the paper, the thesis, the CV); the paper and the thesis share one
+template, so they hit the same lessons. Each is commented beside the line
+it explains in each repo, which is where principle 3 puts a tool quirk:
 
-No skill: it is the only LaTeX project on the machine (the others hold Typst
-or test fixtures), so "any LaTeX project" rests on one case; the lessons are
-one-time setup that a session meets once per repo, version-bound (bundle
-date, conda-forge packaging) so they go stale, and loud -- each fails at the
-command with an error naming the cause, unlike the silent traps the typst
-skill exists for. Reopen if a second LaTeX repo is stood up and re-learns any
-of them.
+- tectonic is the only pixi-managed engine: conda-forge texlive-core
+  (20260301) ships 46 engine binaries and zero .cls or .sty files. Its TeX
+  Live 2022 bundle built all three: revtex, suthesis + beamer under
+  pdflatex-era source, and the XeLaTeX CV (moderncv, fontspec,
+  unicode-math, system fonts). The paper vendors quantikz2, which postdates
+  the bundle.
+- latexmk-smart and .latexmkrc give way to a `tex-preview` pixi task that
+  LaTeX Workshop calls; pixi runs it from the repo root, so \\graphicspath
+  resolves.
+- conda-forge names the binary latexindent.pl; it needs perl-yaml-tiny and
+  perl-file-homedir, cannot resolve on win-64, and works only under
+  `pixi run`, because called directly its shebang finds macOS
+  /usr/bin/perl. Without a project config it reindents whole files with
+  tabs (347 of slides.tex's 463 lines).
+- graphviz needs `dot -c`, because pixi skips post-link scripts.
+
+The template repos re-learned none of this, because the thesis was set up
+from the paper's commit. The silent failure was elsewhere. The CV's pixi.toml
+keeps system TeX on the grounds that "no conda-forge package ships a usable
+macro tree" -- true of texlive-core, but tectonic was never weighed, and it
+builds the CV. That is a decision gone wrong, not a quirk that fails loudly at
+the command, so the old "loud, one repo" reasons for tier 0 no longer hold.
+
+What would carry it is a small skill, triggered by setting up or changing a
+LaTeX build: the engine choice with this evidence, plus the quirks above as
+a reference. Tier 3 needs the user's approval and then brainstorming +
+writing-skills, so this stays tier 0 until the user decides. The Snakemake
+half of the same setup got its own entry (tier 2).
 """
