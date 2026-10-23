@@ -141,6 +141,10 @@ and pricing remain separate and unchanged.
   (which the compiler already teaches) from silent ones (which need a
   rule), and states what to verify in the render rather than the exit
   code. Claims are marked verified-on-0.15.1 or reported.
+- `skills/latex-toolchain/` -- setting up a LaTeX build: try tectonic
+  before concluding a system TeX Live is needed (a CV repo kept one on a
+  premise true only of texlive-core), and the pixi, LaTeX Workshop and
+  latexindent quirks a fresh setup would otherwise re-learn.
 - `skills/scientific-writing/` -- the craft skill section drafters and
   reviewers load for a paper, talk or thesis: a claim ledger before
   prose, one medium per piece of evidence, and changing a figure that

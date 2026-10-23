@@ -436,6 +436,49 @@ def check_precommit_installed(report: Report, root: Path) -> None:
         report.add(FAIL, "pre-commit hook installed", "run: pre-commit install")
 
 
+# Snakemake's default ILP scheduler shells out to pulp's bundled CBC, which
+# pulp ships x86_64-only on macOS; Snakemake's greedy fallback catches
+# PulpSolverError but not the OSError ("Bad CPU type") an Apple Silicon Mac
+# without Rosetta raises, so every build dies. new-report writes the fix into
+# new reports, but two hand-built repos still hit it, so check every Snakefile.
+# Delete this when pulp ships an arm64 CBC or Snakemake catches the OSError.
+GREEDY = re.compile(r"^scheduler:\s*['\"]?greedy['\"]?\s*(#.*)?$", re.MULTILINE)
+
+
+def check_snakemake_scheduler(report: Report, root: Path) -> None:
+    listed = git(
+        "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"
+    )
+    snakefiles = [
+        f
+        for f in (listed or "").splitlines()
+        if Path(f).name in ("Snakefile", "snakefile")
+    ]
+    if not snakefiles:
+        return
+    # Snakemake loads profiles/default/ from the directory it is run from or
+    # from beside the Snakefile, so accept either, taking the root as the
+    # usual working directory (workflow/Snakefile keeps its profile there).
+    unfixed = [
+        f
+        for f in snakefiles
+        if not any(
+            GREEDY.search(cfg.read_text(encoding="utf-8", errors="replace"))
+            for base in {root, (root / f).parent}
+            for cfg in base.glob("profiles/default/*.yaml")
+        )
+    ]
+    if unfixed:
+        report.add(
+            WARN,
+            "snakemake scheduler",
+            f"ILP default fails on Apple Silicon without Rosetta: {', '.join(unfixed)}",
+            ["fix: `scheduler: greedy` in profiles/default/config.yaml beside each"],
+        )
+    else:
+        report.add(OK, "snakemake scheduler", "greedy")
+
+
 def configured_revs(config: Path) -> list[tuple[str, str]]:
     """Pair each configured repo URL with its pinned rev.
 
@@ -938,6 +981,36 @@ def check_skills(
     )
 
 
+REQUIRED_PLUGINS = ("superpowers@claude-plugins-official",)
+
+
+def check_plugins(report: Report, root: Path, home: Path) -> None:
+    """Report required Claude Code plugins this machine lacks.
+
+    AGENTS.md names superpowers skills at every workflow step, and only
+    `/plugin install` can add them -- the installer cannot -- so a fresh
+    machine runs every session without them while every other check is
+    green. Silent in projects with no installer.
+    """
+    if not (root / "install.py").is_file():
+        return
+    registry = home / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        installed = json.loads(registry.read_text(encoding="utf-8"))["plugins"]
+    except (OSError, ValueError, KeyError, TypeError):
+        installed = {}
+    missing = [name for name in REQUIRED_PLUGINS if name not in installed]
+    if not missing:
+        report.add(OK, "Claude plugins", ", ".join(REQUIRED_PLUGINS))
+        return
+    report.add(
+        WARN,
+        "Claude plugins",
+        "missing; in Claude Code run "
+        + "; ".join(f"/plugin install {name}" for name in missing),
+    )
+
+
 def check_repo_link(report: Report, root: Path, home: Path) -> None:
     """Report whether the stable repo locator names this checkout.
 
@@ -1035,6 +1108,7 @@ def main(argv: list[str] | None = None) -> int:
     check_upstream(report)
     check_clean_tree(report)
     check_precommit_installed(report, root)
+    check_snakemake_scheduler(report, root)
     if args.check_updates:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
@@ -1051,6 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             check_skills(report, root, installed, label=label)
     check_repo_link(report, root, Path.home())
+    check_plugins(report, root, Path.home())
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)

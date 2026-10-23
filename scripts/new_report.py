@@ -2,10 +2,10 @@
 
     new-report REPORT_DIR --shared SHARED_DIR --title TITLE
 
-Writes REPORT_DIR (Snakefile, report.typ, refs.bib, one example figure script
-and its sample data), which must be new or empty. Writes SHARED_DIR's
-report.smk and theme.typ only where absent: they are the author's from then
-on, so a second report reuses them untouched. Appends the report's build
+Writes REPORT_DIR (Snakefile, its workflow profile, report.typ, refs.bib, one
+example figure script and its sample data), which must be new or empty. Writes
+SHARED_DIR's report.smk and theme.typ only where absent: they are the author's
+from then on, so a second report reuses them untouched. Appends the report's build
 output and references/ to the repo's .gitignore, and prints -- does not
 write -- the pixi wiring, since editing a manifest means guessing its layout.
 
@@ -125,6 +125,15 @@ rule example:
     shell:
         "python figures/plot_example.py --data-dir data --output {output}"
 """)
+
+# Snakemake loads profiles/default/ beside the Snakefile without being asked.
+PROFILE = """\
+# The default ILP scheduler runs pulp's bundled CBC binary, which pulp ships
+# x86_64-only on macOS, so on Apple Silicon without Rosetta the build dies with
+# "Bad CPU type" as soon as two jobs are ready. A figure DAG gains nothing
+# from ILP scheduling.
+scheduler: greedy
+"""
 
 REPORT_TYP = Template("""\
 // $title
@@ -325,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             figures=relative(report / "build/figures", shared),
         ),
     )
+    write(report / "profiles/default/config.yaml", PROFILE)
     write(report / "refs.bib", REFS_BIB)
     write(report / "figures/plot_example.py", PLOT_EXAMPLE)
     write_sample_data(report / "data/example.npz")

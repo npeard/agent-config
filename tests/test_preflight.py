@@ -440,6 +440,64 @@ class TestHookInstalled:
         assert statuses(report, "pre-commit hook installed") == [FAIL]
 
 
+class TestSnakemakeScheduler:
+    """Two hand-built repos (a paper and a thesis) died with "Bad CPU type" on
+    an Apple Silicon Mac without Rosetta after new-report had already been
+    fixed, because the fix lived only in the scaffold."""
+
+    GREEDY = "scheduler: greedy\n"
+
+    def check(self, root: Path) -> preflight.Report:
+        report = preflight.Report()
+        preflight.check_snakemake_scheduler(report, root)
+        return report
+
+    def test_repo_without_a_snakefile_gets_no_row(self, git_repo: Path):
+        assert statuses(self.check(git_repo), "snakemake scheduler") == []
+
+    def test_snakefile_without_a_profile_warns(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("rule all:\n    input: []\n")
+        report = self.check(git_repo)
+        assert statuses(report, "snakemake scheduler") == [WARN]
+        assert "Snakefile" in details(report, "snakemake scheduler")
+
+    def test_greedy_profile_beside_the_snakefile_passes(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text(self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
+
+    def test_commented_out_scheduler_still_warns(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text("# " + self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [WARN]
+
+    def test_root_profile_covers_the_standard_workflow_layout(self, git_repo: Path):
+        # Snakemake's documented layout, run from the root: the profile is
+        # found under the working directory, not beside workflow/Snakefile.
+        (git_repo / "workflow").mkdir()
+        (git_repo / "workflow/Snakefile").write_text("")
+        (git_repo / "profiles/default").mkdir(parents=True)
+        (git_repo / "profiles/default/config.yaml").write_text(self.GREEDY)
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
+
+    def test_each_nested_report_needs_its_own_profile(self, git_repo: Path):
+        # new-report's layout: one Snakefile per report directory, with the
+        # profile beside it, which is where Snakemake looks when run there.
+        for name in ("fixed", "unfixed"):
+            (git_repo / "reports" / name).mkdir(parents=True)
+            (git_repo / "reports" / name / "Snakefile").write_text("")
+        profile = git_repo / "reports/fixed/profiles/default"
+        profile.mkdir(parents=True)
+        (profile / "config.yaml").write_text(self.GREEDY)
+        report = self.check(git_repo)
+        assert statuses(report, "snakemake scheduler") == [WARN]
+        detail = details(report, "snakemake scheduler")
+        assert "reports/unfixed/Snakefile" in detail
+        assert "reports/fixed/Snakefile" not in detail
+
+
 class TestCodexHooks:
     def stub_registrar(
         self, monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str
@@ -976,6 +1034,49 @@ def write_expected_adapters(root: Path, home: Path) -> None:
     ):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(expected, encoding="utf-8")
+
+
+class TestPlugins:
+    """The workflow names superpowers skills at every step, but the
+    installer cannot install a plugin, so nothing else notices it missing."""
+
+    def _write_registry(self, home: Path, names: list[str]) -> None:
+        registry = home / ".claude" / "plugins" / "installed_plugins.json"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            json.dumps({"version": 2, "plugins": {n: [{}] for n in names}}),
+            encoding="utf-8",
+        )
+
+    def test_an_installed_superpowers_is_ok(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        self._write_registry(home, ["superpowers@claude-plugins-official"])
+        report = preflight.Report()
+        preflight.check_plugins(report, root, home)
+        assert statuses(report, "Claude plugins") == [OK]
+
+    def test_a_missing_superpowers_warns_with_the_install_command(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        self._write_registry(home, ["code-review@claude-plugins-official"])
+        report = preflight.Report()
+        preflight.check_plugins(report, root, home)
+        assert statuses(report, "Claude plugins") == [WARN]
+        assert "/plugin install superpowers@claude-plugins-official" in details(
+            report, "Claude plugins"
+        )
+
+    def test_no_registry_at_all_warns(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        report = preflight.Report()
+        preflight.check_plugins(report, root, tmp_path / "home")
+        assert statuses(report, "Claude plugins") == [WARN]
+
+    def test_silent_outside_the_installer_repo(self, tmp_path: Path):
+        report = preflight.Report()
+        preflight.check_plugins(report, tmp_path, tmp_path / "home")
+        assert statuses(report, "Claude plugins") == []
 
 
 class TestInstructionAdapters:

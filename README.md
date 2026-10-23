@@ -98,7 +98,21 @@ agent-config\install.ps1
 ```
 
 To update, `git pull` and run the installer again. `pixi run preflight`
-reports anything the installer left stale.
+reports anything the installer left stale, including a missing
+superpowers plugin, which the installer cannot add itself.
+
+On a new machine, also:
+
+- **Run `pre-commit install` in every clone**, this one included
+  (`pixi run -e dev pre-commit install`). Git hooks are not cloned, so
+  the gates stay off until you do; preflight reports a clone that lacks
+  them.
+- **On macOS, put `code` on PATH** with VS Code's "Shell Command:
+  Install 'code' command in PATH". The extension check finds the CLI
+  inside the app bundle without it, but your shell does not.
+- **Codex hooks need trusting once in Codex's `/hooks`.** Preflight
+  cannot see that trust, so it keeps warning until Codex is installed
+  and you have done it.
 
 ### What the installer changes
 

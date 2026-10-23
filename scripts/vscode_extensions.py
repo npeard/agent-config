@@ -39,6 +39,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 # The CLI, like preflight, can wait on git; the SessionStart hook passes less.
 CLI_GIT_SECONDS = 20.0
+# macOS VS Code puts `code` on PATH only once "Shell Command: Install 'code'
+# command in PATH" has been run, so a fresh install is otherwise invisible.
+MACOS_BUNDLED_CODE = Path(
+    "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+)
 
 
 # Bootstrap, as in dep_updates: by path, and via load_sibling so the copy
@@ -208,8 +213,8 @@ def check(
 ) -> ExtReport:
     result = run(["code", "--list-extensions"])
     if result is None:
-        # No `code` on PATH means no VS Code on this machine -- not an
-        # error, and there is nothing left to check.
+        # No `code` CLI means no VS Code on this machine -- not an error,
+        # and there is nothing left to check.
         return ExtReport(
             applicable=False,
             missing=[],
@@ -276,7 +281,7 @@ def problem_count(report: ExtReport) -> int:
 
 def render(report: ExtReport) -> tuple[str, list[str]]:
     if not report.applicable:
-        return "VS Code extensions: not applicable (code not on PATH)", []
+        return "VS Code extensions: not applicable (no code CLI found)", []
 
     lines: list[str] = []
     for ext in report.missing:
@@ -299,7 +304,7 @@ def render(report: ExtReport) -> tuple[str, list[str]]:
 
 
 def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
-    """Run `code` for real, or None when it is not on PATH.
+    """Run `code` for real, or None when it cannot be found.
 
     Resolved with shutil.which first rather than handed to subprocess.run
     as a bare name: VS Code installs `code` on Windows as `code.cmd`, and
@@ -307,11 +312,19 @@ def _run_code(argv: list[str]) -> subprocess.CompletedProcess | None:
     so the bare name raises FileNotFoundError there even though `code` is
     genuinely on PATH and a shell invocation of it works.
 
-    A missing `code` means this machine has no VS Code -- the whole check
+    Off PATH, `code` is looked for in the macOS app bundle before giving
+    up. A missing `code` means this machine has no VS Code -- the whole check
     is skipped, silently, for exactly that reason -- so the failure this
     catches is reported through the return value, not an exception.
     """
     exe = shutil.which(argv[0])
+    if (
+        exe is None
+        and argv[0] == "code"
+        and sys.platform == "darwin"
+        and MACOS_BUNDLED_CODE.is_file()
+    ):
+        exe = str(MACOS_BUNDLED_CODE)
     if exe is None:
         return None
     try:
