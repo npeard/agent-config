@@ -978,6 +978,49 @@ def write_expected_adapters(root: Path, home: Path) -> None:
         dest.write_text(expected, encoding="utf-8")
 
 
+class TestPlugins:
+    """The workflow names superpowers skills at every step, but the
+    installer cannot install a plugin, so nothing else notices it missing."""
+
+    def _write_registry(self, home: Path, names: list[str]) -> None:
+        registry = home / ".claude" / "plugins" / "installed_plugins.json"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            json.dumps({"version": 2, "plugins": {n: [{}] for n in names}}),
+            encoding="utf-8",
+        )
+
+    def test_an_installed_superpowers_is_ok(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        self._write_registry(home, ["superpowers@claude-plugins-official"])
+        report = preflight.Report()
+        preflight.check_plugins(report, root, home)
+        assert statuses(report, "Claude plugins") == [OK]
+
+    def test_a_missing_superpowers_warns_with_the_install_command(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        home = tmp_path / "home"
+        self._write_registry(home, ["code-review@claude-plugins-official"])
+        report = preflight.Report()
+        preflight.check_plugins(report, root, home)
+        assert statuses(report, "Claude plugins") == [WARN]
+        assert "/plugin install superpowers@claude-plugins-official" in details(
+            report, "Claude plugins"
+        )
+
+    def test_no_registry_at_all_warns(self, tmp_path: Path):
+        root = make_installable_project(tmp_path)
+        report = preflight.Report()
+        preflight.check_plugins(report, root, tmp_path / "home")
+        assert statuses(report, "Claude plugins") == [WARN]
+
+    def test_silent_outside_the_installer_repo(self, tmp_path: Path):
+        report = preflight.Report()
+        preflight.check_plugins(report, tmp_path, tmp_path / "home")
+        assert statuses(report, "Claude plugins") == []
+
+
 class TestInstructionAdapters:
     def test_current_instruction_adapters_are_ok(self, tmp_path: Path):
         root = make_installable_project(tmp_path)

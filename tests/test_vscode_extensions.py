@@ -568,6 +568,19 @@ class TestRunCode:
         assert result is not None
         assert "fake.extension.one" in result.stdout
 
+    def test_falls_back_to_the_macos_app_bundle(self, tmp_path, monkeypatch):
+        """VS Code on macOS puts `code` on PATH only after its "Install
+        'code' command in PATH" step, so an absent PATH entry must not read
+        as an absent VS Code."""
+        monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+        monkeypatch.setattr(vscode_extensions.sys, "platform", "darwin")
+        monkeypatch.setattr(
+            vscode_extensions, "MACOS_BUNDLED_CODE", self._make_fake_code(tmp_path)
+        )
+        result = vscode_extensions._run_code(["code", "--list-extensions"])
+        assert result is not None
+        assert "fake.extension.one" in result.stdout
+
     def test_none_when_not_on_path(self, monkeypatch, tmp_path):
         monkeypatch.setenv("PATH", str(tmp_path))
         assert vscode_extensions._run_code(["definitely-not-a-real-command"]) is None

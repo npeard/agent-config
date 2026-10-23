@@ -938,6 +938,36 @@ def check_skills(
     )
 
 
+REQUIRED_PLUGINS = ("superpowers@claude-plugins-official",)
+
+
+def check_plugins(report: Report, root: Path, home: Path) -> None:
+    """Report required Claude Code plugins this machine lacks.
+
+    AGENTS.md names superpowers skills at every workflow step, and only
+    `/plugin install` can add them -- the installer cannot -- so a fresh
+    machine runs every session without them while every other check is
+    green. Silent in projects with no installer.
+    """
+    if not (root / "install.py").is_file():
+        return
+    registry = home / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        installed = json.loads(registry.read_text(encoding="utf-8"))["plugins"]
+    except (OSError, ValueError, KeyError, TypeError):
+        installed = {}
+    missing = [name for name in REQUIRED_PLUGINS if name not in installed]
+    if not missing:
+        report.add(OK, "Claude plugins", ", ".join(REQUIRED_PLUGINS))
+        return
+    report.add(
+        WARN,
+        "Claude plugins",
+        "missing; in Claude Code run "
+        + "; ".join(f"/plugin install {name}" for name in missing),
+    )
+
+
 def check_repo_link(report: Report, root: Path, home: Path) -> None:
     """Report whether the stable repo locator names this checkout.
 
@@ -1051,6 +1081,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             check_skills(report, root, installed, label=label)
     check_repo_link(report, root, Path.home())
+    check_plugins(report, root, Path.home())
     if not args.no_friction:
         check_friction(report, root)
     check_audit_owed(report, root)
