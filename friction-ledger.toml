@@ -1662,3 +1662,52 @@ commit time with the pre-commit entry in the script's docstring. The rule
 itself is one bullet in scientific-writing and a red-flags row in typst,
 both pointing at the checker; AGENTS.md is unchanged.
 """
+
+[[decision]]
+class = "snakemake-ilp-cbc-x86-only-on-apple-silicon"
+source = "observed"
+date = "2026-10-23"
+cause = "agent-config-gap"
+outcome = "tier-2"
+note = """
+On an Apple Silicon Mac without Rosetta, every Snakemake build in the LaTeX
+paper repo died with "OSError: Bad CPU type": the default ILP scheduler runs
+pulp 3.3.2's bundled CBC, shipped x86_64-only on macOS, and Snakemake's
+greedy fallback catches PulpSolverError but not OSError. Reproduced in a
+scratch workflow: 9.15 fails once two jobs are ready, 9.27 even on a linear
+two-job chain. Not a LaTeX lesson -- it hits any Snakemake DAG, including
+every report new-report scaffolds and the nine Typst report builds in a
+sibling research-code repo.
+agent-config's own end-to-end test passed only because its lock pins 9.15 and
+the scaffold's DAG never has two jobs ready at once.
+
+Tier 2: new-report writes profiles/default/config.yaml (scheduler: greedy),
+which Snakemake loads beside the Snakefile unasked, and a test with two ready
+jobs went red then green on that machine. Existing reports are not migrated:
+the scaffold writes only new ones, so they need the same three lines by hand.
+"""
+
+[[decision]]
+class = "pixi-managed-latex-toolchain-quirks"
+source = "observed"
+date = "2026-10-23"
+cause = "missing-tooling"
+outcome = "tier-0"
+note = """
+Standing up the LaTeX paper repo with no system TeX Live: tectonic's TeX Live
+2022 bundle predates quantikz2 (vendored); conda-forge's latexindent is named
+latexindent.pl, unsatisfiable on win-64, and needs the env's perl; graphviz
+needs `dot -c` because pixi skips post-link scripts; LaTeX Workshop's
+%WORKSPACE_FOLDER% picks the first folder of a multi-root window; latexindent
+with no project config reindents a whole document. Each was fixed in that
+project, with the reason beside the line it explains (pyproject, settings.json,
+README), which is where principle 3 puts a tool quirk.
+
+No skill: it is the only LaTeX project on the machine (the others hold Typst
+or test fixtures), so "any LaTeX project" rests on one case; the lessons are
+one-time setup that a session meets once per repo, version-bound (bundle
+date, conda-forge packaging) so they go stale, and loud -- each fails at the
+command with an error naming the cause, unlike the silent traps the typst
+skill exists for. Reopen if a second LaTeX repo is stood up and re-learns any
+of them.
+"""

@@ -28,6 +28,7 @@ def test_scaffold_writes_expected_tree(repo):
     assert scaffold(repo, "reports/demo") == 0
     assert {
         "reports/demo/Snakefile",
+        "reports/demo/profiles/default/config.yaml",
         "reports/demo/report.typ",
         "reports/demo/refs.bib",
         "reports/demo/figures/plot_example.py",
@@ -92,6 +93,30 @@ def test_scaffold_builds(repo, build_tools):
     assert result.returncode == 0, result.stderr
     assert (report / "build/figures/example.pdf").stat().st_size > 0
     assert (report / "build/report.pdf").stat().st_size > 0
+
+
+def test_two_ready_jobs_build_without_the_ilp_solver(repo, build_tools):
+    """Snakemake's default ILP scheduler runs pulp's bundled CBC whenever two
+    jobs are ready at once (from 9.27, even one), and pulp ships that binary
+    x86_64-only on macOS: Apple Silicon without Rosetta dies with an OSError
+    that Snakemake's greedy fallback does not catch. Discriminating only on
+    such a machine; elsewhere CBC runs and this passes either way.
+    """
+    scaffold(repo, "reports/demo")
+    report = repo / "reports/demo"
+    with (report / "Snakefile").open("a", encoding="utf-8") as snakefile:
+        snakefile.write(
+            '\n\nrule extra:\n    output:\n        "build/extra.txt",\n'
+            '    run:\n        Path(output[0]).write_text("")\n'
+        )
+    result = subprocess.run(
+        ["snakemake", "--cores", "2", "build/figures/example.pdf", "build/extra.txt"],
+        cwd=report,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_plotting_cli_requires_every_flag():
