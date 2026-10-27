@@ -1731,3 +1731,31 @@ table, and points at the paper's and thesis's commits rather than copying
 their config. The Snakemake half of the same setup got its own entry
 (tier 2), so the skill only points at preflight for it.
 """
+
+[[decision]]
+class = "detached-job-handback-not-resumed"
+source = "observed"
+date = "2026-10-27"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+A subagent regenerating an npz followed compute-job-safety's "Long jobs"
+protocol: it launched the job detached and handed back "waiting on <PID>,
+done when the log ends with 'wrote ...'". The orchestrator, me, never armed
+the wait the protocol assigns it (run_in_background or Monitor on that
+condition). The harness's "may resume on its own" note was read as a
+promise. The job finished, nothing resumed, and the user noticed the idle
+session. I then overcorrected the other way. The next brief told a subagent
+to wait on its own job, which contradicts the same section. poll-guard
+denied its sleep loop, and it waited with `caffeinate -w` instead. That is a
+single blocking call, not the per-wake-up cost poll-guard exists to stop, so
+the hook worked as designed and needs no widening.
+
+Both slips break a rule that is already written down; neither is a gap in
+it. There is no cheap mechanical check: it would have to read the
+hand-back's "done when" clause and see that no wait was armed. That is a
+judgement about the orchestrator's next turn, which no hook observes. It is
+one incident. Tier 0, and the doubling rule cannot reopen it, because an
+observed entry carries no count; a mined class of idle hand-backs would
+start its own entry.
+"""
