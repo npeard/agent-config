@@ -1759,3 +1759,80 @@ one incident. Tier 0, and the doubling rule cannot reopen it, because an
 observed entry carries no count; a mined class of idle hand-backs would
 start its own entry.
 """
+
+[[decision]]
+class = "write-before-read"
+date = "2026-10-28"
+cause = "harness-constraint"
+outcome = "tier-0"
+count_at_decision = 10
+note = """
+Reopened at 10 (decided at 4). The 2026-10-28 instance is not the formatter
+trigger recorded earlier: the file (doqs TASKS.md) had been read with
+Bash sed/grep, which the harness does not count as a Read, and the first Edit
+was refused. One round trip (Read the span, then Edit) each time; the refusal
+names the fix at the moment it applies. Cause 5, not cause 3: no documented
+rule was broken, the Edit tool's precondition is the harness's own. No
+artifact would remove the round trip without removing the guarantee.
+"""
+
+[[decision]]
+class = "xdist-blas-oversubscription"
+source = "observed"
+date = "2026-10-28"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+pytest -n auto (12 workers) with each worker's default BLAS/torch pool drove
+load to ~136 on 12 cores; four doqs research test files ran 48 min without
+finishing, and the stall was first misread as slow tests. With
+OMP/MKL/OPENBLAS/VECLIB_MAXIMUM_THREADS=1 and -n 8 the same files took 28 s.
+compute-job-safety already states the rule (count processes x threads, set
+thread counts explicitly); it was not applied because a test run was not
+treated as a parallel compute job. The durable fix is project-level, not
+agent-config: doqs TASKS.md now carries "Cap BLAS/torch threads in the pixi
+test tasks", which makes it mechanical where the suite is defined. If this
+recurs in a second project, consider shipping the caps in agent-config's
+preflight or a shared pytest conftest snippet (tier 2).
+"""
+
+[[decision]]
+class = "reduction-rule-decided-after-implementation"
+source = "observed"
+date = "2026-10-28"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+The paper's single reduction method went raw lasso -> constrained lasso ->
+ladder-selected penalty -> exact-path lowest-tail rule, and the workbench path
+route went lasso dwells -> NNLS -> per-mode NNLS, each change after a full
+implement/regenerate/review cycle. Each turn was a decision the spec never
+made: the spec adopted the raw lasso from an S-and-support probe, without
+probing the property that mattered (error on the target's defining bonds),
+and fixed a penalty-selection rule whose well-posedness (support size is not
+monotone in the penalty) nobody checked. A five-line probe of bond errors and
+of support vs penalty at the brainstorming stage would have surfaced both.
+workflow-orchestration step 1 already asks to hunt for gaps preemptively, so
+this is a spec-stage discipline miss, not a missing asset. Watch: if a second
+branch shows a method adopted on a proxy metric then reversed on the real one,
+consider a brainstorming checklist item "probe the deliverable's own metric
+before fixing the method" in workflow-orchestration (tier 3 edit).
+"""
+
+[[decision]]
+class = "review-ceremony-not-scaled-to-deliverable-priority"
+source = "observed"
+date = "2026-10-28"
+cause = "agent-config-gap"
+outcome = "tier-0"
+note = """
+Per-phase reviews and fix rounds were applied uniformly to every deliverable,
+including two research reports the author ranked low priority; the author
+stopped the work ("far too much effort churning on review for the reports")
+and later deleted both reports. workflow-orchestration scales ceremony by task
+class (spike/bounded/architectural) but not by deliverable priority within an
+architectural task. One incident, so below the bar for an artifact; recorded
+so a recurrence can be counted. Candidate fix if it recurs: at the spec gate,
+ask the author to rank deliverables and apply per-phase review only to the
+high-priority ones (tier 3 edit to workflow-orchestration, gated).
+"""
