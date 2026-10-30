@@ -1836,3 +1836,78 @@ so a recurrence can be counted. Candidate fix if it recurs: at the spec gate,
 ask the author to rank deliverables and apply per-phase review only to the
 high-priority ones (tier 3 edit to workflow-orchestration, gated).
 """
+
+[[decision]]
+class = "diff-scoped-skill-run-from-wrong-checkout"
+source = "observed"
+date = "2026-10-29"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+The orchestrator worked in a sibling worktree (doqs-collocation-paper) while
+the session cwd stayed in the main checkout. Invoking `code-review` with no
+target reviewed the cwd's diff -- the main checkout, which at that moment held
+a different branch -- and was stopped within a minute; `simplify` was then run
+through a subagent with the worktree diff named explicitly. The skills behave
+as documented (they review the cwd's diff unless given a target), and the miss
+cost one aborted review, so no artifact. If it recurs, the cheapest fix is the
+orchestrator entering the worktree (EnterWorktree) at step 3 rather than a
+new rule.
+"""
+
+[[decision]]
+class = "xdist-blas-oversubscription"
+source = "observed"
+date = "2026-10-29"
+cause = "rule-not-enforced"
+outcome = "tier-2"
+note = """
+Recurred the next day in the same project (doqs): a 4-section research run
+at -n auto sat at 94% for 3.4 h, load ~148, and was again first reported as
+a hang. The 2026-10-28 decision had queued the project-level fix in doqs
+TASKS.md, where it stayed undone, so the rule stayed a request. Diagnosis
+this time: conftest.py already capped torch per worker; numpy's and scipy's
+OpenBLAS pools (12 threads each) were not, and *_NUM_THREADS cannot reach
+pools loaded before pytest_configure. Fix made mechanical in doqs
+(e69cea2f): threadpoolctl caps every loaded BLAS pool per xdist worker, for
+any pytest -n invocation; tests/common/test_worker_threads.py fails without
+it and passes with it. Same suites: 2 min 14 s at load ~8, no env caps. Still
+one project, so agent-config ships nothing; if a second project hits it, the
+conftest snippet is the tier-2 candidate.
+"""
+
+[[decision]]
+class = "interpretation-relayed-before-review"
+source = "observed"
+date = "2026-10-29"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+Three times on the collocation branch the orchestrator passed a subagent's
+interpretive claim to the user as a finding and then corrected it after a
+fresh review: "left-endpoint residual blocks the path to GRAPE's answer"
+(the floor-on-GRAPE check inverted it), "the residual falls as 1/N^2", and
+"the fourier16 L-BFGS run had fully stalled" (one seed of three). Each was
+caught within the session by the review step the workflow already mandates,
+and each correction replaced the claim as AGENTS.md requires. auto-research
+already demands evidence before explanation; the gap is applying it to
+relayed reports, which no hook can check. Accept; recount if a
+user-visible wrong claim survives review.
+"""
+
+[[decision]]
+class = "subagent-cannot-wait-on-long-suite"
+source = "observed"
+date = "2026-10-29"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+poll-guard blocks sleep-polling in subagents, so implementers that launched
+the ~10 min research suite detached handed back "WAITING, not committed"
+(one left an uncommitted fix that a later agent had to finish). Resolved
+in-session by briefing implementers to run only the test files they touch
+and having the orchestrator run the full section; workflow-orchestration's
+brief already says to run the narrowest target. The block is the intended
+guarantee; once the slow tests were marked slow the section took ~1 min and
+the problem disappeared.
+"""
