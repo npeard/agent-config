@@ -31,14 +31,16 @@ evidence to a figure never cuts the claim it supports.
 
 A summary, ranking or comparison is a claim: own row, own evidence.
 
-**Frame before evidence.** A section's first row is its framing: the
-question it answers and why the reader needs the answer, before any
-equation, figure or number. The first section opens from a case the
-reader already knows. Equations follow `math`'s "Introducing an
-equation".
+**One answer per question.** The ledger opens with the questions the
+work set out to answer, from the brief or spec, each with one answer.
+Every other row supports an answer or is method. The introduction states
+every answer, and each answer has a figure whose caption lead states it.
 
-**Key results.** Mark the document's one to three key results. Each
-needs a figure whose caption's lead sentence states it (section 6).
+**Frame before evidence.** A section opens with its question and why the
+reader needs the answer, and a results section then gives its answer,
+all before any equation, figure or number. The first section opens from
+a case the reader knows. Equations follow `math`'s "Introducing an
+equation".
 
 ## 2. Evidence routing
 
