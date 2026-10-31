@@ -185,7 +185,8 @@ Per section:
   only the rendered text and figures, says what each section established
   and which sentences it would skip.
 - **Figures-alone test**, per whole draft: a reader given only the
-  figures and captions recovers every answer (`figures-alone.md`).
+  figures and captions recovers every answer and is convinced by its
+  figure (`figures-alone.md`).
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
 
