@@ -2104,3 +2104,27 @@ bound derivations as results. Under the new text three builders each
 returned the same four answers as the hand-stratified ledger, with
 derivations unscored and 9 to 13 evidence rows.
 """
+
+[[decision]]
+class = "figures-alone-bar-gated-on-evidence-coverage"
+source = "observed"
+date = "2026-10-31"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+Under the stratified protocol the smi report passed all four answers in
+figures-alone runs 2 and 3 but failed the 80% evidence-row bar (77%, 71%).
+Writers chasing that bar lengthened carrying captions to 6-12 sentences
+against scientific-writing's 3-sentence budget, and reader recall of fine
+numbers varied by several points between runs on near-identical figures.
+The PI ruled that the bar is the top-level answers only, with coverage
+advisory, and forbade gaming it with long captions. The fix edits the
+existing reference file: pass rests on the answers, which the reader must
+state and judge convinced by germane, conclusive evidence, naming anything
+beside the point or surplus; coverage is reported, never gating, and the
+evidence tier diagnoses a failed answer; padding captions or annotations
+for coverage is prohibited by name. The ledger's stratification is
+unchanged. Given run 3's score, three of three orchestrators under the old
+text added annotations (one also caption sentences) to lift coverage past
+80%; five of five under the new text made no coverage edits.
+"""
