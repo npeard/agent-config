@@ -32,6 +32,14 @@ When the evidence points at a code defect, switch to that skill.
    points to, then measure against the current approach whether it is
    actually better -- and if not, why. Repeat from step 1.
 
+**Better means outside the replicate spread.** A gap counts only when it
+is wider than the spread between seeds of the same configuration. With
+one seed per arm, a gap inside a spread taken from another configuration
+ranks nothing; say "at the edge of the seed range" and name the run that
+would settle it. **A mechanism is a hypothesis until a run varied it.**
+"Phase drift masks the gain" needs a run without drift; until one
+exists, the write-up calls it one untested reading (example 2).
+
 Do not get creative in devising new approaches or explanations until
 steps 1 and 2 are done.
 
@@ -52,3 +60,4 @@ approach as baseline.
 | "The data seem to show X changing"       | Measure X before building a model around it.                                         |
 | "A more flexible model fits better"      | A time-varying envelope would have absorbed the too-small amplitude, not exposed it. |
 | "The new approach looks better"          | Better than the current one, by which number? And if not, why not?                   |
+| "TCAN beats the TCN" (one seed each)     | Not outside a spread measured at another budget. More seeds, or no ranking.          |

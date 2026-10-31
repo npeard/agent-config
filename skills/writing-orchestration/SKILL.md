@@ -127,7 +127,8 @@ reason to differ leads the text (examples.md case 1).
 After any revision, in every class, reread your own diff for five
 things:
 
-1. every symbol is defined before its first use;
+1. every symbol is defined, and anchored in prose, before its first use
+   (`math`, "Introducing an equation");
 2. no equation or result was dropped without a stated decision;
 3. no edit weakened the argument (revert any that did);
 4. every reference still lands on text that says what it is cited for;
@@ -146,7 +147,8 @@ reference or a number appearing nowhere in the data passes every
 mechanical check, reaches a reader, and costs credibility rather than a
 build. Never invent a number, citation, reference, or attribution. When
 a sentence needs a fact you do not have, ask for it or write the weaker
-sentence you can support.
+sentence you can support. A ranking or a mechanism is a claim too; it
+must meet `auto-research`'s bar for "better" and for a mechanism.
 
 **Notation consistency.** One symbol per quantity across the whole
 document, matching the project's notation file where it has one. This
@@ -158,7 +160,9 @@ whole-document pass sees it.
 documentation, the reader step 1 named. Judge the section against it.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
-including inspecting the rendered figures.
+including inspecting the rendered figures. The orchestrator dispatches
+its figures-alone test (`scientific-writing/figures-alone.md`) once per
+whole draft, before `humanizer`.
 
 ## Red flags
 

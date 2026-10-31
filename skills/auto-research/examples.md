@@ -17,3 +17,19 @@ right.
 over the data and check the fitted parameters against first-principles
 expectations. Here that comparison makes the too-small amplitude readily
 apparent, and the problem is a bad starting regime, not a wrong model.
+
+### 2. Over-reads in a synthetic research report
+
+**What happened:** SMI project, from the fix lists of four independent
+review rounds of an agent-written report. Each round caught the same two
+shapes. Rankings: "What is resolved is that TCAN beats the TCN" rested
+on one seed per cell and a 9% seed range measured at another budget, and
+two roughly 10% leads were both called gains. Mechanisms: "Phase drift
+masks most of the gain" was untested, since no subset ran with drift
+removed; an offline model's failure was diagnosed with no run testing
+the diagnosis.
+
+**What to do:** compare each gap with the seed spread of its own
+configuration, and call a gap inside it "at the edge of the seed range".
+Write an untested cause as "one untested reading" and name the run that
+would test it.
