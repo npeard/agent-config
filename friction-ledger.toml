@@ -1911,3 +1911,34 @@ brief already says to run the narrowest target. The block is the intended
 guarantee; once the slow tests were marked slow the section took ~1 min and
 the problem disappeared.
 """
+
+[[decision]]
+class = "fix-round-adds-protocol-machinery"
+source = "observed"
+date = "2026-10-30"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+bispectral-phases research note: a review asked for a pinning window and
+falsifiable metrics, and the orchestrator's fix brief passed "choose h(L)
+inside the window, score H4 inside it" through verbatim, so the fix agent
+built a selection rule and scoring protocol that the next re-review found
+defective (H4 refuted by construction). workflow-orchestration's "findings
+massed in the last fix mean it added a subsystem" caught it in one round;
+the second round deleted the machinery. The lesson is in filtering findings
+through receiving-code-review before briefing, which already exists.
+"""
+
+[[decision]]
+class = "pytest-timing-retries-macos"
+source = "observed"
+date = "2026-10-30"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+Timing doqs tests by hand cost two retries: `timeout` is absent on macOS,
+and `pixi run python -m pytest` ran in the default env, which has no
+pytest. doqs CLAUDE.md already routes tests through `pixi run test` /
+`test-research` (dev env); bypassing it to add --durations was the error.
+One incident; accept.
+"""
