@@ -35,6 +35,42 @@ numerically" or "agrees to better than 1e-13" is a check that happened
 once and is now unrepeatable. Each such sentence names a check someone
 already wrote and threw away. Commit it as a test.
 
+## Introducing an equation
+
+A reader has to know what an equation is for before it can read the
+equation. In a review, a PI called out a report that opened with
+`y_k(t) = a_k(t)[1 + V_k(t) F(theta_k(t))] - 1 + n_k(t)`: until the
+where-list ended, it gave no sign that this was interferometry, that
+every channel is its own interferometer, or that `d` moves in time.
+Introduce each display in four parts, in this order:
+
+1. **The question.** One or two sentences on what the section needs this
+   quantity for, in the reader's words, placed before any symbol
+   (`scientific-writing` section 1 owns this framing row).
+2. **The familiar case.** If the equation generalizes something the
+   reader knows, write that first and say what the general form adds: "A
+   Michelson channel reads `cos(4 pi d(t)/lambda + phi)`. Optical
+   feedback replaces the cosine with a fringe F that leans, and each
+   wavelength is its own channel." Then give the display.
+3. **The anchor.** Before the display, one sentence holds both the
+   symbol and its name, and says what it buys here. Flag: "how precisely
+   a sample fixes d is set by its Fisher information," then the display
+   of `J_k(theta)`. Prefer: "The Fisher information J_k of channel k
+   bounds how precisely one sample fixes d. We need it because it shows
+   which phases leave a channel blind." Defining a symbol in a
+   where-list does not anchor it.
+4. **The arguments.** A symbol that varies carries its argument at least
+   once, as `d(t)` rather than `d`.
+
+**Display a new relation; keep inline math for symbols, short
+definitions and values.** The reviewer's example was
+`$macron(J) = sum_k E[V_k^2] Phi(C, alpha) (4 pi \/ (lambda_k sigma))^2$`,
+placed inline mid-paragraph after the display that used it. It is a
+result, so it gets its own numbered line. Inline math is fine for
+`sigma`, for `C = 0.2`, or for `(0.635/0.515)^2 = 1.52`. The
+`prose-feedback` hook lists inline relations long enough to need a
+display. The same list is in `prose-metrics` output.
+
 ## Derive once, then refer
 
 Two legitimate structures. Pick one per result and hold it:
@@ -106,11 +142,14 @@ most of the value at a small fraction of the cost.
 
 ## Red flags
 
-| Thought                                                   | Reality                                                              |
-| --------------------------------------------------------- | -------------------------------------------------------------------- |
-| "This is a standard result"                               | Then cite where. Uncited "standard" is an assumption.                |
-| "I'll parse the LaTeX into SymPy"                         | Not on a macro-dense source. Transcribe by hand.                     |
-| "The paper says it was checked numerically"               | Then the check exists and is uncommitted. Commit it.                 |
-| "I'll re-derive it here so the section stands alone"      | Look for it first. Two rigor levels of one derivation is the defect. |
-| "The scaling is obvious from the exponent"                | SymPy confirms the exponent, not that the neglected terms are small. |
-| "I don't quite see why this step follows, but it's right" | That is an exposed gap. Label it.                                    |
+| Thought                                                      | Reality                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| "This is a standard result"                                  | Then cite where. Uncited "standard" is an assumption.                          |
+| "I'll parse the LaTeX into SymPy"                            | Not on a macro-dense source. Transcribe by hand.                               |
+| "The paper says it was checked numerically"                  | Then the check exists and is uncommitted. Commit it.                           |
+| "I'll re-derive it here so the section stands alone"         | Look for it first. Two rigor levels of one derivation is the defect.           |
+| "The scaling is obvious from the exponent"                   | SymPy confirms the exponent, not that the neglected terms are small.           |
+| "I don't quite see why this step follows, but it's right"    | That is an exposed gap. Label it.                                              |
+| "The where-list defines every symbol"                        | That defines them without anchoring them. Say what each one is for.            |
+| "This excerpt already reads as setup" (opens on an equation) | Setup comes before the equation. Put the question and the familiar case first. |
+| "It fits in the sentence"                                    | If it is a new relation, put it on its own line.                               |
