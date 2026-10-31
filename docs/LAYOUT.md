@@ -402,6 +402,10 @@ and pricing remain separate and unchanged.
   has the cost, the cap and the silent cases).
 - `hooks/poll-guard.py` -- denies a subagent's sleep-polling Bash or
   PowerShell call (the docstring has the measured case and the rules).
+- `hooks/compute-guard.py` -- denies uncapped `pytest -n` (with the
+  capped command to re-issue), asks before a benchmark on a loaded
+  machine, and notes a test run over 120 s (the docstring has the
+  measured case).
 - `hooks/notify.py` -- plays a sound and posts a desktop banner when the
   turn genuinely comes back to you: the work finished (`Stop`), a tool
   wants permission (`Notification`), or Claude is asking a question

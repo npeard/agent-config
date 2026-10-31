@@ -1,4 +1,4 @@
-"""What several hooks share: say-once markers, a shell tokenizer and splitter, deny.
+"""What several hooks share: say-once markers, a shell tokenizer and splitter, deny/ask.
 
 Not a hook: it carries no `# claude-hook:` marker, so the registrars skip it.
 The hooks `import hook_lib` plainly: both registrars run a hook as
@@ -131,16 +131,26 @@ def claim_for(name: str, session, agent, scope: str) -> bool:
     return claim(name, f"{session}\0{agent or ''}\0{scope}")
 
 
-def deny(reason: str) -> None:
-    """Print the PreToolUse output that refuses the tool call with `reason`."""
+def permission(decision: str, reason: str) -> None:
+    """Print the PreToolUse output that answers the tool call with `decision`."""
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
+                    "permissionDecision": decision,
                     "permissionDecisionReason": reason,
                 }
             }
         )
     )
+
+
+def deny(reason: str) -> None:
+    """Refuse the tool call with `reason`."""
+    permission("deny", reason)
+
+
+def ask(reason: str) -> None:
+    """Hand the tool call to the user, showing `reason`."""
+    permission("ask", reason)

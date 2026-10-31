@@ -620,3 +620,21 @@ caller passed on its own command line. It launches JupyterLab through an argv
 list with no shell, from this interpreter, and registers nothing: the
 `claude mcp add` line is printed for the caller to run.
 """
+
+[[decision]]
+asset = "hooks/compute-guard.py"
+principle = 5
+date = "2026-10-30"
+cause = "working-as-designed"
+outcome = "tier-0"
+asset_sha = "31d462deb02b7c772a385073a9a688783ca08b50f3337b25beb4d08727542104"
+note = """
+The only text read from outside the command is `ps` output, whose process
+command lines are written by whoever started each process, and the benchmark
+ask puts the top five in its reason. That reason is shown to the user in a
+permission prompt, never to a model alone, and nothing acts on it. Each line
+is cut to 110 characters, which limits but does not remove injected prose;
+the exposure is a user reading a misleading process name, accepted because
+the user is the decision-maker and the lines are the evidence they asked for.
+The deny reason echoes the command the agent itself issued.
+"""
