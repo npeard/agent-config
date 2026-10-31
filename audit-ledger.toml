@@ -627,7 +627,7 @@ principle = 5
 date = "2026-10-30"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "31d462deb02b7c772a385073a9a688783ca08b50f3337b25beb4d08727542104"
+asset_sha = "0996ac1270af66b08f62190bbfe8cd11f96a85ee12cb97e3f450fd9a4e2bd491"
 note = """
 The only text read from outside the command is `ps` output, whose process
 command lines are written by whoever started each process, and the benchmark
