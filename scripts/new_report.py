@@ -26,6 +26,8 @@ import zipfile
 from pathlib import Path
 from string import Template
 
+import preflight
+
 # Typst's own fonts only: report-check fails on any warning, and Typst warns
 # for every font family the building machine lacks.
 THEME_TYP = """\
@@ -334,7 +336,8 @@ def main(argv: list[str] | None = None) -> int:
             figures=relative(report / "build/figures", shared),
         ),
     )
-    write(report / "profiles/default/config.yaml", PROFILE)
+    if preflight.greedy_shared_profile(repo) is None:
+        write(report / "profiles/default/config.yaml", PROFILE)
     write(report / "refs.bib", REFS_BIB)
     write(report / "figures/plot_example.py", PLOT_EXAMPLE)
     write_sample_data(report / "data/example.npz")

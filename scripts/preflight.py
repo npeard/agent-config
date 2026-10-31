@@ -445,6 +445,50 @@ def check_precommit_installed(report: Report, root: Path) -> None:
 GREEDY = re.compile(r"^scheduler:\s*['\"]?greedy['\"]?\s*(#.*)?$", re.MULTILINE)
 
 
+def shared_snakemake_profile(root: Path) -> Path | None:
+    """The profile directory a pixi manifest sets in SNAKEMAKE_PROFILE, if any.
+
+    One activation-env profile covers every Snakefile the project builds
+    through pixi, so a repo with several reports need not copy
+    profiles/default/ beside each.
+    """
+    import tomllib
+
+    for name, table in (("pixi.toml", ()), ("pyproject.toml", ("tool", "pixi"))):
+        try:
+            data = tomllib.loads((root / name).read_text(encoding="utf-8"))
+        except (tomllib.TOMLDecodeError, OSError):
+            continue
+        for key in table:
+            data = data.get(key, {})
+        # The activation table may sit at the top, under a feature, or under
+        # a target, so search every nesting level. Either level may be a
+        # non-table in a malformed manifest.
+        stack = [data]
+        while stack:
+            node = stack.pop()
+            activation = node.get("activation")
+            env = activation.get("env") if isinstance(activation, dict) else None
+            value = env.get("SNAKEMAKE_PROFILE") if isinstance(env, dict) else None
+            if isinstance(value, str):
+                for prefix in ("$PIXI_PROJECT_ROOT/", "${PIXI_PROJECT_ROOT}/"):
+                    value = value.removeprefix(prefix)
+                return root / value
+            stack += [v for v in node.values() if isinstance(v, dict)]
+    return None
+
+
+def greedy_shared_profile(root: Path) -> Path | None:
+    """The shared profile, only if it exists and selects the greedy scheduler."""
+    shared = shared_snakemake_profile(root)
+    if shared is not None and any(
+        GREEDY.search(cfg.read_text(encoding="utf-8", errors="replace"))
+        for cfg in shared.glob("*.yaml")
+    ):
+        return shared
+    return None
+
+
 def check_snakemake_scheduler(report: Report, root: Path) -> None:
     listed = git(
         "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"
@@ -459,6 +503,10 @@ def check_snakemake_scheduler(report: Report, root: Path) -> None:
     # Snakemake loads profiles/default/ from the directory it is run from or
     # from beside the Snakefile, so accept either, taking the root as the
     # usual working directory (workflow/Snakefile keeps its profile there).
+    shared = greedy_shared_profile(root)
+    if shared is not None:
+        report.add(OK, "snakemake scheduler", f"greedy, shared profile {shared}")
+        return
     unfixed = [
         f
         for f in snakefiles
@@ -473,7 +521,10 @@ def check_snakemake_scheduler(report: Report, root: Path) -> None:
             WARN,
             "snakemake scheduler",
             f"ILP default fails on Apple Silicon without Rosetta: {', '.join(unfixed)}",
-            ["fix: `scheduler: greedy` in profiles/default/config.yaml beside each"],
+            [
+                "fix: `scheduler: greedy` in profiles/default/config.yaml beside each",
+                "or: one greedy profile named by SNAKEMAKE_PROFILE in pixi's activation env",
+            ],
         )
     else:
         report.add(OK, "snakemake scheduler", "greedy")
