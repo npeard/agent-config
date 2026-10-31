@@ -630,11 +630,15 @@ outcome = "tier-0"
 asset_sha = "0996ac1270af66b08f62190bbfe8cd11f96a85ee12cb97e3f450fd9a4e2bd491"
 note = """
 The only text read from outside the command is `ps` output, whose process
-command lines are written by whoever started each process, and the benchmark
-ask puts the top five in its reason. That reason is shown to the user in a
-permission prompt, never to a model alone, and nothing acts on it. Each line
-is cut to 110 characters, which limits but does not remove injected prose;
-the exposure is a user reading a misleading process name, accepted because
-the user is the decision-maker and the lines are the evidence they asked for.
+command lines are written by whoever started each process; the busy-machine
+report puts the top five in its reason, each cut to 110 characters. In the
+main session that reason is an `ask` shown to the user, who is the
+decision-maker and asked for the evidence. In a subagent it is a deny read by
+the model, so another process's command line reaches a model as text. The
+exposure is accepted because those processes run on the user's own machine
+(the same trust domain as the session), the 110-character cut leaves no room
+for a sustained instruction, and the deny's own instruction -- stop and
+report the busy machine to the orchestrator -- leaves nothing to act on but
+the report.
 The deny reason echoes the command the agent itself issued.
 """
