@@ -8,7 +8,9 @@ Reports paragraph and sentence budgets, caption lengths, numeric literals
 shared between captions and body text, words and sentences per section, the
 distribution of words per sentence (median, 90th percentile, share over
 ``LONG_SENTENCE_WORDS``), the chained-clause rate, and the five longest
-sentences with their source line numbers. It is a report, not a gate: the
+sentences with their source line numbers, and inline relations long enough
+to want a display. ``--captions`` prints only the captions, for the
+figures-alone test. It is a report, not a gate: the
 exit code is 0 whenever the file parses.
 
 Deliberately crude, so the numbers are reproducible rather than correct:
@@ -33,6 +35,11 @@ Deliberately crude, so the numbers are reproducible rather than correct:
   sentence onward, for its first few words. A sentence whose opening is split
   by a comment, or rewritten by dropped math, falls back to the previous
   sentence's line.
+- An inline relation is inline math holding ``=``, ``<``, ``>``, a LaTeX
+  relation command, or Typst ``approx``/``prop``/``tilde`` (not an accent);
+  it is long at ``INLINE_RELATION_IDENTIFIERS`` letter runs, counting a
+  Typst ``#call(...)`` or string as one. ``sin`` and ``pi`` count, LaTeX
+  layout commands such as ``\\frac`` do not.
 - Numeric literals inside \\ref, \\label, \\cite or \\eqref arguments (and
   Typst ``@label`` references) are ignored, as are bare single digits 0-9:
   those are too common to signal that a caption repeats the body.
@@ -54,6 +61,12 @@ PARAGRAPH_BUDGET_WORDS = 120
 SENTENCE_BUDGET = 5
 LONG_SENTENCE_WORDS = 30
 LONGEST_SHOWN = 5
+# An inline relation with this many identifiers is a result, not a value or a
+# short definition, and wants a display. Set against a report a PI reviewed:
+# both inline expressions he asked to display hold 7 and 14, while the
+# definitions and values he accepted inline (`alpha = 3`, `v = dot(d)`,
+# `x = (d, v, dot(v))`) hold at most 5.
+INLINE_RELATION_IDENTIFIERS = 6
 
 LATEX, TYPST, MARKDOWN = ".tex", ".typ", ".md"
 
@@ -68,6 +81,32 @@ TYPST_REFS = re.compile(r"@[\w:.-]+")
 # A semicolon, a lowercase word then a colon, or a dash used as punctuation.
 CHAINED = re.compile(r";|(?<!\w)[a-z]\w*:\s|---|\u2014|\s--\s")
 INLINE_MATH = re.compile(r"\$[^$]*\$|\\\(.*?\\\)")
+# Typst math is inline only when no whitespace follows the opening `$`; LaTeX
+# inline math is `$...$` (not `$$`) or `\(...\)`.
+TYPST_INLINE = re.compile(r"\$(?=\S)([^$]*)\$")
+LATEX_INLINE = re.compile(r"(?<![$\\])\$(?!\$)([^$]+)\$|\\\((.*?)\\\)")
+# `tilde` and `\tilde` are relations only when not an accent on an argument.
+RELATION = re.compile(
+    r"=|<|>|\\(?:leq?|geq?|approx|sim|propto|neq|equiv)\b"
+    r"|\b(?:approx|prop|tilde)\b(?!\()"
+)
+IDENTIFIER = re.compile(r"\\?[A-Za-z]+")
+TYPST_CODE = re.compile(r'#[\w.]+(?:\([^)]*\))?|"[^"]*"')
+# Layout commands, not symbols the reader has to hold in mind.
+LATEX_LAYOUT = {
+    "frac",
+    "left",
+    "right",
+    "mathrm",
+    "mathbf",
+    "mathcal",
+    "text",
+    "operatorname",
+    "quad",
+    "qquad",
+    "big",
+    "Big",
+}
 LATEX_COMMAND = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?")
 LATEX_ENV_MARKER = re.compile(r"\\(?:begin|end)\{[^}]*\}")
 LATEX_LINE_BREAK = re.compile(r"\\\\(?:\[[^\]]*\])?")
@@ -106,7 +145,10 @@ LATEX_DROPPED = re.compile(
     + r"|(?<!\\)\\\[.*?\\\]|\$\$.*?\$\$)(?:[ \t]*$\n?)?",
     re.DOTALL | re.MULTILINE,
 )
-TYPST_DISPLAY_MATH = re.compile(r"^[ \t]*\$[^$]*\$[ \t]*$\n?", re.DOTALL | re.MULTILINE)
+# A display equation may carry its `<label>` on the closing line.
+TYPST_DISPLAY_MATH = re.compile(
+    r"^[ \t]*\$[^$]*\$[ \t]*(?:<[\w:.-]+>[ \t]*)?$\n?", re.DOTALL | re.MULTILINE
+)
 MD_FENCE = re.compile(r"^(```|~~~).*?^\1[ \t]*$\n?", re.DOTALL | re.MULTILINE)
 LATEX_ENV = re.compile(latex_envs(LATEX_FLOATS), re.DOTALL)
 TYPST_LABEL = re.compile(r"^[ \t]*<[\w:.-]+>")
@@ -284,6 +326,41 @@ def prose_blocks(body: str, kind: str) -> tuple[list[str], list[tuple[int, str]]
     return titles, blocks
 
 
+def long_inline_math(
+    paragraphs: list[tuple[int, str, int]], text: str, kind: str
+) -> list[dict[str, Any]]:
+    """Inline relations with at least INLINE_RELATION_IDENTIFIERS identifiers."""
+    pattern = {TYPST: TYPST_INLINE, LATEX: LATEX_INLINE}.get(kind, LATEX_INLINE)
+    found = []
+    cursor = 0
+    for _, paragraph, _ in paragraphs:
+        for m in pattern.finditer(paragraph):
+            span = next(g for g in m.groups() if g is not None)
+            if not RELATION.search(span):
+                continue
+            # A Typst `#val("key")` or a string is one value, not identifiers.
+            symbols = TYPST_CODE.sub(" v ", span)
+            names = [
+                n
+                for n in IDENTIFIER.findall(symbols)
+                if n.lstrip("\\") not in LATEX_LAYOUT
+            ]
+            if len(names) < INLINE_RELATION_IDENTIFIERS:
+                continue
+            # Whitespace-tolerant, since a span may wrap across source lines.
+            where = re.compile(r"\s+".join(map(re.escape, m.group(0).split())))
+            if hit := where.search(text, cursor):
+                cursor = hit.start()
+            found.append(
+                {
+                    "line": text.count("\n", 0, cursor) + 1,
+                    "identifiers": len(names),
+                    "text": " ".join(span.split()),
+                }
+            )
+    return found
+
+
 def is_chained(sentence: str) -> bool:
     return CHAINED.search(INLINE_MATH.sub(" ", without_refs(sentence))) is not None
 
@@ -374,6 +451,7 @@ def analyze(text: str, kind: str) -> dict[str, Any]:
             {"label_or_index": label, "words": words(c, kind)} for label, c in captions
         ],
         "shared_numerics": sorted(caption_numbers & body_numbers),
+        "long_inline_math": long_inline_math(paragraphs, text, kind),
         "sections": [
             {"title": t, "words": n, "sentences": k}
             for i, (t, n, k) in enumerate(
@@ -414,6 +492,11 @@ def format_report(data: dict[str, Any]) -> str:
         *(f"  {c['label_or_index']}: {c['words']} words" for c in data["captions"]),
         "shared caption/body numerics: "
         + (", ".join(data["shared_numerics"]) or "none"),
+        "long inline relations (display them):",
+        *(
+            f"  line {x['line']}, {x['identifiers']} identifiers: {x['text'][:60]}"
+            for x in data["long_inline_math"]
+        ),
         "sections:",
         *(
             f"  {x['title'] or '(untitled)'}: {x['words']} words, "
@@ -428,16 +511,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("path", help=".tex, .typ or .md file")
     parser.add_argument("--json", action="store_true", help="emit one JSON object")
+    parser.add_argument(
+        "--captions",
+        action="store_true",
+        help="print only the captions, in order, as the figures-alone test's input",
+    )
     args = parser.parse_args(argv)
     path = Path(args.path)
     if path.suffix not in HEADINGS:
         print(f"{path}: unsupported suffix (want .tex, .typ or .md)", file=sys.stderr)
         return 2
     try:
-        data = analyze(path.read_text(encoding="utf-8"), path.suffix)
+        text = path.read_text(encoding="utf-8")
+        data = analyze(text, path.suffix)
     except (OSError, UnicodeDecodeError) as exc:
         print(f"{path}: cannot parse ({exc})", file=sys.stderr)
         return 1
+    if args.captions:
+        for label, caption in captions_of(body_of(text, path.suffix), path.suffix):
+            print(f"[{label}] {' '.join(caption.split())}\n")
+        return 0
     print(json.dumps(data, indent=2) if args.json else format_report(data))
     return 0
 

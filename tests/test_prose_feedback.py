@@ -610,3 +610,21 @@ def test_report_reintroduced_after_a_silent_fix_is_not_a_repeat(tmp_path: Path):
     assert run(agent_write(path, "a1"), tmp_path) == ""
     path.write_text(BACKWARD)
     assert run(agent_write(path, "a1"), tmp_path) != ""
+
+
+def test_long_inline_relation_is_reported(tmp_path: Path):
+    # The PI's example: a closed-form result written inline in a paragraph.
+    path = project(
+        tmp_path,
+        "= Bounds\nSo $J = sum_k E[V_k^2] Phi(C, alpha) sigma$ exactly.\n",
+        "p.typ",
+    )
+    parsed, context = feedback(run(write(path), tmp_path))
+    assert "decision" not in parsed
+    assert "own display" in context
+    assert 'line 2: "J = sum_k' in context
+
+
+def test_short_inline_values_stay_silent(tmp_path: Path):
+    path = project(tmp_path, "= Bounds\nAt $alpha = 3$ it holds.\n", "p.typ")
+    assert run(write(path), tmp_path) == ""

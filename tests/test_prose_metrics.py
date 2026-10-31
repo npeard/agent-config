@@ -341,3 +341,52 @@ def test_unlocated_sentence_keeps_the_previous_line_and_cursor():
     assert locate("First sentence is here.") == 1
     assert locate("Bogus opening never in source.") == 1
     assert locate("Second one later.") == 2
+
+
+def test_labelled_typst_display_math_is_not_prose(tmp_path, capsys):
+    body = "Intro text here.\n$\n  x = y + z\n$ <eq-a>\nwhere it ends.\n"
+    data = report(write(tmp_path, "a.typ", body), capsys)
+    assert data["paragraphs"]["max_words"] == 6
+
+
+LONG_RELATION = "J = sum_k E[V_k^2] Phi(C, alpha) sigma"
+
+
+@pytest.mark.parametrize(
+    ("name", "body", "flagged"),
+    [
+        # The PI's example: a closed-form result written inline.
+        ("a.typ", f"So ${LONG_RELATION}$ exactly.\n", True),
+        ("a.tex", f"So ${LONG_RELATION}$ exactly.\n", True),
+        ("a.tex", f"So \\({LONG_RELATION}\\) exactly.\n", True),
+        # Typst `$ ... $` with spaces is display math, not inline.
+        ("a.typ", f"So $ {LONG_RELATION} $ exactly.\n", False),
+        # Values and short definitions stay inline.
+        ("a.typ", "At $alpha = 3$ and $x = (d, v, dot(v))$ it holds.\n", False),
+        ("a.typ", "Gain is $(0.635 \\/ 0.515)^2 = 1.52$ here.\n", False),
+        # No relation: a long product is a symbol, not a result.
+        ("a.typ", "The term $E[V_k^2] Phi(C, alpha) sigma lambda$ appears.\n", False),
+        # An accent is not a relation; a Typst call is one value.
+        ("a.typ", "So $tilde(x) a b c d e f$ appears.\n", False),
+        ("a.typ", 'So $C <= #val("q3_nrmse_worse_t90")$ here.\n', False),
+        ("a.tex", "So $\\frac{a}{b} \\le c$ here.\n", False),
+    ],
+)
+def test_long_inline_relations(name, body, flagged, tmp_path, capsys):
+    found = report(write(tmp_path, name, body), capsys)["long_inline_math"]
+    assert bool(found) is flagged
+
+
+def test_long_inline_relation_reports_its_wrapped_line(tmp_path, capsys):
+    body = (
+        "Lead.\n\nSince it holds, $J = sum_k E[V_k^2]\nPhi(C, alpha) sigma$ exactly.\n"
+    )
+    (item,) = report(write(tmp_path, "a.typ", body), capsys)["long_inline_math"]
+    assert (item["line"], item["text"]) == (3, LONG_RELATION)
+
+
+def test_captions_flag_prints_captions_only(capsys):
+    assert prose_metrics.main([str(FIXTURES / "sample.typ"), "--captions"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("[1] Gap of 3.5 nm")
+    assert "Second paragraph" not in out

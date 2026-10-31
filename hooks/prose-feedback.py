@@ -19,8 +19,9 @@ reason alone reaches the agent (verified by hand on Claude Code 2.1.296), so
 the same text in additionalContext would arrive twice. Anything else is
 information and goes in additionalContext only.
 
-Silent unless something is wrong: a forward reference, or a sentence over
-the metrics script's long-sentence threshold. A sentence-shape line on every
+Silent unless something is wrong: a forward reference, a sentence over
+the metrics script's long-sentence threshold, or an inline relation long
+enough that the metrics script says it wants a display. A sentence-shape line on every
 edit costs context without changing behaviour: measured over six sessions it
 would be 208 injections (206 of them in subagents), 33.0k tokens, 32% verbatim
 repeats of the one before. A non-blocking report byte-identical to the last one for the same file
@@ -295,8 +296,27 @@ def long_lines(sentences: dict, room: int) -> list[str]:
     return out
 
 
+INLINE_HEADER = (
+    "Inline relations long enough to be results; give each its own display "
+    "line (math skill, 'Introducing an equation'):"
+)
+
+
+def inline_lines(found: list, room: int) -> list[str]:
+    if not found or room < 2:
+        return []
+    out = [INLINE_HEADER]
+    for item in found[: min(MAX_LONGEST, room - 1)]:
+        text = item["text"]
+        if len(text) > EXCERPT_CHARS:
+            text = text[: EXCERPT_CHARS - 3] + "..."
+        # json.dumps: the span is file content, framed as data.
+        out.append(f"  line {item['line']}: {json.dumps(text)}")
+    return out
+
+
 def measure(path: str):
-    """(root, violations, sentences) for one file; any may be empty or None."""
+    """(root, violations, sentences, inline) for one file; any may be empty."""
     with ThreadPoolExecutor(max_workers=2) as pool:
         pending_forward = pool.submit(
             run_json, "check_forward_refs.py", ["--containing", path], (0, 1)
@@ -307,6 +327,7 @@ def measure(path: str):
         str(forward.get("root") or path),
         forward.get("violations") or [],
         (metrics or {}).get("sentences"),
+        (metrics or {}).get("long_inline_math") or [],
     )
 
 
@@ -315,7 +336,7 @@ def file_lines(path, measured, session, share, elsewhere):
     in the file itself. `elsewhere` is empty when another file already listed
     this document's other references.
     """
-    root, violations, sentences = measured
+    root, violations, sentences, inline = measured
     here = [v for v in violations if canonical(v["file"]) == canonical(path)]
     # One line is kept for the metrics.
     lines = violation_lines(HERE_HEADER, here, root, share - 1)
@@ -326,9 +347,10 @@ def file_lines(path, measured, session, share, elsewhere):
         first = baseline(session, path, sentences)
         # `share - 1`: the metrics line takes one of the room long_lines gets.
         over = long_lines(sentences, share - 1 - len(lines))
-        if lines or over:
+        flagged = inline_lines(inline, share - 1 - len(lines) - len(over))
+        if lines or over or flagged:
             lines.append(metrics_line(sentences, first))
-            lines += over
+            lines += over + flagged
     return lines, bool(here)
 
 

@@ -54,8 +54,9 @@ waste the most time and money.
 - **Writing help that checks as well as advises.** Skills cover
   scientific papers, talks and thesis chapters, equations, Typst, and
   removing AI-sounding prose. After each LaTeX or Typst edit a hook
-  reports sentence length and forward references, and another blocks
-  plain-text math such as `3pi/2` in a figure label.
+  reports sentence length, forward references and inline equations long
+  enough to need a display line, and another blocks plain-text math such
+  as `3pi/2` in a figure label.
 - **Know-how for research code.** Stopping and restarting long GPU jobs
   without orphaned processes or overwritten results, keeping a session
   to its share of the machine, and editing notebooks reliably -- the
