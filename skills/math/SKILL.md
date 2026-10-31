@@ -142,14 +142,14 @@ most of the value at a small fraction of the cost.
 
 ## Red flags
 
-| Thought                                                      | Reality                                                                        |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| "This is a standard result"                                  | Then cite where. Uncited "standard" is an assumption.                          |
-| "I'll parse the LaTeX into SymPy"                            | Not on a macro-dense source. Transcribe by hand.                               |
-| "The paper says it was checked numerically"                  | Then the check exists and is uncommitted. Commit it.                           |
-| "I'll re-derive it here so the section stands alone"         | Look for it first. Two rigor levels of one derivation is the defect.           |
-| "The scaling is obvious from the exponent"                   | SymPy confirms the exponent, not that the neglected terms are small.           |
-| "I don't quite see why this step follows, but it's right"    | That is an exposed gap. Label it.                                              |
-| "The where-list defines every symbol"                        | That defines them without anchoring them. Say what each one is for.            |
-| "This excerpt already reads as setup" (opens on an equation) | Setup comes before the equation. Put the question and the familiar case first. |
-| "It fits in the sentence"                                    | If it is a new relation, put it on its own line.                               |
+| Thought                                                                      | Reality                                                                          |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| "This is a standard result"                                                  | Then cite where. Uncited "standard" is an assumption.                            |
+| "I'll parse the LaTeX into SymPy"                                            | Not on a macro-dense source. Transcribe by hand.                                 |
+| "The paper says it was checked numerically"                                  | Then the check exists and is uncommitted. Commit it.                             |
+| "I'll re-derive it here so the section stands alone"                         | Look for it first. Two rigor levels of one derivation is the defect.             |
+| "The scaling is obvious from the exponent"                                   | SymPy confirms the exponent, not that the neglected terms are small.             |
+| "I don't quite see why this step follows, but it's right"                    | That is an exposed gap. Label it.                                                |
+| (Said "its Fisher information", then displayed J_k without saying J_k is it) | That leaves the reader to guess. One sentence names J_k and says what it is for. |
+| "This excerpt already reads as setup" (opens on an equation)                 | Setup comes before the equation. Put the question and the familiar case first.   |
+| (Kept the macron(J) closed form inline, after the display that used it)      | If it is a new relation, put it on its own line.                                 |
