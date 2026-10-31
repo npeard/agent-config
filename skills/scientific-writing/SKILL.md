@@ -182,11 +182,8 @@ Per section:
 - **Fresh expert reader**: a subagent playing the genre's reader, given
   only the rendered text and figures, says what each section established
   and which sentences it would skip.
-- **Figures-alone test**, per whole draft: a fresh cheap subagent sees
-  only the rendered figures and captions. Pass: it states every key
-  result correctly in one or two sentences, and at least 80% of the
-  ledger's result rows. Fix a miss in the figure or caption, not the
-  body. Brief and scoring: `figures-alone.md`.
+- **Figures-alone test**, per whole draft: a reader given only the
+  figures and captions recovers every answer (`figures-alone.md`).
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
 

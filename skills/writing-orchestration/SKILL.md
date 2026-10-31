@@ -161,8 +161,8 @@ documentation, the reader step 1 named. Judge the section against it.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
 including inspecting the rendered figures. The orchestrator dispatches
-its figures-alone test (`scientific-writing/figures-alone.md`) once per
-whole draft, before `humanizer`.
+its figures-alone test (`scientific-writing/figures-alone.md`), ledger
+first, once per whole draft, before `humanizer`.
 
 ## Red flags
 
