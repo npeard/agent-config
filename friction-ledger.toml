@@ -2074,3 +2074,33 @@ the seed spread, untested mechanisms) go to auto-research. Its step 3
 already asked "better by which number" but set no bar against replicate
 spread.
 """
+
+[[decision]]
+class = "claim-ledger-not-stratified-by-question"
+source = "observed"
+date = "2026-10-31"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+The first real run of the figures-alone test (smi report/synthetic.typ at
+06ba81e) could not pass. figures-alone.md said the orchestrator scores
+"against the claim ledger" but not who builds it, from what, or at what
+grain, so a builder told to list "every distinct result" returned 56 flat
+rows for a report that set out to answer fewer than five questions; 19 were
+prose-only, so the 80% bar was out of reach. The PI asked for as many
+results as questions. The fix edits the existing reference file rather than
+adding an asset: the ledger is built by its own subagent, before the
+figures-only read and never from it, from the questions in the brief, spec
+or introduction; one answer per question; support tiered into evidence
+(scored) and derivation or caveat (not scored); method, context and
+pre-registration unscored. scientific-writing section 1 carries the
+writer-facing half: the ledger opens with one answer per question, the
+introduction states them, and a results section gives its answer before
+its evidence. writing-orchestration asks for the questions at step 1.
+Under the old text two fresh builders, given the report's introduction and
+section leads, capped key results at the intro's three and demoted the
+fourth question's answer to an unscored row, and scored the Fisher and
+bound derivations as results. Under the new text three builders each
+returned the same four answers as the hand-stratified ledger, with
+derivations unscored and 9 to 13 evidence rows.
+"""
