@@ -1937,7 +1937,7 @@ cause = "rule-not-enforced"
 outcome = "tier-0"
 note = """
 Timing doqs tests by hand cost two retries: `timeout` is absent on macOS,
-and `pixi run python -m pytest` ran in the default env, which has no
+and running pytest through the default env's python, which has no
 pytest. doqs CLAUDE.md already routes tests through `pixi run test` /
 `test-research` (dev env); bypassing it to add --durations was the error.
 One incident; accept.
