@@ -1942,3 +1942,88 @@ pytest. doqs CLAUDE.md already routes tests through `pixi run test` /
 `test-research` (dev env); bypassing it to add --durations was the error.
 One incident; accept.
 """
+
+[[decision]]
+class = "subagent-notification-pings"
+source = "observed"
+date = "2026-10-30"
+cause = "agent-config-gap"
+outcome = "tier-1"
+note = """
+User notes: chimes heard while the orchestrator was parked on a subagent, and
+a delayed second ping after the first. notify.py announced
+worker_permission_prompt and agent_needs_input and armed a stalled-work
+watchdog. The user wants one ping, orchestrator only: both subagent reasons
+dropped, any payload carrying agent_id is silent, and the watchdog is
+deleted. Accepted trade-off: a subagent blocked on a permission prompt while
+the orchestrator is parked is now silent.
+"""
+
+[[decision]]
+class = "xdist-thread-oversubscription-cross-project"
+source = "observed"
+date = "2026-10-30"
+cause = "rule-not-enforced"
+outcome = "tier-1"
+note = """
+compute-job-safety states processes x threads; doqs fixed it locally
+(conftest threadpoolctl), but transcripts show it recurring in
+bispectral-phases and dispersion-engineering: 271 of 1,222 pytest runs set
+caps, 23 hit the 600 s tool cap, load up to 238 on 12 cores. The
+xdist-blas-oversubscription entry said to share a fix once a second project
+hit it. compute-guard.py now denies a literal `pytest -n` without
+OMP_NUM_THREADS and returns the capped command, and it warns after any test
+run over 120 s. It cannot see `-n` inside a pixi task, which doqs already
+covers itself.
+"""
+
+[[decision]]
+class = "benchmark-without-load-check"
+source = "observed"
+date = "2026-10-30"
+cause = "rule-not-enforced"
+outcome = "tier-1"
+note = """
+68 of 93 long benchmark runs had no uptime/ps in the preceding commands, and
+three doqs handbacks admitted contended timings only after the fact (load
+8.8, 14, 15-90). compute-guard.py asks the user before a benchmark-shaped
+command when the 1-min load exceeds half the cores. The user chose ask over
+block.
+"""
+
+[[decision]]
+class = "worktree-isolation-refusals"
+source = "observed"
+date = "2026-10-30"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+19 refusals in 3 smi sessions on one day, for compound `cd` and heredocs in
+an isolated agent. The harness says why where it refuses, and agents
+recovered. It is one day's cluster, so it gets no artifact.
+"""
+
+[[decision]]
+class = "transcript-and-repeat-read-bloat"
+source = "observed"
+date = "2026-10-30"
+cause = "agent-config-gap"
+outcome = "deferred"
+note = """
+80 Reads over 30k chars, several of them raw ~/.claude/projects/*.jsonl
+transcripts, and 60 (session, file) pairs read 4+ times. A PreToolUse Read
+hook that refuses transcript JSONL and points at friction.py is the
+candidate. It was offered to the user, not built in this pass.
+"""
+
+[[decision]]
+class = "missing-pdf-tools"
+source = "observed"
+date = "2026-10-30"
+cause = "missing-tooling"
+outcome = "deferred"
+note = """
+39 pdftotext/mutool misses and ModuleNotFoundError from bare python3. A
+pinned pixi task (poppler/pymupdf) in agent-config is the candidate. It was
+offered to the user, not built in this pass.
+"""
