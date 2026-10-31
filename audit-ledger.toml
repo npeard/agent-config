@@ -564,17 +564,18 @@ that. A load failure logs to stderr and leaves stdout empty.
 [[decision]]
 asset = "hooks/prose-feedback.py"
 principle = 5
-date = "2026-10-21"
+date = "2026-10-31"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "b4bacd8e9159c431e4e2af0b4aa2aeb5ab0190dec10f6c286029ae758bff6da2"
+asset_sha = "41fdb071aadbc0636ba46696229093caf4a985134279d6f7565737b4f6e16896"
 note = """
 The hook runs check_forward_refs.py and prose_metrics.py as subprocesses, with
 an argument list and no shell, and emits what they report into agent context.
 So text from files this repo did not author reaches the place an instruction
-would be obeyed, through three values: a label name, a sentence excerpt, and a
-file name. Labels and excerpts always go through json.dumps; excerpts are cut
-to 120 characters (EXCERPT_CHARS), at most three are shown, and output is
+would be obeyed, through four values: a label name, a sentence excerpt, an
+inline-math excerpt, and a file name. Labels and both kinds of excerpt always
+go through json.dumps; excerpts are cut to 120 characters (EXCERPT_CHARS), at
+most three of each kind are shown, and output is
 capped at 15 lines. File names print bare only when they are word characters, dots, slashes and hyphens
 and are otherwise json.dumps'd, which matters because a Bash write's names
 come from `git ls-files`. The match runs after separators are made "/", and a

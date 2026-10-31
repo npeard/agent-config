@@ -2027,3 +2027,50 @@ note = """
 pinned pixi task (poppler/pymupdf) in agent-config is the candidate. It was
 offered to the user, not built in this pass.
 """
+
+[[decision]]
+class = "inline-math-carries-a-result"
+source = "observed"
+date = "2026-10-31"
+cause = "agent-config-gap"
+outcome = "tier-1"
+note = """
+A PI's review of an agent-written Typst report (smi, report/synthetic.typ
+at c6abbd2) objected to "far too much in-line math" and asked why a key
+closed form for macron(J) sat inline. No skill said where a relation
+belongs. It is mostly mechanical, so the fix sits at the cheapest tier
+that fires on every edit: prose_metrics.py lists inline relations with 6+
+identifiers, and prose-feedback speaks when there is one. math's
+"Introducing an equation" states the judged half, which is that a new
+relation gets a display, and names the hook.
+"""
+
+[[decision]]
+class = "report-unframed-math-and-figures-that-do-not-carry-results"
+source = "observed"
+date = "2026-10-31"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+The same review named five failures the writing skills did not prevent.
+(1) No figure let a reader state the key results alone. (2) Sections opened
+on a general equation before saying what problem it addressed. (3) Symbols
+were defined in where-lists but never anchored, e.g. J_k never called the
+Fisher information, and d with no (t). (5) Prose narrated the figures.
+(6) Training, validation and test sizes were missing, and so was whether
+data were frozen. Before the edit, two subagents rewriting the PI's quoted
+excerpts under the old scientific-writing and math kept every failure. The
+fix is edits to those skills, not new skills. scientific-writing owns
+framing rows, key results, process before results, and the figures-alone
+test, with its brief in figures-alone.md. math owns how an equation is
+introduced. writing-orchestration's evidence-routing axis dispatches the
+test.
+
+(5) was rule-not-enforced: "the body never narrates a figure" already
+existed. It was a prohibition, though, so it is now a positive recipe: the
+body says why this artifact is the right evidence and how it was made.
+The related over-reads that four review rounds caught (rankings inside
+the seed spread, untested mechanisms) go to auto-research. Its step 3
+already asked "better by which number" but set no bar against replicate
+spread.
+"""
