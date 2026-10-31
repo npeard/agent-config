@@ -482,6 +482,27 @@ class TestSnakemakeScheduler:
         (git_repo / "profiles/default/config.yaml").write_text(self.GREEDY)
         assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
 
+    def test_pixi_shared_profile_covers_every_snakefile(self, git_repo: Path):
+        for name in ("one", "two"):
+            (git_repo / "reports" / name).mkdir(parents=True)
+            (git_repo / "reports" / name / "Snakefile").write_text("")
+        (git_repo / "reports/_shared/profile").mkdir(parents=True)
+        (git_repo / "reports/_shared/profile/config.yaml").write_text(self.GREEDY)
+        (git_repo / "pyproject.toml").write_text(
+            "[tool.pixi.feature.report.activation.env]\n"
+            'SNAKEMAKE_PROFILE = "$PIXI_PROJECT_ROOT/reports/_shared/profile"\n'
+        )
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [OK]
+
+    def test_shared_profile_without_greedy_still_warns(self, git_repo: Path):
+        (git_repo / "Snakefile").write_text("")
+        (git_repo / "profile").mkdir()
+        (git_repo / "profile/config.yaml").write_text("cores: all\n")
+        (git_repo / "pixi.toml").write_text(
+            '[activation.env]\nSNAKEMAKE_PROFILE = "$PIXI_PROJECT_ROOT/profile"\n'
+        )
+        assert statuses(self.check(git_repo), "snakemake scheduler") == [WARN]
+
     def test_each_nested_report_needs_its_own_profile(self, git_repo: Path):
         # new-report's layout: one Snakefile per report directory, with the
         # profile beside it, which is where Snakemake looks when run there.
