@@ -23,8 +23,10 @@ PostToolUse: a test run that took over SLOW_TEST_SECONDS gets a note, using the
 
 Commands are tokenized, so `grep -n pytest` or `cat bench.md` never matches:
 only the command word, and for interpreters and task runners their arguments,
-are inspected. Known false negative: a command hidden in `bash -c '...'` is one
-quoted word, so it passes (fails open).
+are inspected. Known false negatives (all fail open): a command hidden in
+`bash -c '...'` is one quoted word; caps set in a pixi activation env or via
+threadpoolctl in a conftest are invisible, so such a repo costs one denied
+round trip before the explicit caps are accepted.
 """
 
 import json
@@ -42,8 +44,23 @@ CAPS = (
 )
 
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
-# Wrappers that run the next word; `time` is also a benchmark signal.
-WRAPPERS = frozenset({"env", "nohup", "command", "time"})
+# Wrappers that run the next command; `time` is also a benchmark signal. The
+# value is the options that consume the following word, so it is not mistaken
+# for the command (`nice -n 10 pytest`, `env -u NAME pytest`).
+WRAPPERS = {
+    "env": {"-u", "--unset", "-C", "--chdir", "-S"},
+    "nohup": set(),
+    "command": set(),
+    "time": {"-o", "--output", "-f", "--format"},
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "nice": {"-n", "--adjustment"},
+}
+# Interpreter and package-manager options that consume the following word.
+VALUE_FLAGS = frozenset(
+    {"-X", "-W", "-e", "--environment", "--manifest-path", "--with", "--python"}
+    | {"-p", "--project", "--directory", "--group", "--extra", "--env-file"}
+)
+PACKAGE_RUNNERS = frozenset({"pixi", "uv", "poetry", "hatch"})
 RUNNERS = re.compile(r"python[\d.]*|pixi|uv|poetry|hatch|bash|sh|julia|Rscript|node")
 XDIST_ATTACHED = re.compile(r"-n(auto|logical|[1-9]\d*)")
 BENCH_NAME = re.compile(r"bench|benchmark|timing")
@@ -52,14 +69,40 @@ BENCH_NAME = re.compile(r"bench|benchmark|timing")
 def unwrap(words):
     """(words after assignments and wrappers, whether `time` was among them)."""
     timed = False
-    while words and (ASSIGNMENT.match(words[0]) or words[0] in WRAPPERS):
-        timed = timed or words[0] == "time"
-        words = words[1:]
+    while words:
+        wrapper = base(words[0])
+        if ASSIGNMENT.match(words[0]):
+            words = words[1:]
+            continue
+        if wrapper not in WRAPPERS:
+            break
+        timed = timed or wrapper == "time"
+        rest = words[1:]
+        while rest and rest[0].startswith("-"):
+            rest = rest[2:] if rest[0] in WRAPPERS[wrapper] else rest[1:]
+        words = rest[1:] if wrapper == "timeout" else rest  # the duration
     return words, timed
 
 
 def base(word):
     return word.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def entry(words):
+    """What an interpreter runs: ("-m", module), ("file", path), or None for
+    `-c` code or nothing, skipping flags such as `-X dev` and `-O`."""
+    it = iter(words)
+    for word in it:
+        if word == "-c":
+            return None
+        if word == "-m":
+            module = next(it, None)
+            return ("-m", module) if module else None
+        if word in VALUE_FLAGS:
+            next(it, None)
+        elif not word.startswith("-"):
+            return ("file", word)
+    return None
 
 
 def is_pytest(words):
@@ -70,7 +113,7 @@ def is_pytest(words):
         return True
     if RUNNERS.fullmatch(head):
         rest = words[1:]
-        if head.startswith("python") and rest[:1] == ["-m"] and rest[1:2] == ["pytest"]:
+        if head.startswith("python") and entry(rest) == ("-m", "pytest"):
             return True
         # `pixi run pytest`, `uv run python -m pytest`, `pixi run test-fast`
         if "run" in rest:
@@ -102,19 +145,48 @@ def is_benchmark(words, timed):
     if any(w.startswith("--benchmark") for w in words):
         return True
     for i, word in enumerate(words[:-1]):
-        if word == "-m" and (
-            words[i + 1] == "timeit" or re.search(r"\bbenchmark\b", words[i + 1])
+        if word != "-m":
+            continue
+        marker = words[i + 1]
+        if marker == "timeit":
+            return True
+        # Only pytest's -m is a marker expression (`git commit -m` is a
+        # message), and `not benchmark` deselects the benchmarks.
+        if (
+            is_pytest(words)
+            and re.search(r"\bbenchmark\b", marker)
+            and not re.search(r"\bnot\s+benchmark\b", marker)
         ):
             return True
-    if RUNNERS.fullmatch(head):
-        candidates = [w for w in words[1:] if not w.startswith("-")]
-    else:
-        candidates = [words[0]]
     # The whole path, so `benchmarks/run.py` counts; a test file does not.
     return any(
         BENCH_NAME.search(path.lower()) and not base(path).startswith("test_")
-        for path in candidates
+        for path in run_targets(words)
     )
+
+
+def run_targets(words):
+    """What the command would run: the script an interpreter opens, or the
+    task/command name after `pixi run` / `uv run`. Package-manager
+    subcommands, option values and `-c` code are not targets."""
+    head = base(words[0])
+    if head in PACKAGE_RUNNERS:
+        rest = iter(words[1:])
+        for word in rest:
+            if word in VALUE_FLAGS:
+                next(rest, None)
+            elif not word.startswith("-"):
+                if word != "run":
+                    return []
+                break
+        rest = list(rest)
+        while rest and rest[0].startswith("-"):
+            rest = rest[2:] if rest[0] in VALUE_FLAGS else rest[1:]
+        return rest[:1] + (run_targets(rest) if rest[1:] else [])
+    if RUNNERS.fullmatch(head):
+        target = entry(words[1:])
+        return [target[1]] if target else []
+    return [words[0]]
 
 
 def simple_commands(command):
@@ -124,31 +196,34 @@ def simple_commands(command):
 
 
 def uncapped_xdist(command):
-    if "OMP_NUM_THREADS" in os.environ:
-        return False
     # Raw words: unwrap() strips the assignments this looks for.
     raw = hook_lib.shell_commands(command, hook_lib.tokenize)
-    if any(w.startswith("OMP_NUM_THREADS=") for words in raw for w in words):
+    # Accelerate on macOS ignores OMP_NUM_THREADS and reads its own variable.
+    required = ["OMP_NUM_THREADS"]
+    if sys.platform == "darwin":
+        required.append("VECLIB_MAXIMUM_THREADS")
+    if all(
+        name in os.environ or any(w.startswith(f"{name}=") for ws in raw for w in ws)
+        for name in required
+    ):
         return False
     return any(is_pytest(words) and uses_xdist(words) for words, _ in map(unwrap, raw))
 
 
 def capped(command):
-    """`command` with the thread caps set for everything it runs."""
-    command = command.strip()
-    if (
-        len(hook_lib.shell_commands(command, hook_lib.tokenize)) == 1
-        and "\n" not in command
-    ):
-        return f"{CAPS} {command}"
-    return f"export {CAPS}; {command}"
+    """`command` with the thread caps exported for everything it runs.
+
+    Always an export statement: a prefix assignment would be invalid before a
+    subshell or brace group.
+    """
+    return f"export {CAPS}; {command.strip()}"
 
 
 def loadavg():
     return os.getloadavg()
 
 
-def top_processes(count=5):
+def top_processes(count):
     """The `count` busiest processes as ps lines; empty if ps is unusable."""
     import subprocess
 
@@ -179,16 +254,16 @@ def load_report():
     cores = os.cpu_count() or 1
     if one <= LOAD_FRACTION * cores:
         return None
-    lines = "\n".join(top_processes())
+    lines = "\n".join(top_processes(5))
     return (
         f"Load is high for a benchmark: 1-min {one:.1f}, 5-min {five:.1f} on "
         f"{cores} cores (limit {LOAD_FRACTION * cores:.1f}). Timings taken now "
         "will mostly measure contention. Busiest processes (%CPU, PID, command):\n"
-        f"{lines}\nApprove to run anyway, or deny to wait."
+        f"{lines}\n"
     )
 
 
-def pre(command):
+def pre(command, in_subagent):
     if uncapped_xdist(command):
         hook_lib.deny(
             "pytest with xdist and no thread caps: each worker would start a "
@@ -199,8 +274,17 @@ def pre(command):
         return
     if any(is_benchmark(words, timed) for words, timed in simple_commands(command)):
         report = load_report()
-        if report:
-            hook_lib.ask(report)
+        if not report:
+            return
+        if in_subagent:
+            # notify.py silences subagent permission prompts, so an ask there
+            # would block with nobody told; deny and hand the decision back.
+            hook_lib.deny(
+                report + "Stop and report back to the orchestrator that the "
+                "machine is busy; do not wait or retry."
+            )
+        else:
+            hook_lib.ask(report + "Approve to run anyway, or deny to wait.")
 
 
 def post(command, duration_ms):
@@ -234,7 +318,7 @@ def main():
             return
         command = data["tool_input"]["command"]
         if data["hook_event_name"] == "PreToolUse":
-            pre(command)
+            pre(command, bool(data.get("agent_id")))
         elif data["hook_event_name"] == "PostToolUse":
             post(command, data["duration_ms"])
     except (ValueError, KeyError, TypeError, AttributeError, IndexError):

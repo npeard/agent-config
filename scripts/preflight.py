@@ -462,14 +462,30 @@ def shared_snakemake_profile(root: Path) -> Path | None:
         for key in table:
             data = data.get(key, {})
         # The activation table may sit at the top, under a feature, or under
-        # a target, so search every nesting level.
+        # a target, so search every nesting level. Either level may be a
+        # non-table in a malformed manifest.
         stack = [data]
         while stack:
             node = stack.pop()
-            value = node.get("activation", {}).get("env", {}).get("SNAKEMAKE_PROFILE")
+            activation = node.get("activation")
+            env = activation.get("env") if isinstance(activation, dict) else None
+            value = env.get("SNAKEMAKE_PROFILE") if isinstance(env, dict) else None
             if isinstance(value, str):
-                return root / value.replace("$PIXI_PROJECT_ROOT/", "")
+                for prefix in ("$PIXI_PROJECT_ROOT/", "${PIXI_PROJECT_ROOT}/"):
+                    value = value.removeprefix(prefix)
+                return root / value
             stack += [v for v in node.values() if isinstance(v, dict)]
+    return None
+
+
+def greedy_shared_profile(root: Path) -> Path | None:
+    """The shared profile, only if it exists and selects the greedy scheduler."""
+    shared = shared_snakemake_profile(root)
+    if shared is not None and any(
+        GREEDY.search(cfg.read_text(encoding="utf-8", errors="replace"))
+        for cfg in shared.glob("*.yaml")
+    ):
+        return shared
     return None
 
 
@@ -487,11 +503,8 @@ def check_snakemake_scheduler(report: Report, root: Path) -> None:
     # Snakemake loads profiles/default/ from the directory it is run from or
     # from beside the Snakefile, so accept either, taking the root as the
     # usual working directory (workflow/Snakefile keeps its profile there).
-    shared = shared_snakemake_profile(root)
-    if shared is not None and any(
-        GREEDY.search(cfg.read_text(encoding="utf-8", errors="replace"))
-        for cfg in shared.glob("*.yaml")
-    ):
+    shared = greedy_shared_profile(root)
+    if shared is not None:
         report.add(OK, "snakemake scheduler", f"greedy, shared profile {shared}")
         return
     unfixed = [

@@ -41,11 +41,21 @@ def test_scaffold_writes_expected_tree(repo):
 
 
 def test_pixi_shared_profile_replaces_the_per_report_one(repo):
+    (repo / "profile").mkdir()
+    (repo / "profile/config.yaml").write_text("scheduler: greedy\n")
     (repo / "pixi.toml").write_text(
         '[activation.env]\nSNAKEMAKE_PROFILE = "$PIXI_PROJECT_ROOT/profile"\n'
     )
     assert scaffold(repo, "reports/demo") == 0
     assert "reports/demo/profiles/default/config.yaml" not in tree(repo)
+
+
+def test_a_dangling_shared_profile_keeps_the_per_report_one(repo):
+    (repo / "pixi.toml").write_text(
+        '[activation.env]\nSNAKEMAKE_PROFILE = "$PIXI_PROJECT_ROOT/missing"\n'
+    )
+    assert scaffold(repo, "reports/demo") == 0
+    assert "reports/demo/profiles/default/config.yaml" in tree(repo)
 
 
 def test_second_report_leaves_shared_untouched(repo):

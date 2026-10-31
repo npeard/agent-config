@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,7 +33,7 @@ def quiet_machine(monkeypatch):
     monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
     monkeypatch.setattr(compute_guard, "loadavg", lambda: (1.0, 1.0, 1.0))
     monkeypatch.setattr(compute_guard.os, "cpu_count", lambda: 8)
-    monkeypatch.setattr(compute_guard, "top_processes", lambda count=5: [])
+    monkeypatch.setattr(compute_guard, "top_processes", lambda count: [])
 
 
 def out(event, command, monkeypatch, capsys, **extra) -> dict | None:
@@ -66,6 +67,17 @@ def post(command, seconds, monkeypatch, capsys):
         "pytest --numprocesses 8",
         "pixi run pytest -nauto",
         "cd repo && uv run pytest -n auto -q",
+        "timeout 900 pytest -n 8",
+        "timeout -k 5 --signal=INT 900 pytest -n 8",
+        "nice pytest -n 8",
+        "nice -n 10 pytest -n 8",
+        "nohup pytest -n 8",
+        "env -i pytest -n 8",
+        "env -u FOO BAR=1 pytest -n 8",
+        "time -p pytest -n 8",
+        "/usr/bin/time -l pytest -n 8",
+        "python -X dev -m pytest -n 4",
+        "python -O -u -m pytest -n 4",
     ],
 )
 def test_uncapped_xdist_is_denied_with_the_capped_command(command, monkeypatch, capsys):
@@ -76,12 +88,14 @@ def test_uncapped_xdist_is_denied_with_the_capped_command(command, monkeypatch, 
     assert "updatedInput" not in block
 
 
-def test_a_simple_command_is_prefixed_and_a_compound_one_exported():
-    assert compute_guard.capped("pytest -n 4") == f"{CAPS} pytest -n 4"
-    assert (
-        compute_guard.capped("cd r && pytest -n 4")
-        == f"export {CAPS}; cd r && pytest -n 4"
-    )
+@pytest.mark.parametrize(
+    "command",
+    ["pytest -n 4", "cd r && pytest -n 4", "(pytest -n 4)", "{ pytest -n 4; }"],
+)
+def test_the_capped_command_is_exported_and_stays_valid_shell(command):
+    fixed = compute_guard.capped(command)
+    assert fixed == f"export {CAPS}; {command}"
+    subprocess.run(["bash", "-n", "-c", fixed], check=True)
 
 
 @pytest.mark.parametrize(
@@ -91,9 +105,8 @@ def test_a_simple_command_is_prefixed_and_a_compound_one_exported():
         "pytest tests/",
         "pytest -n 0",
         "pytest -k 'not slow' -x",
-        "OMP_NUM_THREADS=1 pytest -n auto",
         f"{CAPS} pytest -n 4",
-        "export OMP_NUM_THREADS=1; pytest -n 4",
+        "export OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1; pytest -n 4",
         "echo pytest -n 4",
     ],
 )
@@ -103,7 +116,17 @@ def test_other_commands_are_not_denied(command, monkeypatch, capsys):
 
 def test_an_exported_cap_in_the_environment_allows_xdist(monkeypatch, capsys):
     monkeypatch.setenv("OMP_NUM_THREADS", "1")
+    monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
     assert pre("pytest -n auto", monkeypatch, capsys) is None
+
+
+def test_omp_alone_caps_off_darwin_but_not_on_it(monkeypatch, capsys):
+    command = "OMP_NUM_THREADS=1 pytest -n auto"
+    monkeypatch.setattr(compute_guard.sys, "platform", "linux")
+    assert pre(command, monkeypatch, capsys) is None
+    # Accelerate reads VECLIB_MAXIMUM_THREADS and ignores OMP.
+    monkeypatch.setattr(compute_guard.sys, "platform", "darwin")
+    assert pre(command, monkeypatch, capsys)["permissionDecision"] == "deny"
 
 
 BENCHMARKS = [
@@ -117,6 +140,10 @@ BENCHMARKS = [
     "pixi run bench",
     "time ./solver input.dat",
     "OMP_NUM_THREADS=1 python benchmark.py",
+    "pixi run benchmark",
+    "python bench_fft.py",
+    "pytest -m 'benchmark and not slow'",
+    "timeout 900 python bench_fft.py",
 ]
 
 
@@ -126,13 +153,22 @@ def test_a_benchmark_under_heavy_load_asks_with_load_and_processes(
 ):
     monkeypatch.setattr(compute_guard, "loadavg", lambda: (9.5, 7.25, 3.0))
     monkeypatch.setattr(
-        compute_guard, "top_processes", lambda count=5: ["99.0 123 python hog.py"]
+        compute_guard, "top_processes", lambda count: ["99.0 123 python hog.py"]
     )
     block = pre(command, monkeypatch, capsys)
     assert block["permissionDecision"] == "ask"
     reason = block["permissionDecisionReason"]
     assert "9.5" in reason and "7.2" in reason and "8 cores" in reason
     assert "python hog.py" in reason
+
+
+def test_a_subagent_is_denied_not_asked_under_heavy_load(monkeypatch, capsys):
+    # notify.py silences subagent permission prompts, so an ask would hang.
+    monkeypatch.setattr(compute_guard, "loadavg", lambda: (9.5, 7.25, 3.0))
+    block = out("PreToolUse", "hyperfine x", monkeypatch, capsys, agent_id="agent-1")
+    assert block["permissionDecision"] == "deny"
+    reason = block["permissionDecisionReason"]
+    assert "9.5" in reason and "busy" in reason and "Approve" not in reason
 
 
 @pytest.mark.parametrize("command", BENCHMARKS)
@@ -147,6 +183,12 @@ def test_a_benchmark_under_light_load_passes(command, monkeypatch, capsys):
         "cat benchmarks/README.md",
         "git add bench_notes.py",
         "pytest tests/test_timing.py",
+        'git commit -m "add benchmark harness"',
+        "pytest -m 'not benchmark'",
+        "pixi add pytest-benchmark",
+        "uv pip install pytest-benchmark",
+        "uv run --with timing x.py",
+        'pixi run python -c "print(timing)"',
         "python train.py",
         "ls",
     ],
@@ -190,7 +232,7 @@ def test_ps_failure_is_tolerated(monkeypatch):
         raise FileNotFoundError
 
     monkeypatch.setattr(subprocess, "run", boom)
-    assert REAL_TOP_PROCESSES() == []
+    assert REAL_TOP_PROCESSES(5) == []
 
 
 @pytest.mark.parametrize(

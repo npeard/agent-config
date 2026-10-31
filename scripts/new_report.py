@@ -336,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             figures=relative(report / "build/figures", shared),
         ),
     )
-    if preflight.shared_snakemake_profile(repo) is None:
+    if preflight.greedy_shared_profile(repo) is None:
         write(report / "profiles/default/config.yaml", PROFILE)
     write(report / "refs.bib", REFS_BIB)
     write(report / "figures/plot_example.py", PLOT_EXAMPLE)
