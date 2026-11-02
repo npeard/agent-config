@@ -2128,3 +2128,52 @@ unchanged. Given run 3's score, three of three orchestrators under the old
 text added annotations (one also caption sentences) to lift coverage past
 80%; five of five under the new text made no coverage edits.
 """
+
+[[decision]]
+class = "precommit-hook-stale-interpreter"
+source = "observed"
+date = "2026-11-02"
+cause = "missing-tooling"
+outcome = "tier-2"
+note = """
+smi's git hook pinned INSTALL_PYTHON=.pixi/envs/dev/bin/python3.12 after the
+env moved to 3.14, so every commit failed with "pre-commit not found" until
+the hook was reinstalled by hand. preflight's check_precommit_installed only
+asked whether the hook file mentioned pre-commit, so it reported OK on a hook
+that could not run. Cause 1 in spirit: the standard check existed but could
+not detect this class. Fixed in preflight (FAIL with "pre-commit install -f"
+when the pinned interpreter is not executable), with a test that fails on the
+old code.
+"""
+
+[[decision]]
+class = "subagent-shell-blocked-on-stdin"
+source = "observed"
+date = "2026-11-02"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+A fix subagent prefixed a heredoc edit with `cat > /tmp/x`, which waited on
+stdin forever after its work was already committed; the session looked
+stalled until the user said so. One incident, self-inflicted by a malformed
+command rather than a gap in the config; the next brief said to use the
+Edit tool for edits and no stdin-reading commands, which held. Reopen only
+if it recurs.
+"""
+
+[[decision]]
+class = "persisted-artifact-compatibility-undecided"
+source = "observed"
+date = "2026-11-02"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+The smi restructure spec allowed "hard breaks" but never decided which
+persisted artifacts (frozen sets, 180 grid checkpoints, results-JSON
+fingerprints) had to keep loading. Per-phase reviewers passed each move; the
+whole-branch code-review then found every pre-branch frozen set and
+checkpoint unloadable, costing a fix wave and a migration. Cause 6: a
+decision the spec stage never made. writing-plans' Review Focus asks for
+unexercised input classes, which covers this if the planner names "artifacts
+written by the old code" as one; no new artifact until it recurs.
+"""

@@ -426,14 +426,27 @@ def check_precommit_installed(report: Report, root: Path) -> None:
     # wherever this process happens to have been invoked from.
     hook_path = git("-C", str(root), "rev-parse", "--git-path", "hooks/pre-commit")
     hook = (root / hook_path) if hook_path else None
-    if (
-        hook
-        and hook.is_file()
-        and "pre-commit" in hook.read_text(encoding="utf-8", errors="replace")
-    ):
-        report.add(OK, "pre-commit hook installed")
-    else:
+    text = (
+        hook.read_text(encoding="utf-8", errors="replace")
+        if hook and hook.is_file()
+        else ""
+    )
+    if "pre-commit" not in text:
         report.add(FAIL, "pre-commit hook installed", "run: pre-commit install")
+        return
+    # The generated hook pins the interpreter it was installed from. When the
+    # env is rebuilt on a new Python that path vanishes, and the hook falls
+    # back to a `pre-commit` on PATH that usually is not there -- so every
+    # commit fails while the hook file itself still looks installed.
+    pinned = re.search(r"^INSTALL_PYTHON=(\S+)$", text, re.MULTILINE)
+    if pinned and not os.access(pinned.group(1), os.X_OK):
+        report.add(
+            FAIL,
+            "pre-commit hook installed",
+            f"hook pins missing {pinned.group(1)}; run: pre-commit install -f",
+        )
+    else:
+        report.add(OK, "pre-commit hook installed")
 
 
 # Snakemake's default ILP scheduler shells out to pulp's bundled CBC, which
