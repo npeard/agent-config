@@ -2177,3 +2177,46 @@ decision the spec stage never made. writing-plans' Review Focus asks for
 unexercised input classes, which covers this if the planner names "artifacts
 written by the old code" as one; no new artifact until it recurs.
 """
+
+[[decision]]
+class = "concurrent-agents-one-tree-precommit-stash"
+source = "observed"
+date = "2026-11-03"
+cause = "rule-not-enforced"
+outcome = "tier-0"
+note = """
+smi research-questions: several subagents committed in one checkout at once;
+pre-commit's unstaged-file stash briefly reverted another agent's files and
+swept staged files into the wrong commit. workflow-orchestration already says
+to use worktrees when phases run in parallel and would collide in one tree;
+the orchestrator ran prose and code agents side by side in the main tree to
+avoid worktree setup. Agents worked around it with `pre-commit run --files`
+plus `--no-verify`. Accept; reopen if it recurs with worktrees in use.
+"""
+
+[[decision]]
+class = "agent-worktree-linted-by-parent-checkout"
+source = "observed"
+date = "2026-11-03"
+cause = "missing-tooling"
+outcome = "tier-0"
+note = """
+smi: an Agent-tool worktree under .claude/worktrees/ was not gitignored, so
+the parent checkout's ruff and ty pre-commit hooks checked it and failed on
+another branch's code. Fixed per project by ignoring .claude/worktrees/. One
+incident; a cross-project preflight/toolgaps check for that ignore entry is
+the tier-2 candidate if it recurs in another repo.
+"""
+
+[[decision]]
+class = "subagent-cannot-wait-on-detached-job"
+source = "observed"
+date = "2026-11-03"
+cause = "harness-constraint"
+outcome = "tier-0"
+note = """
+smi: every subagent that launched a long job handed back before completion
+because a hook blocks sleep-polling in subagents; the orchestrator armed the
+waits. Working as designed: the hook keeps subagents from burning context
+while idle, and it states the refusal where it happens.
+"""
