@@ -92,14 +92,16 @@ the captions that need a symbol, a condition or a method stated.
 Scoring checks that each answer is recovered, never what could go, so
 the SMI report reached 55 exhibits with one RMSE in about 17. The
 ablation read is the penalty. An exhibit is a labelled figure or table;
-each panel of a primary figure counts as one.
+each panel of a primary figure counts as one. Appendix figures and
+tables are exhibits too, and enter every read.
 
 1. **Screen.** One fresh reader gets section 2's input and brief, with
    this appended: "(4) Rank the exhibits you could lose without losing
    any answer, most expendable first."
-2. **Confirm.** One read per candidate, in rank order, non-primary
-   exhibits before primary panels: section 2's input minus that exhibit,
-   on the cheapest model that holds accuracy.
+2. **Confirm.** One read for every ranked candidate, with no early stop,
+   in rank order, non-primary exhibits before primary panels: section
+   2's input minus that exhibit and the cuts already confirmed, on the
+   cheapest model that holds accuracy.
 3. **Pass** is section 3's scoring of that read.
 4. **A pass deletes the exhibit**, with no appendix copy and no approval
    asked: if the reader never misses it, it was not worth showing. The
