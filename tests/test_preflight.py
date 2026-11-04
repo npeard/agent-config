@@ -439,6 +439,26 @@ class TestHookInstalled:
         preflight.check_precommit_installed(report, git_repo)
         assert statuses(report, "pre-commit hook installed") == [FAIL]
 
+    def test_hook_pinned_to_a_vanished_interpreter_fails(self, git_repo: Path):
+        """smi's hook kept INSTALL_PYTHON=.../python3.12 after its env moved to
+        3.14, so every commit died with "pre-commit not found" while this check
+        reported the hook installed."""
+        (git_repo / ".pre-commit-config.yaml").write_text("repos: []\n")
+        hook = git_repo / ".git" / "hooks" / "pre-commit"
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        python = git_repo / "env" / "bin" / "python3.12"
+        hook.write_text(f"#!/bin/sh\n# pre-commit\nINSTALL_PYTHON={python}\n")
+        report = preflight.Report()
+        preflight.check_precommit_installed(report, git_repo)
+        assert statuses(report, "pre-commit hook installed") == [FAIL]
+
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+        python.chmod(0o755)
+        report = preflight.Report()
+        preflight.check_precommit_installed(report, git_repo)
+        assert statuses(report, "pre-commit hook installed") == [OK]
+
 
 class TestSnakemakeScheduler:
     """Two hand-built repos (a paper and a thesis) died with "Bad CPU type" on

@@ -75,8 +75,9 @@ scoping down or a better artifact.
 sentence states what the figure establishes; the rest carries only what
 the plot cannot -- panel key, symbols, conditions, method. The body
 states the claim, why this artifact is the right kind of evidence for
-it, and how the artifact was made. Then it says what the claim licenses
-next or where it breaks. A value the figure shows appears in neither.
+it, and how the artifact was made, then what the claim licenses next or
+where it breaks. A value a figure or table shows, or any but the main
+result, appears in neither; outside methods, prose names no code module.
 
 **Depth goes behind a pointer** -- extra figures, robustness sweeps, a
 derivation that would interrupt the arc between adjacent claims. A
@@ -131,15 +132,14 @@ Defaults a genre file may override:
 - caption beyond its panel key: at most 3 sentences;
 - section: a word budget, set atop the ledger.
 
-The `prose-feedback` hook reports after every edit to a `.tex` or `.typ`
-file. It gives sentence count, median and 90th-percentile words, and
-chained-clause rate, each against the file's first report. On a revision
-the sentence count should fall. A forward reference it lists is a
-defect, not a style choice.
+The `prose-feedback` hook reports sentence statistics after each `.tex`
+or `.typ` edit, against the first report. A revision should cut
+sentences; a listed forward reference is a defect.
 
 Without the hook, run
-`pixi run --manifest-path ~/.agents/agent-config/pixi.toml prose-metrics ABSOLUTE_FILE [--json]`.
-It does not gate.
+`pixi run --manifest-path ~/.agents/agent-config/pixi.toml prose-metrics ABSOLUTE_FILE [--json]`;
+it does not gate. `prose-density FILE... --depth 1` counts prose numbers
+and code names.
 
 ## 5. Precision
 
