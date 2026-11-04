@@ -37,8 +37,9 @@ has failed `scientific-writing` section 1, so fix that first.
 > two kinds. An **evidence** row is a value, trend or comparison the
 > answer rests on, which a figure can show. A **derivation or caveat**
 > row is a derivation, a bound's role, a mechanism, a caveat, or a
-> diagnosis of a failed run. (4) Unscored: method, setup and context
-> rows, and every pre-registered prediction.
+> diagnosis of a failed run. Each row names the exhibit carrying it, or
+> "prose". (4) Unscored: method, setup and context rows, and every
+> pre-registered prediction.
 
 ## 2. The figures-only read
 
@@ -85,3 +86,27 @@ raise coverage or recall.** A caption carries its lead plus what the
 answer needs, and no more, within `SKILL.md` section 4's budget. Cut
 what read (2) calls beside the point or more than needed. Read (3) lists
 the captions that need a symbol, a condition or a method stated.
+
+## 4. Ablation read
+
+Scoring checks that each answer is recovered, never what could go, so
+the SMI report reached 55 exhibits with one RMSE in about 17. The
+ablation read is the penalty. An exhibit is a labelled figure or table;
+each panel of a primary figure counts as one.
+
+1. **Screen.** One fresh reader gets section 2's input and brief, with
+   this appended: "(4) Rank the exhibits you could lose without losing
+   any answer, most expendable first."
+2. **Confirm.** One read per candidate, in rank order, non-primary
+   exhibits before primary panels: section 2's input minus that exhibit,
+   on the cheapest model that holds accuracy.
+3. **Pass** is section 3's scoring of that read.
+4. **A pass deletes the exhibit**, with no appendix copy and no approval
+   asked: if the reader never misses it, it was not worth showing. The
+   commit message names the exhibit and the answer tested.
+5. **Guard.** Keep an exhibit whose removal makes any answer wrong, not
+   merely less detailed.
+
+A real-versus-synthetic panel that confirms as redundant means the
+comparison is badly shown: put the tiers on shared axes, never into a
+table.

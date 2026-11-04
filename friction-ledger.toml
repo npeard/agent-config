@@ -2220,3 +2220,18 @@ because a hook blocks sleep-polling in subagents; the orchestrator armed the
 waits. Working as designed: the hook keeps subagents from burning context
 while idle, and it states the refusal where it happens.
 """
+
+[[decision]]
+class = "evidence-not-cut"
+source = "observed"
+date = "2026-11-04"
+cause = "agent-config-gap"
+outcome = "tier-3"
+note = """
+smi report: 55 exhibits, TCAN nominal RMSE in about 17; the prose-density
+rule moved numbers into new tables ("New labelled tables carry the values
+taken out of prose") and no reviewer was asked what to cut. Penalty is the
+ablation read in figures-alone.md section 4 plus report-only value-owners
+and questions-lint, not a new gate: any threshold on exhibit or cell counts
+can be met by relocating numbers again.
+"""

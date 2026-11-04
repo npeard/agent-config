@@ -79,6 +79,13 @@ it, and how the artifact was made, then what the claim licenses next or
 where it breaks. A value a figure or table shows, or any but the main
 result, appears in neither; outside methods, prose names no code module.
 
+**One primary figure per question**, with a panel per evidence tier
+(analytic, synthetic, real); a tier gap is a result shown by adjacent
+panels, not a new section, since sectioning by tier spread one SMI
+quantity across 17 exhibits. A table is for lookup only: it survives
+when a reader needs exact values and no claim rests on reading them.
+Moving a number out of prose into a new exhibit is not a cut.
+
 **Depth goes behind a pointer** -- extra figures, robustness sweeps, a
 derivation that would interrupt the arc between adjacent claims. A
 load-bearing claim never lives only in an appendix. Derivation placement
@@ -189,6 +196,11 @@ Per section:
   figure (`figures-alone.md`).
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
+- **`value-owners FILE...`**: a value key cited by more than one exhibit
+  keeps one owner; the ablation read (`figures-alone.md` section 4) cuts
+  the rest.
+- **`questions-lint QUESTIONS.md`**: one sentence per question, since a
+  compound question licenses an exhibit per clause.
 
 ## 7. Red flags
 
@@ -211,4 +223,6 @@ Quoted from agent runs, and from agent sentences an author cut.
 | "The number of points in the Brillouin zone --- and hence the number of pulses per Floquet cycle --- is at most $2^d$ times larger..."                                | Two clauses and an aside. Give each its own sentence, or drop it.                                                            |
 | `This example and the RKKY model of Sec.~\ref{sec:rkky} are complementary` (before that section)                                                                      | A forward reference. Point backward, or cut it.                                                                              |
 | (A paragraph per figure, walking through what each panel shows)                                                                                                       | A PI: "I can see them and would ask for detail if I felt it were needed." Say why it is the right test, and how it was made. |
+| "New labelled tables carry the values taken out of prose."                                                                                                            | Relocation, not a cut. The exhibit count rose; cut the values a figure already shows.                                        |
+| (A table repeating values a figure's caption already states)                                                                                                          | Two exhibits, one value. Keep the figure; cut the table.                                                                     |
 | (Filled an empty `\cite{}` with a key of its own choosing)                                                                                                            | Not asked for. An empty citation is the author's to fill.                                                                    |
