@@ -7,7 +7,7 @@ the figures alone cannot, the paper is telling them in prose rather than
 showing them.
 
 The orchestrator runs it at step 6 of `writing-orchestration`, once per
-draft of the whole document, as three dispatches: Reader 1 once, Reader
+draft of the whole document, as four dispatches: Reader 1 twice, Reader
 2 twice. Each goes to a fresh subagent on the cheapest model that can do
 it, and none may have written or reviewed the draft. No reader sees the
 body, abstract or claimed answers, so the test scores the evidence, not
@@ -28,7 +28,9 @@ If no `QUESTIONS.md` states the questions, stop: the draft has failed
 
 **Input.** `QUESTIONS.md` plus the common input. It may read the
 plotting code to check what is plotted, but scores the image, since the
-reader of the paper sees only the image.
+reader of the paper sees only the image. Run it twice, on fresh
+subagents: one run moved a grade (adequate to weak) with its exhibit
+still present, so one read is noise-limited.
 
 **Brief** (paste it as written, then the questions, figures and
 captions):
@@ -62,7 +64,7 @@ The orchestrator scores each Reader 2 run against `QUESTIONS.md`. Each
 listed question is **matched** if the run wrote a question with the same
 subject and quantity, or **missing**; each run question with no listed
 match is **extra**. Pass: every question matched in both runs, and no
-question scored weak by Reader 1.
+question scored weak by both Reader 1 runs.
 
 | Reader 2 | Reader 1 | Diagnosis                                                | Fix                                 |
 | -------- | -------- | -------------------------------------------------------- | ----------------------------------- |
@@ -91,15 +93,17 @@ read, so the appendix holds derivations only. Run only on a draft whose
 section 3 scoring passes; on a failing draft an ablation measures reader
 noise, so fix the figures first.
 
-1. **Candidates** are Reader 1's proposed drops and merges.
+1. **Candidates** are the drops and merges proposed by either Reader 1
+   run.
 2. **Confirm.** One group read with every candidate applied: Reader 1
-   once and Reader 2 twice, on the cheapest model that holds accuracy.
+   twice and Reader 2 twice, on the cheapest model that holds accuracy.
    If it fails, bisect the candidates, non-primary before primary
    panels, until each failing one is isolated; cuts are assumed not to
    interact, and bisection covers the case where they do.
 3. **Pass**: both Reader 2 runs keep every prior match, and no
-   question's Reader 1 score drops. A merge passes if it keeps every
-   match and scores no lower than the best figure it replaces.
+   question's Reader 1 score drops, meaning both runs score it lower
+   than the baseline's lower run. A merge passes if it keeps every match
+   and scores no lower than the best figure it replaces.
 4. **A pass applies the cut**, with no appendix copy and no approval
    asked: if no reader misses it, it was not worth showing. The commit
    message names the exhibit and the questions tested.
