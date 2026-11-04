@@ -90,24 +90,27 @@ the captions that need a symbol, a condition or a method stated.
 ## 4. Ablation read
 
 Scoring checks that each answer is recovered, never what could go, so
-the SMI report reached 55 exhibits with one RMSE in about 17. The
-ablation read is the penalty. An exhibit is a labelled figure or table;
-each panel of a primary figure counts as one. Appendix figures and
-tables are exhibits too, and enter every read.
+the SMI report reached 57 exhibits with one RMSE in about 17. The
+ablation read is the penalty. An exhibit is any figure or table,
+labelled or not; each panel counts as one. Appendix exhibits enter every
+read, so the appendix holds derivations only. Run only on a draft whose
+section 2 read passes; on a failing draft an ablation measures reader
+noise, so fix the figures first (section 3).
 
 1. **Screen.** One fresh reader gets section 2's input and brief, with
    this appended: "(4) Rank the exhibits you could lose without losing
    any answer, most expendable first."
-2. **Confirm.** One read for every ranked candidate, with no early stop,
-   in rank order, non-primary exhibits before primary panels: section
-   2's input minus that exhibit and the cuts already confirmed, on the
-   cheapest model that holds accuracy.
-3. **Pass** is section 3's scoring of that read.
+2. **Confirm.** One read with section 2's input minus every ranked
+   candidate, on the cheapest model that holds accuracy. If it fails,
+   bisect the candidates in rank order, non-primary before primary
+   panels, until each failing exhibit is isolated; cuts are assumed not
+   to interact, and bisection covers the case where they do.
+3. **Pass** is section 3's scoring of a read.
 4. **A pass deletes the exhibit**, with no appendix copy and no approval
    asked: if the reader never misses it, it was not worth showing. The
    commit message names the exhibit and the answer tested.
-5. **Guard.** Keep an exhibit whose removal makes any answer wrong, not
-   merely less detailed.
+5. **Guard.** At each bisection leaf, keep an exhibit whose removal
+   makes any answer wrong, not merely less detailed.
 
 A real-versus-synthetic panel that confirms as redundant means the
 comparison is badly shown: put the tiers on shared axes, never into a

@@ -200,7 +200,7 @@ def exhibits(text: str, kind: str) -> list[Exhibit]:
 
 
 TYPST_NAMED_START = re.compile(r"[a-z-]+\s*:")
-TYPST_NON_CELL = re.compile(r"\.\.|table\.header\(")
+TYPST_NON_CELL = re.compile(r"\.\.|table\.(?:header|hline|vline)\(")
 
 
 def top_level_args(call_inner: str) -> list[str]:
@@ -230,7 +230,12 @@ def typst_cells(body: str) -> int:
     """
     call = TYPST_TABLE_CALL.search(body)
     # A bare #table call's body already starts inside the table.
-    inner = body if call is None else balanced(body, call.end(), "(", ")")[0]
+    inner = body
+    if call is not None:
+        try:
+            inner = balanced(body, call.end(), "(", ")")[0]
+        except ValueError:
+            inner = body[call.end() :]
     return sum(
         not TYPST_NAMED_START.match(a) and not TYPST_NON_CELL.match(a)
         for a in top_level_args(inner)

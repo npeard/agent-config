@@ -141,3 +141,12 @@ def test_typst_counts_every_positional_cell_kind():
     # Spread rows cannot be counted statically, so they add nothing.
     table = '#table(columns: 4, table.header([h]), [a], "s", val("k"), ..rows)'
     assert typst_cells(table) == 3
+
+
+def test_typst_rules_are_not_cells():
+    table = "#table(columns: 2, table.hline(), [a], table.vline(), [b])"
+    assert typst_cells(table) == 2
+
+
+def test_typst_unbalanced_table_does_not_crash():
+    assert typst_cells('#table(columns: 1, [a], "(")') >= 0
