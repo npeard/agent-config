@@ -9,9 +9,10 @@ showing them.
 The orchestrator runs it at step 6 of `writing-orchestration`, once per
 draft of the whole document, as four dispatches: Reader 1 twice, Reader
 2 twice. Each goes to a fresh subagent on the cheapest model that can do
-it, and none may have written or reviewed the draft. No reader sees the
-body, abstract or claimed answers, so the test scores the evidence, not
-what the authors say it shows; overclaiming is out of its scope.
+it, and none may have written or reviewed the draft. No reader sees text
+outside the figures and captions (body, abstract, intro answers).
+Caption leads state results, so readers see them; overclaiming is out of
+scope.
 
 **Input common to both readers:**
 
@@ -63,23 +64,23 @@ subagents, since one read's misses are partly noise.
 The orchestrator scores each Reader 2 run against `QUESTIONS.md`. Each
 listed question is **matched** if the run wrote a question with the same
 subject and quantity, or **missing**; each run question with no listed
-match is **extra**. Pass: every question matched in both runs, and no
-question scored weak by both Reader 1 runs.
+match is **extra**. A listed question is matched only if both Reader 2
+runs match it, otherwise missing. A question's Reader 1 grade is the
+higher of its two runs, so weak means weak in both. Pass: every question
+matched, none weak.
 
-| Reader 2 | Reader 1 | Diagnosis                                                | Fix                                 |
-| -------- | -------- | -------------------------------------------------------- | ----------------------------------- |
-| missing  | strong   | question and evidence misaligned                         | tighten the question                |
-| missing  | weak     | presentation failed                                      | redo Reader 1's round               |
-| extra    | any      | a figure serves no question, or `QUESTIONS.md` lacks one | cut the figure, or add the question |
+| Reader 2 | Reader 1         | Diagnosis                                                | Fix                                                          |
+| -------- | ---------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
+| missing  | strong, adequate | question and evidence misaligned                         | tighten the question                                         |
+| missing  | weak             | presentation failed                                      | fix the weak figure (its (3) list), then rerun all 4 reads   |
+| extra    | any              | a figure serves no question, or `QUESTIONS.md` lacks one | add the question, or cut the figure as a section 4 candidate |
 
-A failure is fixed in the figure, the caption or `QUESTIONS.md`: a panel
-added or removed, an annotation, or a caption lead that states the
-answer. Never fix it in the body, since no reader sees it. Run the
-readers again after the fix.
+A failure may be fixed by a panel, an annotation or a caption lead that
+states the answer, or in `QUESTIONS.md`. Never fix it in the body, since
+no reader sees it. Rerun all four reads after the fix.
 
-**Never lengthen a caption, or add a caption sentence or annotation, to
-raise a match.** A caption carries its lead plus what the answer needs,
-and no more, within `SKILL.md` section 4's budget. Reader 2's
+**Never lengthen a caption past `SKILL.md` section 4's budget, or add
+caption text the question does not need, to raise a match.** Reader 2's
 uninterpretable list names the captions that need a symbol, a condition
 or a method stated.
 
@@ -90,23 +91,25 @@ the SMI report reached 57 exhibits with one RMSE in about 17. The
 ablation read is the penalty. An exhibit is any figure or table,
 labelled or not; each panel counts as one. Appendix exhibits enter every
 read, so the appendix holds derivations only. Run only on a draft whose
-section 3 scoring passes; on a failing draft an ablation measures reader
-noise, so fix the figures first.
+section 3 scoring passes (that read is the baseline); on a failing draft
+an ablation measures reader noise, so fix the figures first.
 
 1. **Candidates** are the drops and merges proposed by either Reader 1
    run.
 2. **Confirm.** One group read with every candidate applied: Reader 1
-   twice and Reader 2 twice, on the cheapest model that holds accuracy.
-   If it fails, bisect the candidates, non-primary before primary
-   panels, until each failing one is isolated; cuts are assumed not to
+   twice and Reader 2 twice, on the same model tier. If it fails, bisect
+   the candidates, non-primary before primary panels, until each failing
+   one is isolated, four reads per step; cuts are assumed not to
    interact, and bisection covers the case where they do.
 3. **Pass**: both Reader 2 runs keep every prior match, and no
    question's Reader 1 score drops, meaning both runs score it lower
    than the baseline's lower run. A merge passes if it keeps every match
-   and scores no lower than the best figure it replaces.
-4. **A pass applies the cut**, with no appendix copy and no approval
-   asked: if no reader misses it, it was not worth showing. The commit
-   message names the exhibit and the questions tested.
+   and no question's Reader 1 grade drops (questions, not figures, are
+   scored).
+4. **A pass applies the cut**, with no appendix copy, no restating its
+   values in the body, and no approval asked: if no reader misses it, it
+   was not worth showing. The commit message names the exhibit and the
+   questions tested.
 
 A real-versus-synthetic panel that confirms as redundant means the
 comparison is badly shown: put the tiers on shared axes, never into a
