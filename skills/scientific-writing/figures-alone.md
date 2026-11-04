@@ -67,7 +67,9 @@ nothing.
 
 A fresh subagent scores the matches, given only `QUESTIONS.md` and the
 two Reader 2 outputs, since the orchestrator's own judging swung 12, 10
-and 14 of 14 on near-identical drafts.
+and 14 of 14 on near-identical drafts. Dispatch it once per set of
+Reader 2 runs and never again on the same runs, since a second draw is a
+chance to pick the better score.
 
 **Brief** (paste it as written, then `QUESTIONS.md` and both runs):
 
@@ -93,12 +95,16 @@ weak.
 
 A failure may be fixed by a panel, an annotation or a caption lead that
 states the answer. Never fix it in the body, since no reader sees it.
-Rerun all four reads and the scorer after the fix.
+Rerun all four reads and the scorer only after a figure or caption
+change, never on an unchanged draft, since that rerun only redraws
+noise.
 
 **Never lengthen a caption past `SKILL.md` section 4's budget, or add
-caption text the question does not need, to raise a match.** Reader 2's
-uninterpretable list names the captions that need a symbol, a condition
-or a method stated.
+caption text the question does not need, to raise a match.** A caption
+edit counts only if it states a result the figure shows; a lead that
+restates a question's wording to raise a match is the same offence.
+Reader 2's uninterpretable list names the captions that need a symbol, a
+condition or a method stated.
 
 ## 4. Ablation read
 
@@ -136,4 +142,5 @@ table.
 A round is the four reads, the scorer, the ablation, then fixes: apply
 ablation-confirmed cuts first, then fix figures, so no effort goes into
 an exhibit about to go. Run at most three rounds, then stop and report
-the remaining failures, since later rounds chase reader noise.
+the remaining failures, since later rounds chase reader noise. Every
+rerun counts toward the three.
