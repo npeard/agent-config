@@ -199,24 +199,50 @@ def exhibits(text: str, kind: str) -> list[Exhibit]:
     ]
 
 
+TYPST_NAMED_START = re.compile(r"[a-z-]+\s*:")
+TYPST_NON_CELL = re.compile(r"\.\.|table\.header\(")
+
+
+def top_level_args(call_inner: str) -> list[str]:
+    """Comma-separated arguments outside any bracket, string or `$...$` math."""
+    args, depth, start, i = [], 0, 0, 0
+    while i < len(call_inner):
+        ch = call_inner[i]
+        if ch in '"$':
+            i = call_inner.find(ch, i + 1)
+            if i == -1:
+                break
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            args.append(call_inner[start:i])
+            start = i + 1
+        i += 1
+    return [a.strip() for a in [*args, call_inner[start:]] if a.strip()]
+
+
+def typst_cells(body: str) -> int:
+    """Positional `table(...)` arguments that are not the header.
+
+    A spread argument (`..rows`) cannot be counted statically and adds zero.
+    """
+    call = TYPST_TABLE_CALL.search(body)
+    # A bare #table call's body already starts inside the table.
+    inner = body if call is None else balanced(body, call.end(), "(", ")")[0]
+    return sum(
+        not TYPST_NAMED_START.match(a) and not TYPST_NON_CELL.match(a)
+        for a in top_level_args(inner)
+    )
+
+
 def table_cells(exhibit: Exhibit, kind: str) -> int:
     """Data cells of a table exhibit; the header row is not data."""
     if exhibit.kind != "table":
         return 0
     if kind == TYPST:
-        # A bare #table call's body already starts inside the table.
-        table = TYPST_TABLE_CALL.search(exhibit.body)
-        rest, _ = cut_calls(
-            exhibit.body[table.end() :] if table else exhibit.body, TYPST_HEADER_CALL
-        )
-        cells, pos = 0, 0
-        while (start := rest.find("[", pos)) != -1:
-            try:
-                _, pos = balanced(rest, start + 1, "[", "]")
-            except ValueError:
-                break
-            cells += 1
-        return cells
+        return typst_cells(exhibit.body)
     if kind == LATEX:
         # Without a \midrule there is no header to drop.
         data = exhibit.body.split("\\midrule", 1)[-1]

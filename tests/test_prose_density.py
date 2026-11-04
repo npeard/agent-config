@@ -126,3 +126,18 @@ def test_document_block_in_json(capsys):
         "unlabelled": 1,
         "table_cells": 10,
     }
+
+
+def typst_cells(text: str) -> int:
+    return prose_density.analyze(text, ".typ", None)["document"]["table_cells"]
+
+
+def test_typst_caption_is_not_a_cell():
+    figure = "#figure(table(columns: 2, [a], [b], [c], [d]), caption: [A caption.])"
+    assert typst_cells(figure) == 4
+
+
+def test_typst_counts_every_positional_cell_kind():
+    # Spread rows cannot be counted statically, so they add nothing.
+    table = '#table(columns: 4, table.header([h]), [a], "s", val("k"), ..rows)'
+    assert typst_cells(table) == 3
