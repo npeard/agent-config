@@ -20,7 +20,16 @@ $ E = m c^2 + 42 $
 #align(center, table(
   columns: 2,
   [a], [11], [b], [13],
-))
+)) <tab-a>
+
+#figure(image("b.pdf"))
+
+#table(
+  columns: 3,
+  table.header([x], [y], [z]),
+  [p], [q], [r],
+  [s], [t], [u],
+) <tab-b>
 
 #assert(val("ok"), message: "the 77 checks failed")
 
