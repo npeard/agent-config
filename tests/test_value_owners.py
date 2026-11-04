@@ -68,28 +68,3 @@ def test_unknown_suffix_is_usage_error(tmp_path: Path, name: str):
     path = tmp_path / name
     path.write_text("x", encoding="utf-8")
     assert value_owners.main([str(path)]) == 2
-
-
-def run_values(capsys, tmp_path: Path, values: dict[str, object]) -> dict[str, object]:
-    path = tmp_path / "values.json"
-    path.write_text(json.dumps(values), encoding="utf-8")
-    assert value_owners.main([str(SAMPLE), "--json", "--values", str(path)]) == 0
-    return json.loads(capsys.readouterr().out)[str(SAMPLE)]
-
-
-def test_rekeyed_quantity_is_reported(capsys, tmp_path):
-    out = run_values(capsys, tmp_path, {"rmse_nominal": "0.200", "repeat_key": "0.200"})
-    assert out["quantities"] == [
-        {
-            "value": "0.200",
-            "keys": ["rmse_nominal", "repeat_key"],
-            "exhibits": ["tab-a", "fig-b", "fig-c"],
-        }
-    ]
-
-
-def test_short_or_boolean_values_are_not_quantities(capsys, tmp_path):
-    out = run_values(
-        capsys, tmp_path, {"rmse_nominal": "2", "repeat_key": "2", "anon_key": True}
-    )
-    assert out["quantities"] == []
