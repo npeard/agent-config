@@ -459,24 +459,27 @@ and pricing remain separate and unchanged.
   not a gate. `prose_density.py` reuses its parser to count numbers and
   code names in prose against those in tables, figures and captions, and
   gates on optional thresholds, so "prose carries claims, artifacts
-  carry values" is checked rather than remembered. `surface_area.py`
-  reports the modules, public symbols and import edges a branch added to
-  a Python package, and flags new modules with one caller or a read of
-  another module's privates, because a LOC diff does not show how many
-  concepts a reader must now hold; it is also a report, and the one
-  script that needs a third-party package (`grimp`).
-  `trivial_wrappers.py` lists the functions too thin to justify existing
-  -- a one-statement body, or a private or nested helper used once -- as
-  the mechanical half of rule 13; a reasoned `wrapper-ok` marker exempts
-  one, and `--gate` makes it fail. `plain_math.py` flags ASCII stand-ins
-  for math (`phi`, `3pi/2`, `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX
-  prose and in the string literals a matplotlib script passes to a
-  label, title, tick or legend call, outside `$...$`; a reasoned
-  `math-ok` comment exempts a line, and its docstring is also the
-  exported `plain-math` hook. `check_forward_refs.py` is the gate: it
-  fails when a LaTeX or Typst document cites a label defined later in
-  reading order (appendices and floats excepted), because a reader
-  cannot yet follow a pointer to text they have not read.
+  carry values" is checked rather than remembered. `value_owners.py`
+  lists the `#val`/`\val` keys cited by more than one exhibit, so a
+  value stated in two tables or captions is found rather than noticed;
+  it is a report. `surface_area.py` reports the modules, public symbols
+  and import edges a branch added to a Python package, and flags new
+  modules with one caller or a read of another module's privates,
+  because a LOC diff does not show how many concepts a reader must now
+  hold; it is also a report, and the one script that needs a third-party
+  package (`grimp`). `trivial_wrappers.py` lists the functions too thin
+  to justify existing -- a one-statement body, or a private or nested
+  helper used once -- as the mechanical half of rule 13; a reasoned
+  `wrapper-ok` marker exempts one, and `--gate` makes it fail.
+  `plain_math.py` flags ASCII stand-ins for math (`phi`, `3pi/2`,
+  `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX prose and in the string
+  literals a matplotlib script passes to a label, title, tick or legend
+  call, outside `$...$`; a reasoned `math-ok` comment exempts a line,
+  and its docstring is also the exported `plain-math` hook.
+  `check_forward_refs.py` is the gate: it fails when a LaTeX or Typst
+  document cites a label defined later in reading order (appendices and
+  floats excepted), because a reader cannot yet follow a pointer to text
+  they have not read.
 - `scripts/new_report.py` + `scripts/report_plotting.py` -- the
   `new-report` scaffold for a report built from results, and the helpers
   its figure scripts import; see the module docstrings.
