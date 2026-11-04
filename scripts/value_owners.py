@@ -11,6 +11,8 @@ repeated inside one exhibit is still one owner. Prose citations count under
 owned by two or more exhibits is reported, most-shared first: the value is
 stated twice where one exhibit should carry it. Report only; exit 0 on
 findings, 2 on a usage error. Markdown has no key syntax and is refused.
+It sees only statically named keys in exhibits, so a quantity re-keyed per
+section or built from a dynamic key is the ablation read's to catch.
 """
 
 from __future__ import annotations
