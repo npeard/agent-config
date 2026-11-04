@@ -437,43 +437,46 @@ and pricing remain separate and unchanged.
 - `scripts/` -- generic CD tools (`check_ascii.py`, `preflight.py`,
   `friction.py`, `burn.py`, `toolgaps.py`, `validate_skills.py`,
   `suppressions.py`, `thresholds.py`, `prose_metrics.py`,
-  `jupyter_mcp.py`, which starts a detached JupyterLab so the notebooks
-  skill's MCP server has something to talk to) meant to be reused rather
-  than rewritten from scratch; the exported ones are installed, not
-  copied (see the README's "Use the gates in another project"). Each
-  runs standalone by file path, as host hooks load it; `preflight.py`
-  skips its two link-related checks unless `platform_paths.py` is beside
-  it, and says so rather than failing to start. Plus `register_hooks.py`
-  and `audit_assets.py`, which are specific to this repo -- the first to
-  its install, the second because it knows this layout rather than
-  describing a capability every project has. `audit_assets.py` also owns
-  the always-loaded context ceilings, which
-  `tests/test_context_budget.py` imports rather than restating, so the
-  gate and the report share one definition of each number.
+  `prose_density.py`, `jupyter_mcp.py`, which starts a detached
+  JupyterLab so the notebooks skill's MCP server has something to talk
+  to) meant to be reused rather than rewritten from scratch; the
+  exported ones are installed, not copied (see the README's "Use the
+  gates in another project"). Each runs standalone by file path, as host
+  hooks load it; `preflight.py` skips its two link-related checks unless
+  `platform_paths.py` is beside it, and says so rather than failing to
+  start. Plus `register_hooks.py` and `audit_assets.py`, which are
+  specific to this repo -- the first to its install, the second because
+  it knows this layout rather than describing a capability every project
+  has. `audit_assets.py` also owns the always-loaded context ceilings,
+  which `tests/test_context_budget.py` imports rather than restating, so
+  the gate and the report share one definition of each number.
   `check_ascii.py` lets a single file opt out with a reason-bearing
   `check-ascii: allow` marker in its first ten lines; a marker with no
   reason fails rather than skipping, so the exemption is documented
   rather than silent. `prose_metrics.py` reports paragraph, sentence,
   caption and section sizes for a LaTeX, Typst or Markdown file, so
   prose density is measured rather than judged by eye; it is a report,
-  not a gate. `surface_area.py` reports the modules, public symbols and
-  import edges a branch added to a Python package, and flags new modules
-  with one caller or a read of another module's privates, because a LOC
-  diff does not show how many concepts a reader must now hold; it is
-  also a report, and the one script that needs a third-party package
-  (`grimp`). `trivial_wrappers.py` lists the functions too thin to
-  justify existing -- a one-statement body, or a private or nested
-  helper used once -- as the mechanical half of rule 13; a reasoned
-  `wrapper-ok` marker exempts one, and `--gate` makes it fail.
-  `plain_math.py` flags ASCII stand-ins for math (`phi`, `3pi/2`,
-  `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX prose and in the string
-  literals a matplotlib script passes to a label, title, tick or legend
-  call, outside `$...$`; a reasoned `math-ok` comment exempts a line,
-  and its docstring is also the exported `plain-math` hook.
-  `check_forward_refs.py` is the gate: it fails when a LaTeX or Typst
-  document cites a label defined later in reading order (appendices and
-  floats excepted), because a reader cannot yet follow a pointer to text
-  they have not read.
+  not a gate. `prose_density.py` reuses its parser to count numbers and
+  code names in prose against those in tables, figures and captions, and
+  gates on optional thresholds, so "prose carries claims, artifacts
+  carry values" is checked rather than remembered. `surface_area.py`
+  reports the modules, public symbols and import edges a branch added to
+  a Python package, and flags new modules with one caller or a read of
+  another module's privates, because a LOC diff does not show how many
+  concepts a reader must now hold; it is also a report, and the one
+  script that needs a third-party package (`grimp`).
+  `trivial_wrappers.py` lists the functions too thin to justify existing
+  -- a one-statement body, or a private or nested helper used once -- as
+  the mechanical half of rule 13; a reasoned `wrapper-ok` marker exempts
+  one, and `--gate` makes it fail. `plain_math.py` flags ASCII stand-ins
+  for math (`phi`, `3pi/2`, `|<x>|`, `J1`, `kappa_b`) in Typst and LaTeX
+  prose and in the string literals a matplotlib script passes to a
+  label, title, tick or legend call, outside `$...$`; a reasoned
+  `math-ok` comment exempts a line, and its docstring is also the
+  exported `plain-math` hook. `check_forward_refs.py` is the gate: it
+  fails when a LaTeX or Typst document cites a label defined later in
+  reading order (appendices and floats excepted), because a reader
+  cannot yet follow a pointer to text they have not read.
 - `scripts/new_report.py` + `scripts/report_plotting.py` -- the
   `new-report` scaffold for a report built from results, and the helpers
   its figure scripts import; see the module docstrings.
