@@ -61,23 +61,39 @@ subagents, since one read's misses are partly noise.
 
 ## 3. Scoring
 
-The orchestrator scores each Reader 2 run against `QUESTIONS.md`. Each
-listed question is **matched** if the run wrote a question with the same
-subject and quantity, or **missing**; each run question with no listed
-match is **extra**. A listed question is matched only if both Reader 2
-runs match it, otherwise missing. A question's Reader 1 grade is the
-higher of its two runs, so weak means weak in both. Pass: every question
-matched, none weak.
+`QUESTIONS.md` is frozen for the whole review run, and the reviser never
+edits it: scoring against a target the reviser can move measures
+nothing.
 
-| Reader 2 | Reader 1         | Diagnosis                                                | Fix                                                          |
-| -------- | ---------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
-| missing  | strong, adequate | question and evidence misaligned                         | tighten the question                                         |
-| missing  | weak             | presentation failed                                      | fix the weak figure (its (3) list), then rerun all 4 reads   |
-| extra    | any              | a figure serves no question, or `QUESTIONS.md` lacks one | add the question, or cut the figure as a section 4 candidate |
+A fresh subagent scores the matches, given only `QUESTIONS.md` and the
+two Reader 2 outputs, since the orchestrator's own judging swung 12, 10
+and 14 of 14 on near-identical drafts.
+
+**Brief** (paste it as written, then `QUESTIONS.md` and both runs):
+
+> Below are a list of research questions and two runs of questions a
+> reader inferred from figures. For each run, mark each listed question
+> matched or missing. A listed question is matched by a run question
+> that names the same measured quantity and the same comparison or
+> condition; wording and scope breadth do not matter. Each run question
+> matches at most one listed question. List every run question that
+> matches none as extra. For each match, quote both questions.
+
+A listed question is matched only if both Reader 2 runs match it,
+otherwise missing. A question's Reader 1 grade is the higher of its two
+runs, so weak means weak in both. Pass: every question matched, none
+weak.
+
+| Reader 2 | Reader 1         | Diagnosis                                                | Fix                                                                                  |
+| -------- | ---------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| missing  | strong, adequate | question and evidence misaligned                         | fix the figures; report a proposed question change to the owner                      |
+| missing  | weak             | presentation failed                                      | fix the weak figure (its (3) list)                                                   |
+| matched  | weak             | figure carries the question, evidence weak               | fix the figure (stronger comparison, missing tier, uncertainty), never the question  |
+| extra    | any              | a figure serves no question, or `QUESTIONS.md` lacks one | cut the figure as a section 4 candidate, or report the missing question to the owner |
 
 A failure may be fixed by a panel, an annotation or a caption lead that
-states the answer, or in `QUESTIONS.md`. Never fix it in the body, since
-no reader sees it. Rerun all four reads after the fix.
+states the answer. Never fix it in the body, since no reader sees it.
+Rerun all four reads and the scorer after the fix.
 
 **Never lengthen a caption past `SKILL.md` section 4's budget, or add
 caption text the question does not need, to raise a match.** Reader 2's
@@ -90,9 +106,9 @@ Scoring checks that each question is recovered, never what could go, so
 the SMI report reached 57 exhibits with one RMSE in about 17. The
 ablation read is the penalty. An exhibit is any figure or table,
 labelled or not; each panel counts as one. Appendix exhibits enter every
-read, so the appendix holds derivations only. Run only on a draft whose
-section 3 scoring passes (that read is the baseline); on a failing draft
-an ablation measures reader noise, so fix the figures first.
+read, so the appendix holds derivations only. The baseline is the
+current round's reads, passing or not: the pass is relative, so it holds
+on a failing draft.
 
 1. **Candidates** are the drops and merges proposed by either Reader 1
    run.
@@ -114,3 +130,10 @@ an ablation measures reader noise, so fix the figures first.
 A real-versus-synthetic panel that confirms as redundant means the
 comparison is badly shown: put the tiers on shared axes, never into a
 table.
+
+## 5. Rounds
+
+A round is the four reads, the scorer, the ablation, then fixes: apply
+ablation-confirmed cuts first, then fix figures, so no effort goes into
+an exhibit about to go. Run at most three rounds, then stop and report
+the remaining failures, since later rounds chase reader noise.
