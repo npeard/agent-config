@@ -1,116 +1,108 @@
 # Figures-alone test
 
 A PI's bar for a research report: a casual reader who looks only at the
-figures and captions should still get the answer to every question the
-work asked, and be convinced by what the figures show. If a subagent
-reading the figures alone cannot, the paper is telling them in prose
-rather than showing them.
+figures and captions should get the answer to every question the work
+asked, and be convinced by what the figures show. If two readers who see
+the figures alone cannot, the paper is telling them in prose rather than
+showing them.
 
 The orchestrator runs it at step 6 of `writing-orchestration`, once per
-draft of the whole document, in two dispatches: first the ledger, then
-the figures-only read. Each goes to a fresh subagent on the cheapest
-model that can do it, and neither may have written or reviewed the
-draft. The reader never sees the ledger, and the ledger is never built
-from the reader's answer.
+draft of the whole document, as three dispatches: Reader 1 once, Reader
+2 twice. Each goes to a fresh subagent on the cheapest model that can do
+it, and none may have written or reviewed the draft. No reader sees the
+body, abstract or claimed answers, so the test scores the evidence, not
+what the authors say it shows; overclaiming is out of its scope.
 
-## 1. The ledger: one answer per question
-
-A ledger that lists every distinct result fails the test by
-construction. The same PI asked fewer than five questions of one report;
-a builder told to list "every distinct result" returned 56 flat rows,
-one per sentence with a number, guard or reviewer caveat. With 19 of
-them prose-only, the report failed by construction. The PI asked for as
-many results as questions, with the rest reclassified as support.
-
-**Input.** The questions the work set out to answer, quoted from the
-brief or spec, or from the introduction if neither exists, and the
-draft's full text. If no source states the questions, stop: the draft
-has failed `scientific-writing` section 1, so fix that first.
-
-**Brief** (paste it as written, then the questions and the draft):
-
-> Build the claim ledger for this document, in four parts. (1)
-> Questions: list the questions given, quoted. (2) Answers: one per
-> question, one or two sentences each, naming the figure that carries
-> it. There are exactly as many answers as questions. (3) Support: every
-> other result in the draft goes under the answer it supports, as one of
-> two kinds. An **evidence** row is a value, trend or comparison the
-> answer rests on, which a figure can show. A **derivation or caveat**
-> row is a derivation, a bound's role, a mechanism, a caveat, or a
-> diagnosis of a failed run. Each row names the exhibit carrying it, or
-> "prose". (4) Unscored: method, setup and context rows, and every
-> pre-registered prediction.
-
-## 2. The figures-only read
-
-**Input, and nothing else.** No body text, abstract, title or ledger:
+**Input common to both readers:**
 
 - each figure rendered as the reader will see it, so the built PDF or
-  PNG and never the plotting script;
+  PNG;
 - each caption as typeset, in figure order.
   `prose-metrics FILE --captions` prints them in order, with LaTeX
   labels or Typst indices.
 
-**Brief** (paste it as written, then the figure files and captions):
+If no `QUESTIONS.md` states the questions, stop: the draft has failed
+`scientific-writing` section 1, so fix that first.
+
+## 1. Reader 1: evidence quality
+
+**Input.** `QUESTIONS.md` plus the common input. It may read the
+plotting code to check what is plotted, but scores the image, since the
+reader of the paper sees only the image.
+
+**Brief** (paste it as written, then the questions, figures and
+captions):
+
+> These are the research questions of a scientific document and its
+> figures and captions, and nothing else. For each question: (1) say
+> which figures address it and how directly; (2) score the strength of
+> their evidence as strong, adequate or weak, and say why: is it
+> germane, and is it conclusive? (3) say what each of those figures
+> fails to show. Then (4) propose figures to drop, and weak figures to
+> merge into stronger ones; a merge may stack tiers as panels on shared
+> axes. Do not guess at what a body text might say.
+
+## 2. Reader 2: question inference
+
+**Input.** The common input only, blind to `QUESTIONS.md`, so the
+questions it writes come from the figures. Run it twice, on fresh
+subagents, since one read's misses are partly noise.
+
+**Brief** (paste it as written, then the figures and captions):
 
 > These are the figures and captions of a scientific document, and
-> nothing else. (1) List every result they establish, one sentence each,
-> and name the figure each comes from. (2) Name the few results the
-> document exists to report, in one or two sentences each. For each, say
-> whether its figure's evidence convinces you, and why: is it germane,
-> and is it conclusive? Then name anything shown that is beside the
-> point or more than the result needs. (3) List anything a figure shows
-> that you could not interpret without more text. Do not guess at what
-> the body might say.
+> nothing else. Write the questions these figures answer, one sentence
+> each, and name the figures that answer each. Then list anything a
+> figure shows that you could not interpret without more text. Do not
+> guess at what a body text might say.
 
 ## 3. Scoring
 
-The orchestrator scores the read against the ledger. Pass rests on the
-answers alone. Every answer must appear in read (2), correct and in no
-more than two sentences, and the reader must judge its figure's evidence
-germane and conclusive. A read that records no such judgment has not
-passed.
+The orchestrator scores each Reader 2 run against `QUESTIONS.md`. Each
+listed question is **matched** if the run wrote a question with the same
+subject and quantity, or **missing**; each run question with no listed
+match is **extra**. Pass: every question matched in both runs, and no
+question scored weak by Reader 1.
 
-Evidence-row coverage is advisory: report the share of evidence rows in
-read (1), with the value read off the plot or stated in a caption, but
-never pass or fail on it. Derivation, caveat, method and prediction rows
-are not counted.
+| Reader 2 | Reader 1 | Diagnosis                                                | Fix                                 |
+| -------- | -------- | -------------------------------------------------------- | ----------------------------------- |
+| missing  | strong   | question and evidence misaligned                         | tighten the question                |
+| missing  | weak     | presentation failed                                      | redo Reader 1's round               |
+| extra    | any      | a figure serves no question, or `QUESTIONS.md` lacks one | cut the figure, or add the question |
 
-A failed answer is fixed in its figure or caption: a panel added or
-removed, an annotation, or a caption lead that states the answer. Never
-fix it in the body. The evidence rows under that answer say what the
-reader lacked. Run the read again after the fix.
+A failure is fixed in the figure, the caption or `QUESTIONS.md`: a panel
+added or removed, an annotation, or a caption lead that states the
+answer. Never fix it in the body, since no reader sees it. Run the
+readers again after the fix.
 
 **Never lengthen a caption, or add a caption sentence or annotation, to
-raise coverage or recall.** A caption carries its lead plus what the
-answer needs, and no more, within `SKILL.md` section 4's budget. Cut
-what read (2) calls beside the point or more than needed. Read (3) lists
-the captions that need a symbol, a condition or a method stated.
+raise a match.** A caption carries its lead plus what the answer needs,
+and no more, within `SKILL.md` section 4's budget. Reader 2's
+uninterpretable list names the captions that need a symbol, a condition
+or a method stated.
 
 ## 4. Ablation read
 
-Scoring checks that each answer is recovered, never what could go, so
+Scoring checks that each question is recovered, never what could go, so
 the SMI report reached 57 exhibits with one RMSE in about 17. The
 ablation read is the penalty. An exhibit is any figure or table,
 labelled or not; each panel counts as one. Appendix exhibits enter every
 read, so the appendix holds derivations only. Run only on a draft whose
-section 2 read passes; on a failing draft an ablation measures reader
-noise, so fix the figures first (section 3).
+section 3 scoring passes; on a failing draft an ablation measures reader
+noise, so fix the figures first.
 
-1. **Screen.** One fresh reader gets section 2's input and brief, with
-   this appended: "(4) Rank the exhibits you could lose without losing
-   any answer, most expendable first."
-2. **Confirm.** One read with section 2's input minus every ranked
-   candidate, on the cheapest model that holds accuracy. If it fails,
-   bisect the candidates in rank order, non-primary before primary
-   panels, until each failing exhibit is isolated; cuts are assumed not
-   to interact, and bisection covers the case where they do.
-3. **Pass** is section 3's scoring of a read.
-4. **A pass deletes the exhibit**, with no appendix copy and no approval
-   asked: if the reader never misses it, it was not worth showing. The
-   commit message names the exhibit and the answer tested.
-5. **Guard.** At each bisection leaf, keep an exhibit whose removal
-   makes any answer wrong, not merely less detailed.
+1. **Candidates** are Reader 1's proposed drops and merges.
+2. **Confirm.** One group read with every candidate applied: Reader 1
+   once and Reader 2 twice, on the cheapest model that holds accuracy.
+   If it fails, bisect the candidates, non-primary before primary
+   panels, until each failing one is isolated; cuts are assumed not to
+   interact, and bisection covers the case where they do.
+3. **Pass**: both Reader 2 runs keep every prior match, and no
+   question's Reader 1 score drops. A merge passes if it keeps every
+   match and scores no lower than the best figure it replaces.
+4. **A pass applies the cut**, with no appendix copy and no approval
+   asked: if no reader misses it, it was not worth showing. The commit
+   message names the exhibit and the questions tested.
 
 A real-versus-synthetic panel that confirms as redundant means the
 comparison is badly shown: put the tiers on shared axes, never into a

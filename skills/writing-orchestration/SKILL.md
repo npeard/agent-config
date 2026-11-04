@@ -161,12 +161,12 @@ documentation, the reader step 1 named. Judge the section against it.
 
 **Evidence routing.** Run the review checks in `scientific-writing`,
 including inspecting the rendered figures. The orchestrator dispatches
-its figures-alone test (`scientific-writing/figures-alone.md`), ledger
-first, once per whole draft, before `humanizer`, then its ablation read.
-Every whole-document reviewer returns a ranked cut list and names every
-exhibit it inspected, since none of 31 SMI reviewers was asked what to
-cut. Metrics include `prose-density`'s whole-document line, so numbers
-moved into tables count as cost.
+its figures-alone test (`scientific-writing/figures-alone.md`), Reader 1
+and Reader 2, once per whole draft, before `humanizer`, then its
+ablation read. Every whole-document reviewer returns a ranked cut list
+and names every exhibit it inspected, since none of 31 SMI reviewers was
+asked what to cut. Metrics include `prose-density`'s whole-document
+line, so numbers moved into tables count as cost.
 
 ## Red flags
 

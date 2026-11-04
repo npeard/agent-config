@@ -190,9 +190,9 @@ Per section:
 - **Fresh expert reader**: a subagent playing the genre's reader, given
   only the rendered text and figures, says what each section established
   and which sentences it would skip.
-- **Figures-alone test**, per whole draft: a reader given only the
-  figures and captions recovers every answer and is convinced by its
-  figure (`figures-alone.md`).
+- **Figures-alone test**, per whole draft: Reader 1 scores the figures'
+  evidence per question, blind Reader 2 infers the questions
+  (`figures-alone.md`).
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
 - **`value-owners FILE...`**: a value key cited by more than one exhibit
