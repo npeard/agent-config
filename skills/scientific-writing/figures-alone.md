@@ -8,11 +8,12 @@ showing them.
 
 The orchestrator runs it at step 6 of `writing-orchestration`, once per
 draft of the whole document, as four dispatches: Reader 1 twice, Reader
-2 twice. Each goes to a fresh subagent on the cheapest model that can do
-it, and none may have written or reviewed the draft. No reader sees text
-outside the figures and captions (body, abstract, intro answers).
-Caption leads state results, so readers see them; overclaiming is out of
-scope.
+2 twice. Each goes to a fresh subagent on a Sonnet-tier model, as does
+the scorer, since Haiku runs disagreed on 4 of 14 questions and
+under-reported extras about twofold; none may have written or reviewed
+the draft. No reader sees text outside the figures and captions (body,
+abstract, intro answers). Caption leads state results, so readers see
+them; overclaiming is out of scope.
 
 **Input common to both readers:**
 
@@ -91,7 +92,7 @@ weak.
 | missing  | strong, adequate | question and evidence misaligned                         | fix the figures; report a proposed question change to the owner                      |
 | missing  | weak             | presentation failed                                      | fix the weak figure (its (3) list)                                                   |
 | matched  | weak             | figure carries the question, evidence weak               | fix the figure (stronger comparison, missing tier, uncertainty), never the question  |
-| extra    | any              | a figure serves no question, or `QUESTIONS.md` lacks one | cut the figure as a section 4 candidate, or report the missing question to the owner |
+| extra    | any              | a figure serves no question, or `QUESTIONS.md` lacks one | cut the figure as a section 5 candidate, or report the missing question to the owner |
 
 A failure may be fixed by a panel, an annotation or a caption lead that
 states the answer. Never fix it in the body, since no reader sees it.
@@ -106,7 +107,33 @@ restates a question's wording to raise a match is the same offence.
 Reader 2's uninterpretable list names the captions that need a symbol, a
 condition or a method stated.
 
-## 4. Ablation read
+## 4. Designer step
+
+Pruning cut 57 exhibits to 40, yet results stayed shaped by the
+experiment that produced them (ridge and LightGBM kept a table beside
+the all-model figure they belong in). So each round, before Reader 1's
+candidates are confirmed, redesign by question.
+
+Per question, one fresh designer subagent gets the question and an
+inventory of every result available for it: the result keys or files and
+which current exhibits show them. It never sees the current figures'
+layout, so it is not anchored on them.
+
+**Brief** (paste it as written, then the question and inventory):
+
+> Below is a research question and every result available to answer it.
+> Sketch the one primary figure you would draw from scratch to answer
+> it: panels, axes, series, and one panel per tier where tiers exist.
+> Name the result each series plots. Prior figures are drafts, not
+> commitments; that an experiment was run separately, later or by
+> another agent is never a reason for a separate exhibit.
+
+The reviser builds that figure. Every existing exhibit for the question
+whose data the design contains is folded in and retired; every exhibit
+outside it is an ablation candidate and must survive section 5 on its
+own. The designed figure enters the ablation as a merge.
+
+## 5. Ablation read
 
 Scoring checks that each question is recovered, never what could go, so
 the SMI report reached 57 exhibits with one RMSE in about 17. The
@@ -117,7 +144,7 @@ current round's reads, passing or not: the pass is relative, so it holds
 on a failing draft.
 
 1. **Candidates** are the drops and merges proposed by either Reader 1
-   run.
+   run, plus each designed figure and the exhibits it retires.
 2. **Confirm.** One group read with every candidate applied: Reader 1
    twice and Reader 2 twice, on the same model tier. If it fails, bisect
    the candidates, non-primary before primary panels, until each failing
@@ -137,10 +164,10 @@ A real-versus-synthetic panel that confirms as redundant means the
 comparison is badly shown: put the tiers on shared axes, never into a
 table.
 
-## 5. Rounds
+## 6. Rounds
 
-A round is the four reads, the scorer, the ablation, then fixes: apply
-ablation-confirmed cuts first, then fix figures, so no effort goes into
-an exhibit about to go. Run at most three rounds, then stop and report
-the remaining failures, since later rounds chase reader noise. Every
-rerun counts toward the three.
+A round is the designer step, the four reads, the scorer, the ablation,
+then fixes: apply ablation-confirmed cuts first, then fix figures, so no
+effort goes into an exhibit about to go. Run at most three rounds, then
+stop and report the remaining failures, since later rounds chase reader
+noise. Every rerun counts toward the three.

@@ -86,7 +86,7 @@ quantity across 17 exhibits. A table is for lookup only, and an exhibit
 like any other.
 
 **An appendix holds derivations only**, behind a pointer from the body;
-its exhibits face the ablation read (`figures-alone.md` section 4). A
+its exhibits face the ablation read (`figures-alone.md` section 5). A
 load-bearing claim never lives only in an appendix. Derivation placement
 is `math`'s "Derive once, then refer".
 
@@ -196,7 +196,7 @@ Per section:
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
 - **`value-owners FILE...`**: a value key cited by more than one exhibit
-  keeps one owner; the ablation read (`figures-alone.md` section 4) cuts
+  keeps one owner; the ablation read (`figures-alone.md` section 5) cuts
   the rest.
 - **`questions-lint QUESTIONS.md`**: one sentence per question, since a
   compound question licenses an exhibit per clause.
