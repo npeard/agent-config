@@ -7,13 +7,13 @@ the figures alone cannot, the paper is telling them in prose rather than
 showing them.
 
 The orchestrator runs it at step 6 of `writing-orchestration`, once per
-draft of the whole document, as four dispatches: Reader 1 twice, Reader
-2 twice. Each goes to a fresh subagent on a Sonnet-tier model, as does
-the scorer, since Haiku runs disagreed on 4 of 14 questions and
-under-reported extras about twofold; none may have written or reviewed
-the draft. No reader sees text outside the figures and captions (body,
-abstract, intro answers). Caption leads state results, so readers see
-them; overclaiming is out of scope.
+draft of the whole document: one designer per question (section 4), then
+four reads (Reader 1 twice, Reader 2 twice), then one scorer. Each goes
+to a fresh subagent on a Sonnet-tier model, since Haiku runs disagreed
+on 4 of 14 questions and under-reported extras about twofold; none may
+have written or reviewed the draft. No reader sees text outside the
+figures and captions (body, abstract, intro answers). Caption leads
+state results, so readers see them; overclaiming is out of scope.
 
 **Input common to both readers:**
 
@@ -111,13 +111,16 @@ condition or a method stated.
 
 Pruning cut 57 exhibits to 40, yet results stayed shaped by the
 experiment that produced them (ridge and LightGBM kept a table beside
-the all-model figure they belong in). So each round, before Reader 1's
-candidates are confirmed, redesign by question.
+the all-model figure they belong in). So at round start, before the
+reads, redesign by question; section 5's candidates include the design
+and the exhibits it retires.
 
 Per question, one fresh designer subagent gets the question and an
 inventory of every result available for it: the result keys or files and
 which current exhibits show them. It never sees the current figures'
-layout, so it is not anchored on them.
+layout, so it is not anchored on them. The orchestrator builds the
+inventory from `value-owners` keys, result files and plotting code,
+never from rendered layout.
 
 **Brief** (paste it as written, then the question and inventory):
 
@@ -131,7 +134,9 @@ layout, so it is not anchored on them.
 The reviser builds that figure. Every existing exhibit for the question
 whose data the design contains is folded in and retired; every exhibit
 outside it is an ablation candidate and must survive section 5 on its
-own. The designed figure enters the ablation as a merge.
+own. The designed figure enters the ablation as a merge. One that fails
+its confirm is reverted and the exhibits it retired are restored; log
+the failure.
 
 ## 5. Ablation read
 
