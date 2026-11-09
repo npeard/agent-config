@@ -44,6 +44,8 @@ report = { features = ["dev", "report"], solve-group = "default" }
 ascii = "python scripts/check_ascii.py"
 prose-metrics = "python scripts/prose_metrics.py"
 prose-density = "python scripts/prose_density.py"
+value-owners = "python scripts/value_owners.py"
+questions-lint = "python scripts/questions_lint.py"
 surface-area = "python scripts/surface_area.py"
 trivial-wrappers = "python scripts/trivial_wrappers.py"
 plain-math = "python scripts/plain_math.py"

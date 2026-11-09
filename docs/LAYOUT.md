@@ -459,12 +459,17 @@ and pricing remain separate and unchanged.
   not a gate. `prose_density.py` reuses its parser to count numbers and
   code names in prose against those in tables, figures and captions, and
   gates on optional thresholds, so "prose carries claims, artifacts
-  carry values" is checked rather than remembered. `surface_area.py`
-  reports the modules, public symbols and import edges a branch added to
-  a Python package, and flags new modules with one caller or a read of
-  another module's privates, because a LOC diff does not show how many
-  concepts a reader must now hold; it is also a report, and the one
-  script that needs a third-party package (`grimp`).
+  carry values" is checked rather than remembered. `value_owners.py`
+  lists the `#val`/`\val` keys cited by more than one exhibit, so a
+  value stated in two tables or captions is found rather than noticed;
+  it is a report. `questions_lint.py` flags research questions in a
+  `QUESTIONS.md` that need more than one sentence (several `?`, an
+  `and`-joined second question, two framing sentences); it is a report.
+  `surface_area.py` reports the modules, public symbols and import edges
+  a branch added to a Python package, and flags new modules with one
+  caller or a read of another module's privates, because a LOC diff does
+  not show how many concepts a reader must now hold; it is also a
+  report, and the one script that needs a third-party package (`grimp`).
   `trivial_wrappers.py` lists the functions too thin to justify existing
   -- a one-statement body, or a private or nested helper used once -- as
   the mechanical half of rule 13; a reasoned `wrapper-ok` marker exempts

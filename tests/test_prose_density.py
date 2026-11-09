@@ -77,3 +77,76 @@ def test_unsupported_suffix_is_usage_error(tmp_path: Path):
     other = tmp_path / "a.rst"
     other.write_text("text", encoding="utf-8")
     assert prose_density.main([str(other)]) == 2
+
+
+def test_exhibits_counts_labelled_floats():
+    text = (FIXTURES / "sample.typ").read_text(encoding="utf-8")
+    found = prose_density.exhibits(text, ".typ")
+    assert [(e.label, e.kind) for e in found] == [
+        ("fig-a", "figure"),
+        ("tab-a", "table"),
+        (None, "figure"),
+        ("tab-b", "table"),
+    ]
+
+
+def test_exhibits_label_forms():
+    latex = r"\begin{figure}\caption{c}\label{fig:a}\end{figure}"
+    assert [(e.label, e.kind) for e in prose_density.exhibits(latex, ".tex")] == [
+        ("fig:a", "figure")
+    ]
+    markdown = "text\n\n| a | b |\n| - | - |\n| 1 | 2 |\n"
+    assert [(e.label, e.kind) for e in prose_density.exhibits(markdown, ".md")] == [
+        (None, "table")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("kind", "table", "cells"),
+    [
+        (".typ", "#table(columns: 3, table.header([x], [y], [z]), [a], [b], [c])", 3),
+        (
+            ".tex",
+            "\\begin{table}\n x & y \\\\ \\midrule\n a & b \\\\ c & d \\\\\n\\end{table}",
+            4,
+        ),
+        (".md", "| x | y |\n| - | - |\n| a | b |\n| c | d |\n", 4),
+    ],
+)
+def test_table_cells_excludes_header(kind: str, table: str, cells: int):
+    assert prose_density.analyze(table, kind, None)["document"]["table_cells"] == cells
+
+
+def test_document_block_in_json(capsys):
+    document = report(MARKUP[0], capsys)["document"]
+    assert document == {
+        "exhibits": 4,
+        "figures": 2,
+        "tables": 2,
+        "unlabelled": 1,
+        "table_cells": 10,
+    }
+
+
+def typst_cells(text: str) -> int:
+    return prose_density.analyze(text, ".typ", None)["document"]["table_cells"]
+
+
+def test_typst_caption_is_not_a_cell():
+    figure = "#figure(table(columns: 2, [a], [b], [c], [d]), caption: [A caption.])"
+    assert typst_cells(figure) == 4
+
+
+def test_typst_counts_every_positional_cell_kind():
+    # Spread rows cannot be counted statically, so they add nothing.
+    table = '#table(columns: 4, table.header([h]), [a], "s", val("k"), ..rows)'
+    assert typst_cells(table) == 3
+
+
+def test_typst_rules_are_not_cells():
+    table = "#table(columns: 2, table.hline(), [a], table.vline(), [b])"
+    assert typst_cells(table) == 2
+
+
+def test_typst_unbalanced_table_does_not_crash():
+    assert typst_cells('#table(columns: 1, [a], "(")') >= 0

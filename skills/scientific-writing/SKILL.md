@@ -79,8 +79,14 @@ it, and how the artifact was made, then what the claim licenses next or
 where it breaks. A value a figure or table shows, or any but the main
 result, appears in neither; outside methods, prose names no code module.
 
-**Depth goes behind a pointer** -- extra figures, robustness sweeps, a
-derivation that would interrupt the arc between adjacent claims. A
+**One primary figure per question**, with a panel per evidence tier
+(analytic, synthetic, real); a tier gap is a result shown by adjacent
+panels, not a new section, since sectioning by tier spread one SMI
+quantity across 17 exhibits. A table is for lookup only, and an exhibit
+like any other.
+
+**An appendix holds derivations only**, behind a pointer from the body;
+its exhibits face the ablation read (`figures-alone.md` section 5). A
 load-bearing claim never lives only in an appendix. Derivation placement
 is `math`'s "Derive once, then refer".
 
@@ -184,31 +190,38 @@ Per section:
 - **Fresh expert reader**: a subagent playing the genre's reader, given
   only the rendered text and figures, says what each section established
   and which sentences it would skip.
-- **Figures-alone test**, per whole draft: a reader given only the
-  figures and captions recovers every answer and is convinced by its
-  figure (`figures-alone.md`).
+- **Figures-alone test**, per whole draft: Reader 1 scores the figures'
+  evidence per question, blind Reader 2 infers the questions
+  (`figures-alone.md`).
 - **`prose-metrics` shared numerics**: each needs a reason the figure
   cannot show the value.
+- **`value-owners FILE...`**: a value key cited by more than one exhibit
+  keeps one owner; the ablation read (`figures-alone.md` section 5) cuts
+  the rest.
+- **`questions-lint QUESTIONS.md`**: one sentence per question, since a
+  compound question licenses an exhibit per clause.
 
 ## 7. Red flags
 
 Quoted from agent runs, and from agent sentences an author cut.
 
-| Thought                                                                                                                                                               | Reality                                                                                                                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| "I classified this as a Pass: line edits and claim fixes, with the argument unchanged."                                                                               | The reverse outline runs in every class.                                                                                     |
-| "It also says the OBC 90th percentile is below 10^-3 at m >= 5, which I read off the band"                                                                            | Reciting the plot is not a fix. Scope the claim; point to the figure.                                                        |
-| "The figure shows OBC about 20-30x above PBC, with the same slope. The old text never mentioned this, so I added a sentence stating it."                              | Shown by the figure, so not said in prose. If it matters and is not obvious, annotate the figure.                            |
-| "adds a sentence covering panels F and G, and states the C_YZ exception."                                                                                             | A contradicting panel means the claim is scoped wrong. Narration hides it.                                                   |
-| "...and the engineered program transports it as the target does"                                                                                                      | Panel H shows it 1.5-2 sites off; the original asked whether.                                                                |
-| "which makes it the hardest target here"                                                                                                                              | A ranking with no ledger row or evidence.                                                                                    |
-| (A revision that splits long sentences and removes none)                                                                                                              | Revising cuts sentences first. The count should fall.                                                                        |
-| "to a mean absolute error of $0.43$ sites against $0.45$"                                                                                                             | The figure shows it. Cut it, do not update it.                                                                               |
-| "This is a choice of presentation rather than of physics."; "the obstruction is exact rather than a matter of degree"; "this is a design error and not Trotter error" | An answer to an objection nobody raised. Cut it.                                                                             |
-| "We use it as a test of sign structure rather than as a model of a one-dimensional metal" (added by a revision run)                                                   | A new sentence needs a reason the request gave. This one has none.                                                           |
-| "The three examples thus differ in what reduction gives up."                                                                                                          | A synthesis no ledger row asked for. Each example already made its claim.                                                    |
-| "warm-starting each step from the previous solution"; "a bound-constrained quasi-Newton solver (L-BFGS-B) suffices" (added by a revision run)                         | Solver internals. State the problem, not how it was solved.                                                                  |
-| "The number of points in the Brillouin zone --- and hence the number of pulses per Floquet cycle --- is at most $2^d$ times larger..."                                | Two clauses and an aside. Give each its own sentence, or drop it.                                                            |
-| `This example and the RKKY model of Sec.~\ref{sec:rkky} are complementary` (before that section)                                                                      | A forward reference. Point backward, or cut it.                                                                              |
-| (A paragraph per figure, walking through what each panel shows)                                                                                                       | A PI: "I can see them and would ask for detail if I felt it were needed." Say why it is the right test, and how it was made. |
-| (Filled an empty `\cite{}` with a key of its own choosing)                                                                                                            | Not asked for. An empty citation is the author's to fill.                                                                    |
+| Thought                                                                                                                                                               | Reality                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| "I classified this as a Pass: line edits and claim fixes, with the argument unchanged."                                                                               | The reverse outline runs in every class.                                                                                               |
+| "It also says the OBC 90th percentile is below 10^-3 at m >= 5, which I read off the band"                                                                            | Reciting the plot is not a fix. Scope the claim; point to the figure.                                                                  |
+| "The figure shows OBC about 20-30x above PBC, with the same slope. The old text never mentioned this, so I added a sentence stating it."                              | Shown by the figure, so not said in prose. If it matters and is not obvious, annotate the figure.                                      |
+| "adds a sentence covering panels F and G, and states the C_YZ exception."                                                                                             | A contradicting panel means the claim is scoped wrong. Narration hides it.                                                             |
+| "...and the engineered program transports it as the target does"                                                                                                      | Panel H shows it 1.5-2 sites off; the original asked whether.                                                                          |
+| "which makes it the hardest target here"                                                                                                                              | A ranking with no ledger row or evidence.                                                                                              |
+| (A revision that splits long sentences and removes none)                                                                                                              | Revising cuts sentences first. The count should fall.                                                                                  |
+| "to a mean absolute error of $0.43$ sites against $0.45$"                                                                                                             | The figure shows it. Cut it, do not update it.                                                                                         |
+| "This is a choice of presentation rather than of physics."; "the obstruction is exact rather than a matter of degree"; "this is a design error and not Trotter error" | An answer to an objection nobody raised. Cut it.                                                                                       |
+| "We use it as a test of sign structure rather than as a model of a one-dimensional metal" (added by a revision run)                                                   | A new sentence needs a reason the request gave. This one has none.                                                                     |
+| "The three examples thus differ in what reduction gives up."                                                                                                          | A synthesis no ledger row asked for. Each example already made its claim.                                                              |
+| "warm-starting each step from the previous solution"; "a bound-constrained quasi-Newton solver (L-BFGS-B) suffices" (added by a revision run)                         | Solver internals. State the problem, not how it was solved.                                                                            |
+| "The number of points in the Brillouin zone --- and hence the number of pulses per Floquet cycle --- is at most $2^d$ times larger..."                                | Two clauses and an aside. Give each its own sentence, or drop it.                                                                      |
+| `This example and the RKKY model of Sec.~\ref{sec:rkky} are complementary` (before that section)                                                                      | A forward reference. Point backward, or cut it.                                                                                        |
+| (A paragraph per figure, walking through what each panel shows)                                                                                                       | A PI: "I can see them and would ask for detail if I felt it were needed." Say why it is the right test, and how it was made.           |
+| "New labelled tables carry the values taken out of prose."                                                                                                            | Relocation is not a cut, and neither is a merge that keeps every value. The exhibit count rose; cut the values a figure already shows. |
+| (A table repeating values a figure's caption already states)                                                                                                          | Two exhibits, one value. Keep the figure; cut the table.                                                                               |
+| (Filled an empty `\cite{}` with a key of its own choosing)                                                                                                            | Not asked for. An empty citation is the author's to fill.                                                                              |

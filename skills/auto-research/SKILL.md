@@ -50,7 +50,10 @@ This skill owns the question, not the build. When a step needs kept code
 `workflow-orchestration`; when it needs a write-up, under
 `writing-orchestration`. Step 3's measurement is that spine's success
 metric: a goodness of fit, a residual, an error against the current
-approach as baseline.
+approach as baseline. Only the final comparison against that baseline
+enters the write-up as evidence; rejected arms, diagnostics and
+iteration history go to commit messages or notes, since each would
+become an exhibit no answer needs.
 
 ## Red flags
 

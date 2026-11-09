@@ -37,12 +37,14 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from prose_metrics import (
     HEADINGS,
     LATEX,
+    LATEX_LABEL,
     MARKDOWN,
     MD_FENCE,
     NUMERIC,
@@ -140,6 +142,124 @@ def split_regions(body: str, kind: str) -> tuple[str, list[str]]:
     return MD_TABLE.sub("\n", body), floats
 
 
+@dataclass(frozen=True)
+class Exhibit:
+    label: str | None
+    kind: Literal["figure", "table"]
+    body: str
+
+
+TYPST_TABLE_CALL = re.compile(r"\btable\(")
+TYPST_HEADER_CALL = re.compile(r"table\.header\(")
+TYPST_LABEL_AFTER = re.compile(r"[ \t]*\n?[ \t]*<([\w:.-]+)>")
+
+
+def typst_exhibits(body: str) -> list[Exhibit]:
+    body = TYPST_RAW_BLOCK.sub("\n", body)
+    found: list[Exhibit] = []
+    pos = 0
+    while (m := TYPST_FLOAT_CALL.search(body, pos)) is not None:
+        try:
+            inner, end = balanced(body, m.end(), "(", ")")
+        except ValueError:
+            return found
+        has_table = m.group(0) == "#table(" or TYPST_TABLE_CALL.search(inner)
+        # A Typst #align that holds no table is layout around prose.
+        if m.group(0) == "#align(" and not has_table:
+            pos = m.end()
+            continue
+        label = TYPST_LABEL_AFTER.match(body, end)
+        found.append(
+            Exhibit(
+                label.group(1) if label else None,
+                "table" if has_table else "figure",
+                inner,
+            )
+        )
+        pos = end
+    return found
+
+
+def exhibits(text: str, kind: str) -> list[Exhibit]:
+    """Every figure and table in the document, in order, with its label if any."""
+    body = body_of(text, kind)
+    if kind == TYPST:
+        return typst_exhibits(body)
+    if kind == LATEX:
+        return [
+            Exhibit(
+                label.group(1) if (label := LATEX_LABEL.search(m.group(0))) else None,
+                "table" if "table" in m.group(1) else "figure",
+                m.group(0),
+            )
+            for m in LATEX_FLOAT.finditer(body)
+        ]
+    return [
+        Exhibit(None, "table", t) for t in MD_TABLE.findall(MD_FENCE.sub("\n", body))
+    ]
+
+
+TYPST_NAMED_START = re.compile(r"[a-z-]+\s*:")
+TYPST_NON_CELL = re.compile(r"\.\.|table\.(?:header|hline|vline)\(")
+
+
+def top_level_args(call_inner: str) -> list[str]:
+    """Comma-separated arguments outside any bracket, string or `$...$` math."""
+    args, depth, start, i = [], 0, 0, 0
+    while i < len(call_inner):
+        ch = call_inner[i]
+        if ch in '"$':
+            i = call_inner.find(ch, i + 1)
+            if i == -1:
+                break
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            args.append(call_inner[start:i])
+            start = i + 1
+        i += 1
+    return [a.strip() for a in [*args, call_inner[start:]] if a.strip()]
+
+
+def typst_cells(body: str) -> int:
+    """Positional `table(...)` arguments that are not the header.
+
+    A spread argument (`..rows`) cannot be counted statically and adds zero.
+    """
+    call = TYPST_TABLE_CALL.search(body)
+    # A bare #table call's body already starts inside the table.
+    inner = body
+    if call is not None:
+        try:
+            inner = balanced(body, call.end(), "(", ")")[0]
+        except ValueError:
+            inner = body[call.end() :]
+    return sum(
+        not TYPST_NAMED_START.match(a) and not TYPST_NON_CELL.match(a)
+        for a in top_level_args(inner)
+    )
+
+
+def table_cells(exhibit: Exhibit, kind: str) -> int:
+    """Data cells of a table exhibit; the header row is not data."""
+    if exhibit.kind != "table":
+        return 0
+    if kind == TYPST:
+        return typst_cells(exhibit.body)
+    if kind == LATEX:
+        # Without a \midrule there is no header to drop.
+        data = exhibit.body.split("\\midrule", 1)[-1]
+        data = re.sub(
+            r"\\(?:bottomrule|end\{tabular\*?\}.*)", "", data, flags=re.DOTALL
+        )
+        rows = [r for r in data.split("\\\\") if "&" in r]
+        return sum(r.count("&") + 1 for r in rows)
+    rows = exhibit.body.strip().splitlines()[2:]
+    return sum(r.strip().strip("|").count("|") + 1 for r in rows)
+
+
 def with_values_as_numbers(text: str) -> str:
     """`text` with each `#val(...)`/`#fmt(...)` call replaced by one number."""
     while (m := TYPST_VALUE_CALL.search(text)) is not None:
@@ -217,7 +337,15 @@ def analyze(text: str, kind: str, depth: int | None) -> dict[str, Any]:
             "prose_number_share": round(prose_numbers / total, 3) if total else 0.0,
         }
     )
-    return {"sections": sections, "overall": overall}
+    found = exhibits(text, kind)
+    document = {
+        "exhibits": len(found),
+        "figures": sum(e.kind == "figure" for e in found),
+        "tables": sum(e.kind == "table" for e in found),
+        "unlabelled": sum(e.label is None for e in found),
+        "table_cells": sum(table_cells(e, kind) for e in found),
+    }
+    return {"sections": sections, "overall": overall, "document": document}
 
 
 def breaches(
@@ -234,7 +362,7 @@ def breaches(
 
 
 def format_report(path: str, data: dict[str, Any]) -> str:
-    o = data["overall"]
+    o, d = data["overall"], data["document"]
     lines = [
         f"{path}",
         f"  {'section':<48} {'words':>6} {'num':>5} {'/100':>6} {'ids':>4}",
@@ -251,6 +379,10 @@ def format_report(path: str, data: dict[str, Any]) -> str:
             f"  numeric literals: {o['numbers']} prose, "
             f"{o['caption_numbers']} captions, {o['float_numbers']} tables/figures; "
             f"prose share {o['prose_number_share']}"
+        ),
+        (
+            f"  exhibits {d['exhibits']} ({d['figures']} figures, {d['tables']} tables, "
+            f"{d['table_cells']} table cells, {d['unlabelled']} unlabelled)"
         ),
     ]
     return "\n".join(lines)
