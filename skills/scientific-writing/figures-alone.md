@@ -17,8 +17,8 @@ state results, so readers see them; overclaiming is out of scope.
 
 **Input common to both readers:**
 
-- each figure rendered as the reader will see it, so the built PDF or
-  PNG;
+- each figure and table rendered as the reader will see it, so the built
+  PDF or PNG, since section 5 counts both as exhibits;
 - each caption as typeset, in figure order.
   `prose-metrics FILE --captions` prints them in order, with LaTeX
   labels or Typst indices.
@@ -79,8 +79,14 @@ chance to pick the better score.
 > matched or missing. A listed question is matched by a run question
 > that names the same measured quantity and the same comparison or
 > condition; wording and scope breadth do not matter. Each run question
-> matches at most one listed question. List every run question that
-> matches none as extra. For each match, quote both questions.
+> matches at most one listed question; when one run question covers two,
+> it matches the closer one and the other is missing. List every run
+> question that matches none as extra. For each match, quote both
+> questions.
+
+If the same pair collides across rounds while each question has its own
+figure, report the pair to the owner as possibly one question;
+`QUESTIONS.md` stays frozen.
 
 A listed question is matched only if both Reader 2 runs match it,
 otherwise missing. A question's Reader 1 grade is the higher of its two
@@ -154,7 +160,10 @@ on a failing draft.
    twice and Reader 2 twice, on the same model tier. If it fails, bisect
    the candidates, non-primary before primary panels, until each failing
    one is isolated, four reads per step; cuts are assumed not to
-   interact, and bisection covers the case where they do.
+   interact, and bisection covers the case where they do. Group
+   candidates by the question they serve and bisect groups before
+   individual exhibits; steps may run in parallel. A design's prose
+   edits move with the design as one candidate.
 3. **Pass**: both Reader 2 runs keep every prior match, and no
    question's Reader 1 score drops, meaning both runs score it lower
    than the baseline's lower run. A merge passes if it keeps every match
