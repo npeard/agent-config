@@ -58,6 +58,12 @@ from prose_metrics import (
     words,
 )
 
+# The house rule the prose-feedback hook enforces (scientific-writing, section
+# 4). Owned here so the hook reads it from --json rather than restating it.
+MAX_NUMBERS_PER_100 = 4.0
+# Below this a section's rate is one stray number's worth of noise.
+MIN_SECTION_WORDS = 100
+
 TYPST_FLOAT_CALL = re.compile(r"#(?:figure|fig|table|align)\(")
 TYPST_DROPPED_CALL = re.compile(r"#(?:assert|bibliography)\(")
 TYPST_RAW_BLOCK = re.compile(r"^[ \t]*(```).*?\1[ \t]*$\n?", re.DOTALL | re.MULTILINE)
@@ -345,7 +351,15 @@ def analyze(text: str, kind: str, depth: int | None) -> dict[str, Any]:
         "unlabelled": sum(e.label is None for e in found),
         "table_cells": sum(table_cells(e, kind) for e in found),
     }
-    return {"sections": sections, "overall": overall, "document": document}
+    return {
+        "sections": sections,
+        "overall": overall,
+        "document": document,
+        "rule": {
+            "max_numbers_per_100": MAX_NUMBERS_PER_100,
+            "min_section_words": MIN_SECTION_WORDS,
+        },
+    }
 
 
 def breaches(

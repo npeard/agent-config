@@ -628,3 +628,71 @@ def test_long_inline_relation_is_reported(tmp_path: Path):
 def test_short_inline_values_stay_silent(tmp_path: Path):
     path = project(tmp_path, "= Bounds\nAt $alpha = 3$ it holds.\n", "p.typ")
     assert run(write(path), tmp_path) == ""
+
+
+def dense_typst(sections: dict[str, int]) -> str:
+    """Typst prose of 200 words per section, with the given count of numbers."""
+    parts = []
+    for title, numbers in sections.items():
+        words = ["Word"] * (200 - numbers) + [str(n + 7) for n in range(numbers)]
+        # Short sentences, so only the density rule has anything to say.
+        sentences = (" ".join(words[i : i + 10]) + "." for i in range(0, 200, 10))
+        parts.append(f"= {title}\n" + " ".join(sentences) + "\n")
+    return "\n".join(parts)
+
+
+def test_dense_section_is_named_and_only_advises(tmp_path: Path):
+    path = project(tmp_path, dense_typst({"Sparse": 2, "Crowded": 30}), "p.typ")
+    parsed, context = feedback(run(write(path), tmp_path))
+    assert "decision" not in parsed
+    assert '"Crowded": 15.0 (30 numbers in 200 words)' in context
+    assert "Sparse" not in context
+
+
+def test_density_lists_worst_three_with_a_count_of_the_rest(tmp_path: Path):
+    sections = {f"S{i}": 10 + i for i in range(5)}
+    path = project(tmp_path, dense_typst(sections), "p.typ")
+    _, context = feedback(run(write(path), tmp_path))
+    assert context.index('"S4"') < context.index('"S3"') < context.index('"S2"')
+    assert '"S1"' not in context
+    assert "(+2 more)" in context
+
+
+def test_density_ranks_by_excess_numbers_not_rate(tmp_path: Path):
+    # 24 numbers in 200 words (excess 16) outranks 14 in 100 words (excess 10).
+    long_dense = dense_typst({"Long": 24})
+    sentence = " ".join(["Word"] * 10) + ". "
+    numbered = " ".join(["Word"] * 3 + ["1"] * 7) + ". "
+    short = "= Short\n" + sentence * 8 + numbered * 2 + "\n"
+    text = long_dense + "\n" + short
+    path = project(tmp_path, text, "p.typ")
+    _, context = feedback(run(write(path), tmp_path))
+    assert context.index('"Long"') < context.index('"Short"')
+
+
+def test_sparse_and_tiny_sections_stay_silent(tmp_path: Path):
+    # Nine numbers per 100 words in a 10-word section is one stray number.
+    text = dense_typst({"Sparse": 2}) + "= Tiny\nIn 2024 we saw 3 of 5.\n"
+    path = project(tmp_path, text, "p.typ")
+    assert run(write(path), tmp_path) == ""
+
+
+def test_density_threshold_comes_from_prose_density(tmp_path: Path):
+    density = {
+        "sections": [
+            {"title": "Odd", "words": 50, "numbers": 1, "numbers_per_100_words": 2.0}
+        ],
+        "rule": {"max_numbers_per_100": 1.5, "min_section_words": 40},
+    }
+    # The stand-in prints the rule against the path the hook passes last.
+    hook = fake_hook(
+        tmp_path,
+        {
+            "prose_density": "import json, sys\n"
+            f"print(json.dumps({{sys.argv[-1]: {density!r}}}))\n"
+        },
+    )
+    path = project(tmp_path, BACKWARD)
+    _, context = feedback(run(write(path), tmp_path, hook))
+    assert '"Odd": 2.0' in context
+    assert "over 1.5 per 100" in context

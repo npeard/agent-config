@@ -141,7 +141,12 @@ Defaults a genre file may override:
 
 - paragraph: at most 5 sentences or about 120 words;
 - caption beyond its panel key: at most 3 sentences;
-- section: a word budget, set atop the ledger.
+- section: a word budget, set atop the ledger;
+- numbers in body prose: at most 4 numeric literals per 100 words in any
+  top-level section of 100 words or more. Prose states the claim; a
+  table or figure carries the value, so move a run of values there and
+  keep the one or two that carry the argument. Captions, tables and
+  figure bodies are counted apart and excluded.
 
 The `prose-feedback` hook reports sentence statistics after each `.tex`
 or `.typ` edit, against the first report. A revision should cut
@@ -149,8 +154,12 @@ sentences; a listed forward reference is a defect.
 
 Without the hook, run
 `pixi run --manifest-path ~/.agents/agent-config/pixi.toml prose-metrics ABSOLUTE_FILE [--json]`;
-it does not gate. `prose-density FILE... --depth 1` counts prose numbers
-and code names.
+it does not gate. The same hook names up to three top-level sections
+over the numbers rule after an edit; it advises rather than blocks,
+because the excess is a property of the whole section, not of the lines
+just written. Without the hook, run `prose-density FILE... --depth 1`,
+which counts prose numbers and code names per section (add
+`--max-numbers-per-100 4` to make it exit 1 on a breach).
 
 ## 5. Precision
 
