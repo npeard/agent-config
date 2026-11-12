@@ -178,6 +178,17 @@ then claim. For long-running scripts, smoke-verify under a timeout and
 confirm the metric is moving the right way; being killed by the timeout
 is expected, not a failure.
 
+**Compute gate: review before any job expected to run over about an
+hour.** Run step 6's `code-review` (filtered through
+`superpowers:receiving-code-review`) and `simplify`, with an efficiency
+emphasis, over the code the job imports; then profile one representative
+unit *at production size* against the expected cost; then launch. A
+small-size benchmark can hide the dominant cost. Freeze the imported
+code while the job runs and queue changes for between jobs. After
+compute, step 6 covers only the diff since this review -- plots, prose,
+fixes made during the run. Why: `examples.md` 5. Launch mechanics:
+`compute-job-safety`.
+
 ### 6. Review
 
 Order matters here, and the obvious order is wrong:

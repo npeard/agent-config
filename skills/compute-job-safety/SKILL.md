@@ -26,6 +26,9 @@ until that is resolved.
 - Determine the durable outputs and whether the program overwrites,
   truncates, appends, checkpoints, or writes a temporary file before
   publishing a result.
+- For a job expected to run over about an hour, pass the compute gate in
+  `workflow-orchestration` step 5 first (review, simplify, profile at
+  production size), and do not edit the code it imports while it runs.
 
 ## Long jobs: launch detached and return
 
