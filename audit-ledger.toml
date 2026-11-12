@@ -486,9 +486,9 @@ principle = 3
 date = "2026-10-21"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "2680a01e780de068f968cc154a4b5f07a4d4cd5bcb23001fa171b1a97ee0b340"
+asset_sha = "f787323c07957e5e2d79c7780fce7f3d0260521f17671a58d57363f6342ece91"
 note = """
-2116 words against the 2000 warn threshold; 4800 is the failure line, so this
+2209 words against the 2000 warn threshold; 4800 is the failure line, so this
 is an advisory to review before adding, not a breach.
 
 The body is the orchestrator's contract, read once per task, and each section
@@ -504,6 +504,11 @@ The ceiling is doing its job: this branch added the brief instructions and the
 fix-round paragraph and paid for them by tightening the surrounding prose,
 landing 7 words under the previous grant. Revisit if it approaches 4800, or if
 a new section is proposed -- then the question is what comes out.
+
+Re-granted 2026-11-12 at 2209 words for the step 5 compute gate (one
+paragraph, its evidence in examples.md 5). It sits in the spine because it
+reorders review against compute, which a reference file opened later would
+not do.
 """
 
 [[decision]]
