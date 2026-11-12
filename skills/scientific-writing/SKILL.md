@@ -65,6 +65,11 @@ panel that does not show the claim is a claim-integrity error.
 - **Cannot change it** (no plotting code, out of scope): record the
   change in the medium cell -- "Fig. 2, CHANGE: integer m ticks" -- and
   report it. The prose still states only the claim.
+- **Same quantity, same scale.** In a panel grid, share x and y ticks
+  and labels wherever the quantity matches, and draw one colorbar per
+  plotted quantity on one normalization for the whole figure, not one
+  per row. Break the shared scale only for incommensurate quantities,
+  and say so in the caption.
 
 **Sufficiency check.** Delete the artifact: a paragraph still standing
 on its own numbers duplicated the evidence. Delete the pointer: the
