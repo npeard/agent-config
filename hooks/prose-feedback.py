@@ -20,8 +20,12 @@ the same text in additionalContext would arrive twice. Anything else is
 information and goes in additionalContext only.
 
 Silent unless something is wrong: a forward reference, a sentence over
-the metrics script's long-sentence threshold, or an inline relation long
-enough that the metrics script says it wants a display. A sentence-shape line on every
+the metrics script's long-sentence threshold, an inline relation long
+enough that the metrics script says it wants a display, or a top-level
+section whose prose holds more numbers per 100 words than
+scripts/prose_density.py's rule. The density report only advises: it is a
+judgment about the whole section, not about the lines the edit touched, so a
+block would stop edits the agent cannot attribute to the breach. A sentence-shape line on every
 edit costs context without changing behaviour: measured over six sessions it
 would be 208 injections (206 of them in subagents), 33.0k tokens, 32% verbatim
 repeats of the one before. A non-blocking report byte-identical to the last one for the same file
@@ -315,9 +319,52 @@ def inline_lines(found: list, room: int) -> list[str]:
     return out
 
 
+DENSITY_HEADER = (
+    "Numbers in prose over {limit:g} per 100 words; state the claim and let a "
+    "table or figure carry the value (scientific-writing, section 4):"
+)
+MAX_DENSE_SECTIONS = 3
+
+
+def density_lines(density, room: int) -> list[str]:
+    """Sections over the script's own rule, most excess numbers first."""
+    if not density or room < 2:
+        return []
+    rule = density["rule"]
+    over = [
+        s
+        for s in density["sections"]
+        if s["words"] >= rule["min_section_words"]
+        and s["numbers_per_100_words"] > rule["max_numbers_per_100"]
+    ]
+    # Worst by numbers beyond the rule, not by rate: the long section that
+    # needs cutting outranks a short one a few numbers over.
+    limit = rule["max_numbers_per_100"]
+    over.sort(key=lambda s: limit * s["words"] / 100 - s["numbers"])
+    shown = min(len(over), MAX_DENSE_SECTIONS, room - 1)
+    if not shown:
+        return []
+    lines = [DENSITY_HEADER.format(limit=rule["max_numbers_per_100"])]
+    for s in over[:shown]:
+        title = s["title"]
+        if len(title) > EXCERPT_CHARS:
+            title = title[: EXCERPT_CHARS - 3] + "..."
+        # json.dumps: the title is file content, framed as data.
+        lines.append(
+            f"  {json.dumps(title)}: {s['numbers_per_100_words']:.1f} "
+            f"({s['numbers']} numbers in {s['words']} words)"
+        )
+    if len(over) > shown:
+        lines.append(f"  (+{len(over) - shown} more)")
+    return lines
+
+
 def measure(path: str):
-    """(root, violations, sentences, inline) for one file; any may be empty."""
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    """(root, violations, sentences, inline, density) for one file; any may be empty."""
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        pending_density = pool.submit(
+            run_json, "prose_density.py", ["--depth", "1", path], (0,)
+        )
         pending_forward = pool.submit(
             run_json, "check_forward_refs.py", ["--containing", path], (0, 1)
         )
@@ -328,6 +375,7 @@ def measure(path: str):
         forward.get("violations") or [],
         (metrics or {}).get("sentences"),
         (metrics or {}).get("long_inline_math") or [],
+        (pending_density.result() or {}).get(path),
     )
 
 
@@ -336,7 +384,7 @@ def file_lines(path, measured, session, share, elsewhere):
     in the file itself. `elsewhere` is empty when another file already listed
     this document's other references.
     """
-    root, violations, sentences, inline = measured
+    root, violations, sentences, inline, density = measured
     here = [v for v in violations if canonical(v["file"]) == canonical(path)]
     # One line is kept for the metrics.
     lines = violation_lines(HERE_HEADER, here, root, share - 1)
@@ -351,6 +399,7 @@ def file_lines(path, measured, session, share, elsewhere):
         if lines or over or flagged:
             lines.append(metrics_line(sentences, first))
             lines += over + flagged
+    lines += density_lines(density, share - len(lines))
     return lines, bool(here)
 
 

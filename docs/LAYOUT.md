@@ -320,9 +320,10 @@ and pricing remain separate and unchanged.
   what they share (the docstring lists it).
 - `hooks/prose-feedback.py` -- after every edit to a `.tex` or `.typ`
   file, reports forward references (blocking feedback) and
-  sentence-length metrics against the session's first measurement,
-  because advice to keep sentences short loses to the habit of writing
-  long ones and a number does not.
+  sentence-length metrics against the session's first measurement, and
+  advises on sections over the numbers-per-100-words rule
+  (`scripts/prose_density.py`), because advice to keep sentences short
+  loses to the habit of writing long ones and a number does not.
 - `hooks/plain-math.py` -- after a Write or Edit of a `.typ`, `.tex` or
   matplotlib `.py` file, runs `scripts/plain_math.py` on it and blocks
   on ASCII math stand-ins (`3pi/2`, `phi`, `mean |<kappa_b>|`) on the
