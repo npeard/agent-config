@@ -191,7 +191,9 @@ agent-config = { git = "https://github.com/npeard/agent-config", tag = "v0.1.0" 
 That installs the five gates above as commands, plus
 
 - `preflight` -- checks the project is fit to start work in: pre-commit
-  installed, tests green, default branch, clean tree.
+  installed, tests green, default branch, clean tree, and whether a
+  newer agent-config release than the pinned tag exists (cached for 24
+  h).
 - `new-report REPORT_DIR --shared SHARED_DIR --title TITLE` -- scaffolds
   a report whose figures are built from saved results.
 - `jupyter-mcp --port PORT --token TOKEN --timeout SECONDS --root DIR`

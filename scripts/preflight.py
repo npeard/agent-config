@@ -39,7 +39,12 @@ rows from the cache without waiting.
     Query upstream for newer pre-commit hook revs. Off by default because
     it needs network and costs a ``git ls-remote`` per configured repo.
 ``--offline``
-    Report dependency updates from the cache only, never the network.
+    Report dependency updates and the agent-config release from the cache
+    only, never the network.
+
+The agent-config release row is also on by default, for the same reason: a
+project's pinned tag goes stale silently otherwise. Its one ``git ls-remote``
+is cached for 24 h in the temp directory.
 
 Exit status is 0 unless ``--strict`` is passed, so that a hook can never
 abort a session over a warning.
@@ -55,6 +60,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -590,6 +596,11 @@ def configured_revs(config: Path) -> list[tuple[str, str]]:
     return pairs
 
 
+def semver_key(tag: str) -> tuple[int, ...] | None:
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+    return tuple(int(g) for g in m.groups()) if m else None
+
+
 def latest_tag(url: str) -> tuple[str | None, str | None]:
     """(newest semver tag, problem) -- exactly one of the two is set.
 
@@ -607,12 +618,7 @@ def latest_tag(url: str) -> tuple[str | None, str | None]:
         # reporting it as one sends the reader to the wrong place.
         return None, "no-semver-tags"
     tags = [line.rsplit("/", 1)[-1] for line in out.splitlines()]
-
-    def key(tag: str) -> tuple[int, ...] | None:
-        m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
-        return tuple(int(g) for g in m.groups()) if m else None
-
-    ranked = sorted((k, t) for t in tags if (k := key(t)) is not None)
+    ranked = sorted((k, t) for t in tags if (k := semver_key(t)) is not None)
     if not ranked:
         return None, "no-semver-tags"
     return ranked[-1][1], None
@@ -658,6 +664,105 @@ def check_hook_revs(report: Report, root: Path) -> None:
         )
     else:
         report.add(OK, "hook revs current")
+
+
+AGENT_CONFIG_PIN_FILES = ("pyproject.toml", "pixi.toml")
+RELEASE_CACHE_SECONDS = 24 * 3600
+
+
+def agent_config_pin(root: Path) -> tuple[str, str, str] | None:
+    """(git url, pinned tag, manifest name) of this project's agent-config
+    dependency, or None when it pins none or pins a rev rather than a tag.
+
+    Searched as a key anywhere in the manifest, not at one table path: pixi
+    keeps it under `tool.pixi.pypi-dependencies`, a feature or a platform
+    table depending on the project.
+    """
+    import tomllib
+
+    def find(node):
+        if isinstance(node, dict):
+            spec = node.get("agent-config")
+            if isinstance(spec, dict) and "git" in spec and "tag" in spec:
+                return spec
+            for child in node.values():
+                if (found := find(child)) is not None:
+                    return found
+        return None
+
+    for name in AGENT_CONFIG_PIN_FILES:
+        try:
+            data = tomllib.loads((root / name).read_text(encoding="utf-8"))
+        except (tomllib.TOMLDecodeError, OSError):
+            continue
+        if (spec := find(data)) is not None:
+            return spec["git"], spec["tag"], name
+    return None
+
+
+def cached_latest_tag(url: str, offline: bool) -> tuple[str | None, str | None]:
+    """`latest_tag`, remembered for 24 h so the default-on row costs one
+    `git ls-remote` a day per machine, not one per preflight.
+
+    A failed lookup is not cached, so the next run retries. Offline reads the
+    cache whatever its age: a stale answer beats none when it cannot refresh.
+    """
+    cache = Path(tempfile.gettempdir()) / "agent-config-release-check.json"
+    try:
+        entries = json.loads(cache.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        entries = {}
+    entry = entries.get(url) if isinstance(entries, dict) else None
+    if (
+        isinstance(entry, dict)
+        and "latest" in entry
+        and "checked" in entry
+        and (offline or time.time() - entry["checked"] < RELEASE_CACHE_SECONDS)
+    ):
+        return entry["latest"], None
+    if offline:
+        return None, "no-cache"
+    latest, problem = latest_tag(url)
+    if latest:
+        entries = entries if isinstance(entries, dict) else {}
+        entries[url] = {"latest": latest, "checked": time.time()}
+        try:
+            cache.write_text(json.dumps(entries), encoding="utf-8")
+        except OSError:
+            pass
+    return latest, problem
+
+
+def check_agent_config_release(report: Report, root: Path, offline: bool) -> None:
+    """Warn when a newer agent-config release exists than the one pinned.
+
+    Default-on with a cache rather than behind --check-updates: that flag is
+    off by default, so a pin could go stale for months with nobody asking.
+    Silent for a project that pins no agent-config tag (agent-config itself
+    among them).
+    """
+    pin = agent_config_pin(root)
+    if pin is None:
+        return
+    url, pinned, manifest = pin
+    latest, problem = cached_latest_tag(url, offline)
+    if problem or latest is None:
+        report.add(OK, "agent-config release", f"{pinned} (latest unknown: {problem})")
+    elif (semver_key(latest) or ()) > (semver_key(pinned) or ()):
+        report.add(
+            WARN,
+            "agent-config release",
+            f"{pinned} pinned, {latest} available",
+            [
+                (
+                    f'update: set tag = "{latest}" for agent-config in {manifest}'
+                    " (and the agent-config rev in .pre-commit-config.yaml),"
+                    " then `pixi update agent-config`"
+                )
+            ],
+        )
+    else:
+        report.add(OK, "agent-config release", pinned)
 
 
 def _pixi_has_test_task(path: Path) -> bool:
@@ -1177,6 +1282,7 @@ def main(argv: list[str] | None = None) -> int:
         check_hook_revs(report, root)
     check_tests(report, root, run=args.with_tests)
     check_dependencies(report, root, offline=args.offline)
+    check_agent_config_release(report, root, offline=args.offline)
     check_extensions(report, root)
     check_hooks(report, root)
     check_codex_hooks(report, root)

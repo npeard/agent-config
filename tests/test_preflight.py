@@ -1364,3 +1364,97 @@ class TestInstallHintWithoutTheSibling:
         assert preflight._install_hint() == "./install.ps1"
         monkeypatch.setattr(preflight.os, "name", "posix")
         assert preflight._install_hint() == "./install.sh"
+
+
+URL = "https://github.com/npeard/agent-config"
+
+
+def pin(root: Path, tag: str = "v0.1.2", name: str = "pyproject.toml") -> None:
+    (root / name).write_text(
+        "[tool.pixi.pypi-dependencies]\n"
+        f'agent-config = {{ git = "{URL}", tag = "{tag}" }}\n'
+    )
+
+
+class TestAgentConfigRelease:
+    @pytest.fixture(autouse=True)
+    def private_cache(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        cache = tmp_path / "tmp"
+        cache.mkdir()
+        monkeypatch.setattr(preflight.tempfile, "gettempdir", lambda: str(cache))
+
+    def check(self, root: Path, offline: bool = False) -> preflight.Report:
+        report = preflight.Report()
+        preflight.check_agent_config_release(report, root, offline)
+        return report
+
+    def test_a_newer_tag_warns_with_the_update_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.1.10", None))
+        report = self.check(tmp_path)
+        assert statuses(report, "agent-config release") == [WARN]
+        assert "v0.1.2 pinned, v0.1.10 available" in details(
+            report, "agent-config release"
+        )
+        assert 'tag = "v0.1.10"' in report.rows[0][3][0]
+        assert "pixi update agent-config" in report.rows[0][3][0]
+
+    def test_the_pinned_tag_being_latest_is_ok(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path, name="pixi.toml")
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.1.2", None))
+        assert statuses(self.check(tmp_path), "agent-config release") == [OK]
+
+    def test_no_pin_is_silent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+        monkeypatch.setattr(preflight, "latest_tag", forbidden)
+        assert self.check(tmp_path).rows == []
+
+    def test_a_rev_pin_is_silent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        (tmp_path / "pyproject.toml").write_text(
+            f'[tool.x]\nagent-config = {{ git = "{URL}", rev = "abc" }}\n'
+        )
+        monkeypatch.setattr(preflight, "latest_tag", forbidden)
+        assert self.check(tmp_path).rows == []
+
+    def test_second_run_within_a_day_uses_the_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.2.0", None))
+        self.check(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", forbidden)
+        assert statuses(self.check(tmp_path), "agent-config release") == [WARN]
+
+    def test_an_old_cache_entry_is_refreshed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.2.0", None))
+        self.check(tmp_path)
+        later = time.time() + 2 * 24 * 3600
+        monkeypatch.setattr(preflight.time, "time", lambda: later)
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.1.2", None))
+        assert statuses(self.check(tmp_path), "agent-config release") == [OK]
+
+    def test_offline_never_reaches_the_network(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", forbidden)
+        report = self.check(tmp_path, offline=True)
+        assert statuses(report, "agent-config release") == [OK]
+        assert "no-cache" in details(report, "agent-config release")
+
+    def test_unreachable_is_reported_unknown_and_not_cached(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        pin(tmp_path)
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: (None, "unreachable"))
+        report = self.check(tmp_path)
+        assert "latest unknown: unreachable" in details(report, "agent-config release")
+        monkeypatch.setattr(preflight, "latest_tag", lambda url: ("v0.1.3", None))
+        assert statuses(self.check(tmp_path), "agent-config release") == [WARN]
