@@ -67,7 +67,9 @@ invoke a skill by the pattern you are fixing, not by the file extension.
    a fresh cheap reviewer running `standards-and-spec-review` in `phase`
    mode -- never the subagent that wrote it.
 5. **Verify.** `superpowers:verification-before-completion` -- run the
-   command and read the output before claiming anything.
+   command and read the output before claiming anything. Before any job
+   over about an hour, review, simplify and profile at production size
+   first (the compute gate in `workflow-orchestration`).
 6. **Review.** `code-review` at high effort, then filter its findings
    through `superpowers:receiving-code-review` before acting on any of
    them, then fix. Then `standards-and-spec-review` in `branch` mode for

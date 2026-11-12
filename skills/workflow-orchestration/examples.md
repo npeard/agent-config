@@ -37,3 +37,16 @@ full suite once at step 5.
 for Read, at 1.2-2.8k calls per session (36-85 agent-minutes).
 
 **What to do:** batch independent commands into one call.
+
+### 5. Long compute launched on unreviewed code
+
+**What happened:** sector-solver code went straight to cost measurement.
+Reading and profiling then found every momentum sector paying a needless
+certification solve, all 24 sector matrices held at once, a correlator
+holding about 134 full vectors (5.8 GB), and a missing complex conjugate
+in a fidelity formula -- all review-findable. A census on that code
+would have been about 180 h of output from code about to change. An L =
+20 benchmark hid the cost an L = 24 profile exposed.
+
+**What to do:** the step 5 compute gate -- review and simplify, profile
+at production size, then launch with the code frozen.
