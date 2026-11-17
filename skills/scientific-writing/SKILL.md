@@ -100,6 +100,14 @@ is `math`'s "Derive once, then refer".
 **Do not answer an objection the reader has not raised.** A sentence
 defending a choice nobody questioned is the tell. Cut it.
 
+**Do answer the one a domain reader will raise.** Each method choice in
+the simulation or analysis -- a model, estimator, optimizer, error
+model, fit metric, cutoff, gate, normalization -- gets one or two
+sentences on what it is and why, since without them the result cannot be
+trusted or reproduced. Presentation and wording choices get none. Name a
+solver only when the choice changes the result, as a local optimizer
+that misses a second minimum does.
+
 **Every reference points backward.** The reader reads in order. Only a
 float, or an appendix named from the main body, may be named before it
 appears: an appendix pointing to a later appendix is a forward
@@ -198,6 +206,7 @@ which counts prose numbers and code names per section (add
 
 Per section:
 
+- **Why-this-way test**: section 3's method-choice rule, per choice.
 - **Skim test**: the topic sentences alone reconstruct the argument.
 - **Removal test**: section 2's sufficiency check, per paragraph.
 - **Repetition audit**: section 2's caption-and-body rule, per claim.
@@ -232,7 +241,7 @@ Quoted from agent runs, and from agent sentences an author cut.
 | "This is a choice of presentation rather than of physics."; "the obstruction is exact rather than a matter of degree"; "this is a design error and not Trotter error" | An answer to an objection nobody raised. Cut it.                                                                                       |
 | "We use it as a test of sign structure rather than as a model of a one-dimensional metal" (added by a revision run)                                                   | A new sentence needs a reason the request gave. This one has none.                                                                     |
 | "The three examples thus differ in what reduction gives up."                                                                                                          | A synthesis no ledger row asked for. Each example already made its claim.                                                              |
-| "warm-starting each step from the previous solution"; "a bound-constrained quasi-Newton solver (L-BFGS-B) suffices" (added by a revision run)                         | Solver internals. State the problem, not how it was solved.                                                                            |
+| "warm-starting each step from the previous solution"; "a bound-constrained quasi-Newton solver (L-BFGS-B) suffices" (added by a revision run)                         | Solver internals that do not change the result. State the problem; justify only result-affecting method choices (section 3).           |
 | "The number of points in the Brillouin zone --- and hence the number of pulses per Floquet cycle --- is at most $2^d$ times larger..."                                | Two clauses and an aside. Give each its own sentence, or drop it.                                                                      |
 | `This example and the RKKY model of Sec.~\ref{sec:rkky} are complementary` (before that section)                                                                      | A forward reference. Point backward, or cut it.                                                                                        |
 | (A paragraph per figure, walking through what each panel shows)                                                                                                       | A PI: "I can see them and would ask for detail if I felt it were needed." Say why it is the right test, and how it was made.           |
