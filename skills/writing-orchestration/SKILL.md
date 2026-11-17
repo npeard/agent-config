@@ -148,7 +148,9 @@ mechanical check, reaches a reader, and costs credibility rather than a
 build. Never invent a number, citation, reference, or attribution. When
 a sentence needs a fact you do not have, ask for it or write the weaker
 sentence you can support. A ranking or a mechanism is a claim too; it
-must meet `auto-research`'s bar for "better" and for a mechanism.
+must meet `auto-research`'s bar for "better" and for a mechanism. So is
+a method choice: each needs its one-sentence why (`scientific-writing`
+section 3).
 
 **Notation consistency.** One symbol per quantity across the whole
 document, matching the project's notation file where it has one. This
