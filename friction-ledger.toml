@@ -2235,3 +2235,30 @@ ablation read in figures-alone.md section 4 plus report-only value-owners
 and questions-lint, not a new gate: any threshold on exhibit or cell counts
 can be met by relocating numbers again.
 """
+
+[[decision]]
+class = "worktree-hook-repoint"
+source = "observed"
+date = "2026-11-16"
+cause = "working-as-designed"
+outcome = "tier-0"
+note = """
+dispersion-engineering chore/tasks-to-zero: orchestrator briefs told each
+worktree subagent to run `pre-commit install -f`; worktrees share .git/hooks,
+so the hook pointed at a deleted worktree's python and one subagent committed
+with --no-verify. Brief error, not a tool gap: preflight's hook-pin check
+already reports this. Commits were redone with hooks.
+"""
+
+[[decision]]
+class = "fix-rounds-on-unspecified-protocol"
+source = "observed"
+date = "2026-11-16"
+cause = "underspecified-task"
+outcome = "tier-0"
+note = """
+Same branch: three code-review fix rounds massed in the figure-job launcher's
+lock/merge layer because the spec never fixed the lock protocol between
+launcher, drivers and merge. The step-6 escalation rule stopped the loop and
+the added machinery was reverted; the fix is at spec stage, no new artifact.
+"""
