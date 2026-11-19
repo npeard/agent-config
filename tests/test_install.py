@@ -196,7 +196,7 @@ class TestEnvironmentAndHookRegistration:
         )
         entries = [
             handler
-            for groups in hooks.values()
+            for groups in hooks["hooks"].values()
             for group in groups
             for handler in group["hooks"]
         ]

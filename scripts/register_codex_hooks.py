@@ -44,6 +44,7 @@ CODEX_HOOKS = (
     # resume and compact do not re-inject what cannot change mid-session.
     HookSpec("environment-drift.py", "SessionStart", "startup"),
     HookSpec("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
+    HookSpec("spawn-agent-model.py", "PreToolUse", ".*spawn_agent"),
     HookSpec("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
     HookSpec("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),
     HookSpec("audit-owed.py", "PostToolUse", "Bash"),
@@ -154,6 +155,22 @@ def apply(
     )
 
 
+def events_of(config: dict[str, object]) -> dict[str, object]:
+    """The event table, moving legacy top-level events under `hooks`.
+
+    Codex 0.170 accepts only `description` and `hooks` at the top level and
+    rejects the whole file otherwise ("unknown field `PreToolUse`"), so the
+    flat layout earlier versions of this script wrote disabled every hook.
+    """
+    events = config.setdefault("hooks", {})
+    if not isinstance(events, dict):
+        raise TypeError("hooks must be an object of events")
+    # Only list values are events; anything else is the user's and stays.
+    for key in [k for k, v in config.items() if k != "hooks" and isinstance(v, list)]:
+        events.setdefault(key, []).extend(config.pop(key))
+    return events
+
+
 def backup_path(settings: Path) -> Path:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     candidate = settings.with_name(f"{settings.name}.{stamp}.bak")
@@ -194,7 +211,9 @@ def main(argv: list[str]) -> int:
     else:
         config = {}
 
-    changes = apply(config, declared_hooks(repo))
+    before = json.dumps(config, sort_keys=True)
+    apply(events_of(config), declared_hooks(repo))
+    changes = json.dumps(config, sort_keys=True) != before
     if not changes:
         print("Codex hooks already registered.")
         return 0
@@ -206,7 +225,10 @@ def main(argv: list[str]) -> int:
     if existed:
         shutil.copyfile(args.settings, backup_path(args.settings))
     _write_atomically(args.settings, json.dumps(config, indent=2) + "\n")
-    print("Codex hooks updated.")
+    print(
+        "Codex hooks updated. Codex runs a new or changed hook only after you "
+        "trust it: open `codex` and approve them when it says hooks need review."
+    )
     return 0
 
 
