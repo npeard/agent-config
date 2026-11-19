@@ -483,12 +483,12 @@ its caller, and an integer carries nothing.
 [[decision]]
 asset = "skills/workflow-orchestration/SKILL.md"
 principle = 3
-date = "2026-10-21"
+date = "2026-11-18"
 cause = "working-as-designed"
 outcome = "tier-0"
-asset_sha = "f787323c07957e5e2d79c7780fce7f3d0260521f17671a58d57363f6342ece91"
+asset_sha = "a4cf9a17c833ab2153797991b1b1ee09bcd448243fbd457e202ef3fcf8d1170d"
 note = """
-2209 words against the 2000 warn threshold; 4800 is the failure line, so this
+2237 words against the 2000 warn threshold; 4800 is the failure line, so this
 is an advisory to review before adding, not a breach.
 
 The body is the orchestrator's contract, read once per task, and each section
@@ -502,7 +502,8 @@ in examples.md, which is where the evidence goes.
 
 The ceiling is doing its job: this branch added the brief instructions and the
 fix-round paragraph and paid for them by tightening the surrounding prose,
-landing 7 words under the previous grant. Revisit if it approaches 4800, or if
+landing 7 words under the previous grant. A later
+bump added the no-ff merge default to step 7 for about 30 words. Revisit if it approaches 4800, or if
 a new section is proposed -- then the question is what comes out.
 
 Re-granted 2026-11-12 at 2209 words for the step 5 compute gate (one

@@ -233,11 +233,14 @@ nor as thrash.
 
 ### 7. Integrate -- `superpowers:finishing-a-development-branch`
 
-Ask whether to open a PR or merge locally -- do not assume. If a PR is
-opened, run the `/code-review` command on it: it is a genuinely
-different analysis from step 6, reading git blame and prior PR comments
-on the touched files with confidence-scored findings, so it catches
-historical-context problems a local diff review structurally cannot.
+Ask "merge locally (no-ff) or open a PR?" -- do not assume. Local
+`git merge --no-ff` is the default: a fast-forward erases the branch
+from history, and the merge commit is what keeps the change reviewable
+and revertable as one unit. If a PR is opened, run the `/code-review`
+command on it: it is a genuinely different analysis from step 6, reading
+git blame and prior PR comments on the touched files with
+confidence-scored findings, so it catches historical-context problems a
+local diff review structurally cannot.
 
 Before the final report, check the README and top-level docs for claims
 the branch made false; the README holds no transient information.

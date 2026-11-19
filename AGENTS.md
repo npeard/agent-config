@@ -79,7 +79,7 @@ invoke a skill by the pattern you are fixing, not by the file extension.
    massed in the last round's fix mean it added a subsystem, which
    re-enters at step 4.
 7. **Integrate.** `superpowers:finishing-a-development-branch`. Ask
-   whether to open a PR or merge locally; if a PR is opened, run
+   whether to merge locally (no-ff) or open a PR; if a PR is opened, run
    `/code-review` on it as an independent second pass.
 
 Stop for me at only two points: the finished spec (step 2) and the final
