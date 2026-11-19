@@ -398,6 +398,12 @@ and pricing remain separate and unchanged.
   ignored; `opus` stays a valid answer, it just has to be typed. Named
   specialists and `fork` are left alone -- a specialist may pin its own
   model, and `fork` ignores the override.
+- `hooks/spawn-agent-model.py` -- the Codex counterpart: denies a
+  `spawn_agent` call that does not state both `model` and `fork_turns`.
+  Codex's defaults are worse than Claude's. Omitting `fork_turns` forks
+  the whole parent conversation into every child. One picdev session
+  spent about 57M input tokens in 35 minutes that way, with every child
+  on the parent's model.
 - `hooks/agent-resume-size.py` -- denies a `SendMessage` that would
   resume a subagent whose context is over the hook's cap (the docstring
   has the cost, the cap and the silent cases).

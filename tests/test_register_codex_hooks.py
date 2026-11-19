@@ -21,6 +21,7 @@ def repo(tmp_path: Path) -> Path:
         "task-list.py",
         "environment-drift.py",
         "prose-writing.py",
+        "spawn-agent-model.py",
         "promotion-check.py",
         "prose-feedback.py",
         "audit-owed.py",
@@ -39,6 +40,7 @@ def test_declared_hooks_are_the_supported_static_mapping(registrar, repo: Path):
         ("task-list.py", "SessionStart", None),
         ("environment-drift.py", "SessionStart", "startup"),
         ("prose-writing.py", "PreToolUse", "apply_patch|Bash"),
+        ("spawn-agent-model.py", "PreToolUse", ".*spawn_agent"),
         ("promotion-check.py", "PostToolUse", "apply_patch|Bash"),
         ("prose-feedback.py", "PostToolUse", "apply_patch|Bash"),
         ("audit-owed.py", "PostToolUse", "Bash"),
@@ -201,3 +203,22 @@ def test_check_and_invalid_json_never_change_bytes(
     assert settings.read_bytes() == b"not json\n"
     assert registrar.main(["--settings", str(settings), "--repo", str(repo)]) == 1
     assert settings.read_bytes() == b"not json\n"
+
+
+def test_main_moves_legacy_top_level_events_under_hooks(
+    registrar, repo: Path, tmp_path: Path
+):
+    """Would catch writing the flat layout Codex 0.170 rejects wholesale."""
+    settings = tmp_path / "hooks.json"
+    foreign = {"matcher": "x", "hooks": [{"type": "command", "command": "mine"}]}
+    settings.write_text(json.dumps({"PreToolUse": [foreign]}), encoding="utf-8")
+
+    assert registrar.main(["--settings", str(settings), "--repo", str(repo)]) == 0
+
+    written = json.loads(settings.read_text(encoding="utf-8"))
+    assert set(written) == {"hooks"}
+    assert foreign in written["hooks"]["PreToolUse"]
+    assert (
+        registrar.main(["--check", "--settings", str(settings), "--repo", str(repo)])
+        == 0
+    )
